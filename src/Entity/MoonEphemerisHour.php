@@ -7,6 +7,9 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: MoonEphemerisHourRepository::class)]
+#[ORM\Table(name: 'moon_ephemeris_hour', uniqueConstraints: [
+    new ORM\UniqueConstraint(name: 'uniq_moon_ephemeris_hour_ts', columns: ['ts_utc']),
+])]
 class MoonEphemerisHour
 {
     #[ORM\Id]

@@ -1,0 +1,47 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Phases lunaires' %}
+{% set page_subtitle = 'Evenements de phase (limite: ' ~ limit ~ ').' %}
+{% set active_menu = 'phase_events' %}
+
+{% block admin_content %}
+    <section class="admin-card admin-card--table">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Moon phase event</h2>
+            <p class="admin-card__subtitle">Calendrier des transitions principales.</p>
+        </div>
+
+        {% if events is empty %}
+            <p class="admin-empty">Aucun evenement en base.</p>
+        {% else %}
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th class="admin-table__cell">ID</th>
+                            <th class="admin-table__cell">Type</th>
+                            <th class="admin-table__cell">Timestamp UTC</th>
+                            <th class="admin-table__cell">Phase deg</th>
+                            <th class="admin-table__cell">Precision sec</th>
+                            <th class="admin-table__cell">Source</th>
+                            <th class="admin-table__cell">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                            <tr>
+                                <td class="admin-table__cell">{{ event.id }}</td>
+                                <td class="admin-table__cell">{{ event.eventType }}</td>
+                                <td class="admin-table__cell">{{ event.tsUtc ? event.tsUtc|date('Y-m-d H:i') : '' }}</td>
+                                <td class="admin-table__cell">{{ event.phaseDeg }}</td>
+                                <td class="admin-table__cell">{{ event.precisionSec }}</td>
+                                <td class="admin-table__cell">{{ event.source }}</td>
+                                <td class="admin-table__cell">{{ event.createdAtUtc ? event.createdAtUtc|date('Y-m-d H:i') : '' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </section>
+{% endblock %}

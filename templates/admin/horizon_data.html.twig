@@ -1,0 +1,357 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Horizon data' %}
+{% set page_subtitle = 'Telecharger et parser des donnees astronomiques.' %}
+{% set active_menu = 'horizon' %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="admin-imports admin-grid admin-grid--two">
+        <section class="admin-card admin-card--collapsible">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Telecharger des donnees</h2>
+                <p class="admin-card__subtitle">Import direct depuis NASA JPL Horizons.</p>
+            </div>
+            <div class="admin-card__body">
+                <form class="admin-form" method="post" action="{{ path('admin_horizon_data_run') }}">
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="start">Start (UTC)</label>
+                        <input class="admin-form__input" id="start" name="start" type="datetime-local" value="{{ default_start }}">
+                    </div>
+                <div class="admin-form__row">
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="days">Days</label>
+                        <input class="admin-form__input" id="days" name="days" type="number" min="1" max="30" value="{{ default_days }}">
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="step">Step</label>
+                        <input class="admin-form__input" id="step" name="step" type="text" value="{{ default_step }}">
+                    </div>
+                </div>
+                <button class="admin-button admin-button--primary" type="submit">Importer raw_response</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="admin-card admin-card--collapsible">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Parser un run</h2>
+                <p class="admin-card__subtitle">Transformer raw_response en moon_ephemeris_hour.</p>
+            </div>
+            <div class="admin-card__body">
+                {% if imports is not empty %}
+                    <form class="admin-form" method="post" action="{{ path('admin_horizon_data_parse') }}">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="run_id">Run</label>
+                            <select class="admin-form__select" id="run_id" name="run_id" data-run-select>
+                                {% for import in imports %}
+                                    <option value="{{ import.id }}">
+                                        #{{ import.id }}
+                                        {{ import.startUtc ? import.startUtc|date('Y-m-d H:i') : '' }}
+                                        ->
+                                        {{ import.stopUtc ? import.stopUtc|date('Y-m-d H:i') : '' }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button class="admin-button" type="submit">Parser</button>
+                    </form>
+                {% else %}
+                    <p class="admin-empty">Aucun import disponible.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <div class="admin-grid admin-grid--two">
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Import mensuel (Moon + Sun)</h2>
+                <p class="admin-card__subtitle">Plage calee de 00:00 a 23:00 pour couvrir un mois complet.</p>
+            </div>
+            <div class="admin-month-import" data-month-initial="{{ next_month_start }}">
+                <div class="admin-month-import__label">Prochain mois:</div>
+                <div class="admin-month-import__value" data-month-label>{{ next_month_label }}</div>
+            </div>
+            <form class="admin-month-actions" method="post" action="{{ path('admin_horizon_data_bulk_month') }}">
+                <input type="hidden" name="start" value="{{ next_month_start }}" data-month-input>
+                <button class="admin-button admin-button--ghost" type="button" data-month-prev aria-label="Mois precedent">&lt;</button>
+                <button class="admin-button admin-button--primary" type="submit">Ajouter ce mois</button>
+                <button class="admin-button admin-button--ghost" type="button" data-month-next aria-label="Mois suivant">&gt;</button>
+            </form>
+        </section>
+
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Couverture des mois</h2>
+                <p class="admin-card__subtitle">Presence des donnees Moon (L) et Sun (S).</p>
+            </div>
+            <div class="admin-month-legend">
+                <span class="admin-month-legend__item admin-month-legend__item--moon">L</span>
+                <span class="admin-month-legend__item admin-month-legend__item--solar">S</span>
+            </div>
+            <div class="admin-month-grid__row admin-month-grid__row--header">
+                <div class="admin-month-grid__year">Annee</div>
+                <div class="admin-month-grid__months admin-month-grid__months--header">
+                    {% for month in 1..12 %}
+                        <div class="admin-month-grid__label">{{ '%02d'|format(month) }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="admin-month-grid">
+                {% for year in years %}
+                    <div class="admin-month-grid__row">
+                        <div class="admin-month-grid__year">{{ year }}</div>
+                        <div class="admin-month-grid__months">
+                            {% for month in 1..12 %}
+                                {% set month_key = year ~ '-' ~ '%02d'|format(month) %}
+                                <div class="admin-month-grid__cell" title="{{ month_key }}">
+                                    <span class="admin-month-dot admin-month-dot--moon {{ month_key in moon_months ? 'admin-month-dot--active' : '' }}"></span>
+                                    <span class="admin-month-dot admin-month-dot--solar {{ month_key in solar_months ? 'admin-month-dot--active' : '' }}"></span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <section class="admin-card admin-card--table">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Historique des imports</h2>
+            <p class="admin-card__subtitle">Derniers runs en base.</p>
+        </div>
+        {% if imports is empty %}
+            <p class="admin-empty">Aucun import pour le moment.</p>
+        {% else %}
+            {% set id_dir = sort == 'id' and dir == 'asc' ? 'desc' : 'asc' %}
+            {% set period_dir = sort == 'period' and dir == 'asc' ? 'desc' : 'asc' %}
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th class="admin-table__cell">
+                                <a class="admin-table__sort {{ sort == 'id' ? 'is-active' : '' }}"
+                                   href="{{ path('admin_horizon_data', {'page': 1, 'sort': 'id', 'dir': id_dir}) }}">ID</a>
+                            </th>
+                            <th class="admin-table__cell">Provider</th>
+                            <th class="admin-table__cell">Target</th>
+                            <th class="admin-table__cell">Center</th>
+                            <th class="admin-table__cell">Year</th>
+                            <th class="admin-table__cell">
+                                <a class="admin-table__sort {{ sort == 'period' ? 'is-active' : '' }}"
+                                   href="{{ path('admin_horizon_data', {'page': 1, 'sort': 'period', 'dir': period_dir}) }}">Start UTC</a>
+                            </th>
+                            <th class="admin-table__cell">Stop UTC</th>
+                            <th class="admin-table__cell">Step</th>
+                            <th class="admin-table__cell">Time zone</th>
+                            <th class="admin-table__cell">SHA256</th>
+                            <th class="admin-table__cell">Retrieved</th>
+                            <th class="admin-table__cell">Status</th>
+                            <th class="admin-table__cell">Error</th>
+                            <th class="admin-table__cell">Raw size</th>
+                            <th class="admin-table__cell admin-table__cell--actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for import in imports %}
+                            <tr class="admin-table__row" data-run-id="{{ import.id }}">
+                                <td class="admin-table__cell">{{ import.id }}</td>
+                                <td class="admin-table__cell">{{ import.provider }}</td>
+                                <td class="admin-table__cell">{{ import.target }}</td>
+                                <td class="admin-table__cell">{{ import.center }}</td>
+                                <td class="admin-table__cell">{{ import.year }}</td>
+                                <td class="admin-table__cell">{{ import.startUtc ? import.startUtc|date('Y-m-d H:i') : '' }}</td>
+                                <td class="admin-table__cell">{{ import.stopUtc ? import.stopUtc|date('Y-m-d H:i') : '' }}</td>
+                                <td class="admin-table__cell">{{ import.stepSize }}</td>
+                                <td class="admin-table__cell">{{ import.timeZone }}</td>
+                                <td class="admin-table__cell admin-table__cell--mono admin-table__cell--truncate">{{ import.sha256 }}</td>
+                                <td class="admin-table__cell">{{ import.retrievedAtUtc ? import.retrievedAtUtc|date('Y-m-d H:i') : '' }}</td>
+                                <td class="admin-table__cell">
+                                    <span class="admin-status admin-status--{{ import.status ?: 'unknown' }}">
+                                        {{ import.status ?: 'unknown' }}
+                                    </span>
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--truncate">{{ import.errorMessage }}</td>
+                                <td class="admin-table__cell">{{ import.rawResponse ? import.rawResponse|length : 0 }}</td>
+                                <td class="admin-table__cell admin-table__cell--actions">
+                                    <button
+                                        class="admin-button admin-button--danger"
+                                        type="button"
+                                        data-delete-button
+                                        data-delete-id="{{ import.id }}"
+                                        data-delete-token="{{ csrf_token('delete_import_' ~ import.id) }}"
+                                        data-delete-action="{{ path('admin_horizon_data_delete', {id: import.id}) }}"
+                                    >Supprimer</button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if total_pages > 1 %}
+                <div class="admin-pagination">
+                    <a class="admin-pagination__link {{ page <= 1 ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_horizon_data', {'page': page - 1, 'sort': sort, 'dir': dir}) }}">Precedent</a>
+                    <div class="admin-pagination__pages">
+                        {% set start_page = page - 2 %}
+                        {% set end_page = page + 2 %}
+                        {% if start_page < 1 %}{% set start_page = 1 %}{% endif %}
+                        {% if end_page > total_pages %}{% set end_page = total_pages %}{% endif %}
+                        {% for p in start_page..end_page %}
+                            <a class="admin-pagination__link {{ p == page ? 'is-active' : '' }}"
+                               href="{{ path('admin_horizon_data', {'page': p, 'sort': sort, 'dir': dir}) }}">{{ p }}</a>
+                        {% endfor %}
+                    </div>
+                    <a class="admin-pagination__link {{ page >= total_pages ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_horizon_data', {'page': page + 1, 'sort': sort, 'dir': dir}) }}">Suivant</a>
+                    <span class="admin-pagination__meta">{{ total_count }} lignes</span>
+                </div>
+            {% endif %}
+        {% endif %}
+    </section>
+
+    <div class="admin-modal" data-delete-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Confirmer la suppression</div>
+            <div class="admin-modal__body">
+                Voulez-vous supprimer ce run ? Les lignes associees seront supprimees.
+            </div>
+            <form class="admin-modal__actions" method="post" data-modal-form>
+                <input type="hidden" name="_token" value="" data-modal-token>
+                <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+                <button class="admin-button" type="button" data-modal-close>Annuler</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var container = document.querySelector('.admin-month-import');
+            var input = document.querySelector('[data-month-input]');
+            var label = document.querySelector('[data-month-label]');
+            var prev = document.querySelector('[data-month-prev]');
+            var next = document.querySelector('[data-month-next]');
+            if (!container || !input || !label || !prev || !next) {
+                return;
+            }
+
+            var monthNames = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+
+            function formatLabel(date) {
+                var year = date.getUTCFullYear();
+                var month = date.getUTCMonth() + 1;
+                var padded = month < 10 ? '0' + month : String(month);
+                return year + ' ' + padded + ' (' + monthNames[month - 1] + ')';
+            }
+
+            function readDate() {
+                var value = input.value || container.getAttribute('data-month-initial');
+                var parts = value.split('-');
+                if (parts.length < 2) {
+                    return new Date();
+                }
+                var year = parseInt(parts[0], 10);
+                var month = parseInt(parts[1], 10) - 1;
+                return new Date(Date.UTC(year, month, 1));
+            }
+
+            function writeDate(date) {
+                var year = date.getUTCFullYear();
+                var month = date.getUTCMonth() + 1;
+                var padded = month < 10 ? '0' + month : String(month);
+                input.value = year + '-' + padded + '-01';
+                label.textContent = formatLabel(date);
+            }
+
+            prev.addEventListener('click', function () {
+                var date = readDate();
+                date.setUTCMonth(date.getUTCMonth() - 1);
+                writeDate(date);
+            });
+
+            next.addEventListener('click', function () {
+                var date = readDate();
+                date.setUTCMonth(date.getUTCMonth() + 1);
+                writeDate(date);
+            });
+
+            writeDate(readDate());
+        })();
+    </script>
+    <script>
+        (function () {
+            var select = document.querySelector('[data-run-select]');
+            var rows = document.querySelectorAll('[data-run-id]');
+            if (!select || !rows.length) {
+                return;
+            }
+
+            rows.forEach(function (row) {
+                row.addEventListener('click', function (event) {
+                    if (event.target.closest('[data-delete-button]')) {
+                        return;
+                    }
+                    var id = row.getAttribute('data-run-id');
+                    if (!id) {
+                        return;
+                    }
+                    select.value = id;
+                    rows.forEach(function (item) {
+                        item.classList.remove('admin-table__row--selected');
+                    });
+                    row.classList.add('admin-table__row--selected');
+                });
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var modal = document.querySelector('[data-delete-modal]');
+            var form = document.querySelector('[data-modal-form]');
+            var tokenInput = document.querySelector('[data-modal-token]');
+            var buttons = document.querySelectorAll('[data-delete-button]');
+            if (!modal || !form || !tokenInput || !buttons.length) {
+                return;
+            }
+
+            function closeModal() {
+                modal.setAttribute('aria-hidden', 'true');
+                modal.classList.remove('is-open');
+            }
+
+            buttons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var action = button.getAttribute('data-delete-action');
+                    var token = button.getAttribute('data-delete-token');
+                    if (!action || !token) {
+                        return;
+                    }
+                    form.setAttribute('action', action);
+                    tokenInput.value = token;
+                    modal.setAttribute('aria-hidden', 'false');
+                    modal.classList.add('is-open');
+                });
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-modal-close]')) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeModal();
+                }
+            });
+        })();
+    </script>
+{% endblock %}

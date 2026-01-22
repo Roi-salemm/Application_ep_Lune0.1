@@ -16,6 +16,42 @@ class MoonNasaImportRepository extends ServiceEntityRepository
         parent::__construct($registry, MoonNasaImport::class);
     }
 
+    /**
+     * @return MoonNasaImport[]
+     */
+    public function findPage(int $page, int $limit, string $sort = 'period', string $direction = 'asc'): array
+    {
+        $page = max(1, $page);
+        $offset = ($page - 1) * $limit;
+        $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
+        $sort = strtolower($sort);
+
+        $query = $this->createQueryBuilder('m');
+
+        if ($sort === 'id') {
+            $query->orderBy('m.id', $direction);
+        } else {
+            $query
+                ->orderBy('m.start_utc', $direction)
+                ->addOrderBy('m.stop_utc', $direction)
+                ->addOrderBy('m.id', $direction);
+        }
+
+        return $query
+            ->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function countAll(): int
+    {
+        return (int) $this->createQueryBuilder('m')
+            ->select('COUNT(m.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     //    /**
     //     * @return MoonNasaImport[] Returns an array of MoonNasaImport objects
     //     */

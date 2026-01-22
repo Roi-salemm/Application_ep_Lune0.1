@@ -1,0 +1,76 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Moon ephemeris hours' %}
+{% set page_subtitle = 'Dernieres valeurs calculees (limite: ' ~ limit ~ ').' %}
+{% set active_menu = 'ephemeris' %}
+
+{% block admin_content %}
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Verification des donnees</h2>
+            <p class="admin-card__subtitle">Controle des trous et doublons sur toute la table.</p>
+        </div>
+        <form class="admin-form admin-form--inline" method="post" action="{{ path('admin_moon_ephemeris_hours_verify') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('verify_moon_ephemeris') }}">
+            <button class="admin-button" type="submit">Lancer la verification</button>
+        </form>
+        {% for message in app.flashes('verification_error') %}
+            <div class="admin-flash admin-flash--error">{{ message }}</div>
+        {% endfor %}
+        {% for message in app.flashes('verification_report') %}
+            <pre class="admin-console">{{ message }}</pre>
+        {% endfor %}
+        {% if verification_error is defined and verification_error %}
+            <div class="admin-flash admin-flash--error">{{ verification_error }}</div>
+        {% endif %}
+        {% if verification_output is defined and verification_output %}
+            <pre class="admin-console">{{ verification_output }}</pre>
+        {% endif %}
+    </section>
+
+    <section class="admin-card admin-card--table">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Table moon_ephemeris_hour</h2>
+            <p class="admin-card__subtitle">Affichage des derniers enregistrements.</p>
+        </div>
+
+        {% if hours is empty %}
+            <p class="admin-empty">Aucune donnee disponible.</p>
+        {% else %}
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th class="admin-table__cell">ID</th>
+                            <th class="admin-table__cell">Run</th>
+                            <th class="admin-table__cell">Timestamp UTC</th>
+                            <th class="admin-table__cell">Phase deg</th>
+                            <th class="admin-table__cell">Age days</th>
+                            <th class="admin-table__cell">Dist km</th>
+                            <th class="admin-table__cell">RA</th>
+                            <th class="admin-table__cell">DEC</th>
+                            <th class="admin-table__cell">Sun elong</th>
+                            <th class="admin-table__cell">Constellation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hour in hours %}
+                            <tr>
+                                <td class="admin-table__cell">{{ hour.id }}</td>
+                                <td class="admin-table__cell">{{ hour.runId ? hour.runId.id : '' }}</td>
+                                <td class="admin-table__cell">{{ hour.tsUtc ? hour.tsUtc|date('Y-m-d H:i') : '' }}</td>
+                                <td class="admin-table__cell">{{ hour.phaseDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.ageDays }}</td>
+                                <td class="admin-table__cell">{{ hour.distKm }}</td>
+                                <td class="admin-table__cell">{{ hour.raHours }}</td>
+                                <td class="admin-table__cell">{{ hour.decDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.sunElongDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.constellation }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </section>
+{% endblock %}

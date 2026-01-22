@@ -1,0 +1,49 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Solar ephemeris' %}
+{% set page_subtitle = 'Donnees solaires horaires (limite: ' ~ limit ~ ').' %}
+{% set active_menu = 'solar' %}
+
+{% block admin_content %}
+    <section class="admin-card admin-card--table">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Solar ephemeris hour</h2>
+            <p class="admin-card__subtitle">Reference solaire pour astrologie et calculs derives.</p>
+        </div>
+
+        {% if hours is empty %}
+            <p class="admin-empty">Aucune donnee en base.</p>
+        {% else %}
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th class="admin-table__cell">ID</th>
+                            <th class="admin-table__cell">Timestamp UTC</th>
+                            <th class="admin-table__cell">RA</th>
+                            <th class="admin-table__cell">DEC</th>
+                            <th class="admin-table__cell">Ecl lon</th>
+                            <th class="admin-table__cell">Ecl lat</th>
+                            <th class="admin-table__cell">Dist AU</th>
+                            <th class="admin-table__cell">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hour in hours %}
+                            <tr>
+                                <td class="admin-table__cell">{{ hour.id }}</td>
+                                <td class="admin-table__cell">{{ hour.tsUtc ? hour.tsUtc|date('Y-m-d H:i') : '' }}</td>
+                                <td class="admin-table__cell">{{ hour.raHours }}</td>
+                                <td class="admin-table__cell">{{ hour.decDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.elonDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.elatDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.distAu }}</td>
+                                <td class="admin-table__cell">{{ hour.createdAtUtc ? hour.createdAtUtc|date('Y-m-d H:i') : '' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </section>
+{% endblock %}
