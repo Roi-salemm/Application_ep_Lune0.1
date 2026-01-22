@@ -1,0 +1,157 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Moon NASA Imports{% endblock %}
+
+{% block body %}
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #818181;
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+        th {
+            background: #f2f2f2;
+            text-align: left;
+        }
+        .mono {
+            font-family: Consolas, Monaco, "Courier New", monospace;
+            font-size: 12px;
+        }
+        .flash {
+            margin: 10px 0;
+            padding: 8px 10px;
+            border: 1px solid #bbb;
+            background: #fafafa;
+        }
+        .flash.error {
+            border-color: #c0392b;
+            background: #fdecea;
+        }
+        .flash.success {
+            border-color: #27ae60;
+            background: #e9f7ef;
+        }
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .toolbar label {
+            display: block;
+            font-size: 12px;
+            color: #333;
+        }
+        .toolbar input {
+            padding: 6px 8px;
+            font-size: 14px;
+        }
+        .toolbar select {
+            padding: 6px 8px;
+            font-size: 14px;
+        }
+        .toolbar button {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+    </style>
+
+    <h1>Moon NASA Imports</h1>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="flash {{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <form class="toolbar" method="post" action="{{ path('moon_imports_run') }}">
+        <div>
+            <label for="start">Start (UTC)</label>
+            <input id="start" name="start" type="datetime-local" value="{{ default_start }}">
+        </div>
+        <div>
+            <label for="days">Days</label>
+            <input id="days" name="days" type="number" min="1" max="30" value="{{ default_days }}">
+        </div>
+        <div>
+            <label for="step">Step</label>
+            <input id="step" name="step" type="text" value="{{ default_step }}">
+        </div>
+        <div>
+            <button type="submit">Importer depuis Horizons (raw_response)</button>
+        </div>
+    </form>
+
+    {% if imports is not empty %}
+        <form class="toolbar" method="post" action="{{ path('moon_imports_parse') }}">
+            <div>
+                <label for="run_id">Run a parser</label>
+                <select id="run_id" name="run_id">
+                    {% for import in imports %}
+                        <option value="{{ import.id }}">
+                            #{{ import.id }}
+                            {{ import.startUtc ? import.startUtc|date('Y-m-d H:i') : '' }}
+                            ->
+                            {{ import.stopUtc ? import.stopUtc|date('Y-m-d H:i') : '' }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button type="submit">Parser vers moon_ephemeris_hour</button>
+            </div>
+        </form>
+    {% endif %}
+
+    {% if imports is empty %}
+        <p>No imports yet.</p>
+    {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Provider</th>
+                    <th>Target</th>
+                    <th>Center</th>
+                    <th>Year</th>
+                    <th>Start UTC</th>
+                    <th>Stop UTC</th>
+                    <th>Step</th>
+                    <th>Time Zone</th>
+                    <th>SHA256</th>
+                    <th>Retrieved</th>
+                    <th>Status</th>
+                    <th>Error</th>
+                    <th>Raw Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for import in imports %}
+                    <tr>
+                        <td>{{ import.id }}</td>
+                        <td>{{ import.provider }}</td>
+                        <td>{{ import.target }}</td>
+                        <td>{{ import.center }}</td>
+                        <td>{{ import.year }}</td>
+                        <td>{{ import.startUtc ? import.startUtc|date('Y-m-d H:i') : '' }}</td>
+                        <td>{{ import.stopUtc ? import.stopUtc|date('Y-m-d H:i') : '' }}</td>
+                        <td>{{ import.stepSize }}</td>
+                        <td>{{ import.timeZone }}</td>
+                        <td class="mono">{{ import.sha256 }}</td>
+                        <td>{{ import.retrievedAtUtc ? import.retrievedAtUtc|date('Y-m-d H:i') : '' }}</td>
+                        <td>{{ import.status }}</td>
+                        <td>{{ import.errorMessage }}</td>
+                        <td>{{ import.rawResponse ? import.rawResponse|length : 0 }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}
