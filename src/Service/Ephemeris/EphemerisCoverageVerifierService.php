@@ -8,7 +8,6 @@ final class EphemerisCoverageVerifierService
 {
     private const ALLOWED_TABLES = [
         'moon_ephemeris_hour',
-        'solar_ephemeris_hour',
     ];
 
     public function __construct(private readonly Connection $connection)

@@ -4,26 +4,17 @@ namespace App\Service\Moon\Phase;
 
 use App\Entity\MoonPhaseEvent;
 use App\Entity\MoonEphemerisHour;
-use App\Entity\SolarEphemerisHour;
 use App\Repository\MoonEphemerisHourRepository;
 use App\Repository\MoonPhaseEventRepository;
-use App\Repository\SolarEphemerisHourRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 final class MoonPhaseEventCalculatorService
 {
-    private const EVENT_THRESHOLDS = [
-        'new_moon' => 0.0,
-        'first_quarter' => 90.0,
-        'full_moon' => 180.0,
-        'last_quarter' => 270.0,
-    ];
-
     public function __construct(
         private MoonEphemerisHourRepository $moonRepository,
-        private SolarEphemerisHourRepository $solarRepository,
         private MoonPhaseEventRepository $eventRepository,
         private EntityManagerInterface $entityManager,
+        private MoonPhaseDefinitions $phaseDefinitions,
     ) {
     }
 
@@ -34,12 +25,15 @@ final class MoonPhaseEventCalculatorService
         \DateTimeInterface $start,
         \DateTimeInterface $stop,
         \DateTimeZone $utc,
-        bool $dryRun = false
+        bool $dryRun = false,
+        ?\DateTimeInterface $eventStart = null,
+        ?\DateTimeInterface $eventStop = null,
     ): array {
         $moonRows = $this->moonRepository->findByTimestampRange($start, $stop);
-        $solarRows = $this->solarRepository->findByTimestampRange($start, $stop);
-        $solarByTimestamp = $this->indexSolarRows($solarRows);
-        $existingEvents = $this->eventRepository->findByTimestampRangeIndexed($start, $stop);
+        $rangeStart = $eventStart ?? $start;
+        $rangeStop = $eventStop ?? $stop;
+        $existingEvents = $this->eventRepository->findByTimestampRangeIndexed($rangeStart, $rangeStop);
+        $definitions = $this->phaseDefinitions->all();
 
         $saved = 0;
         $updated = 0;
@@ -56,8 +50,7 @@ final class MoonPhaseEventCalculatorService
             }
 
             $timestampKey = $timestamp->format('Y-m-d H:i');
-            $solarRow = $solarByTimestamp[$timestampKey] ?? null;
-            $angle = $this->computeElongationAngle($moonRow, $solarRow);
+            $angle = $this->computeElongationAngle($moonRow);
             if ($angle === null) {
                 continue;
             }
@@ -75,10 +68,17 @@ final class MoonPhaseEventCalculatorService
                     $timestamp,
                     $prevAngleUnwrapped,
                     $angleUnwrapped,
+                    $definitions,
                     $utc
                 );
 
                 foreach ($events as $eventData) {
+                    if ($eventStart && $eventData['timestamp'] < $eventStart) {
+                        continue;
+                    }
+                    if ($eventStop && $eventData['timestamp'] >= $eventStop) {
+                        continue;
+                    }
                     $total++;
                     $eventKey = $eventData['type'] . '|' . $eventData['timestamp']->format('Y-m-d H:i');
                     if ($dryRun) {
@@ -92,6 +92,9 @@ final class MoonPhaseEventCalculatorService
                     if (isset($existingEvents[$eventKey])) {
                         $event = $existingEvents[$eventKey];
                         $event->setPhaseDeg($eventData['phase_deg']);
+                        $event->setPhaseName($eventData['phase_name']);
+                        $event->setDisplayAtUtc(\DateTime::createFromImmutable($eventData['display_at']));
+                        $event->setIllumPct($eventData['illum_pct']);
                         $event->setPrecisionSec($eventData['precision_sec']);
                         $event->setSource($eventData['source']);
                         $updated++;
@@ -99,7 +102,10 @@ final class MoonPhaseEventCalculatorService
                         $event = new MoonPhaseEvent();
                         $event->setEventType($eventData['type']);
                         $event->setTsUtc(\DateTime::createFromImmutable($eventData['timestamp']));
+                        $event->setPhaseName($eventData['phase_name']);
+                        $event->setDisplayAtUtc(\DateTime::createFromImmutable($eventData['display_at']));
                         $event->setPhaseDeg($eventData['phase_deg']);
+                        $event->setIllumPct($eventData['illum_pct']);
                         $event->setPrecisionSec($eventData['precision_sec']);
                         $event->setSource($eventData['source']);
                         $event->setCreatedAtUtc(new \DateTime('now', $utc));
@@ -127,27 +133,40 @@ final class MoonPhaseEventCalculatorService
     }
 
     /**
-     * @param SolarEphemerisHour[] $solarRows
-     * @return array<string, SolarEphemerisHour>
+     * @return array{saved:int, updated:int, total:int}
      */
-    private function indexSolarRows(array $solarRows): array
-    {
-        $indexed = [];
-        foreach ($solarRows as $row) {
-            $timestamp = $row->getTsUtc();
-            if (!$timestamp instanceof \DateTimeInterface) {
-                continue;
-            }
-            $indexed[$timestamp->format('Y-m-d H:i')] = $row;
-        }
+    public function calculateAndPersistMonth(
+        \DateTimeInterface $monthStart,
+        \DateTimeInterface $monthStop,
+        \DateTimeZone $utc,
+        bool $dryRun = false
+    ): array {
+        $dataStart = (new \DateTimeImmutable($monthStart->format('Y-m-d H:i:s'), $utc))
+            ->modify('-2 hours');
+        $dataStop = (new \DateTimeImmutable($monthStop->format('Y-m-d H:i:s'), $utc))
+            ->modify('+2 hours');
 
-        return $indexed;
+        return $this->calculateAndPersist($dataStart, $dataStop, $utc, $dryRun, $monthStart, $monthStop);
     }
 
-    private function computeElongationAngle(MoonEphemerisHour $moon, ?SolarEphemerisHour $solar): ?float
+    private function computeElongationAngle(MoonEphemerisHour $moon): ?float
     {
+        $sunElong = $moon->getSunElongDeg();
+        if ($sunElong !== null) {
+            $elong = (float) $sunElong;
+            $trail = $moon->getSunTrail();
+            if ($trail === '/L') {
+                return 360.0 - $elong;
+            }
+            if ($trail === '/T') {
+                return $elong;
+            }
+
+            return $elong;
+        }
+
         $moonLon = $moon->getElonDeg();
-        $solarLon = $solar?->getElonDeg();
+        $solarLon = $moon->getSunEclLonDeg();
         if ($moonLon !== null && $solarLon !== null) {
             return (float) $moonLon - (float) $solarLon;
         }
@@ -175,13 +194,15 @@ final class MoonPhaseEventCalculatorService
     }
 
     /**
-     * @return array<int, array{type:string, timestamp:\DateTimeImmutable, phase_deg:string, precision_sec:int, source:string}>
+     * @param array<string, array{angle: float, label: string}> $definitions
+     * @return array<int, array{type:string, timestamp:\DateTimeImmutable, display_at:\DateTimeImmutable, phase_name:string, phase_deg:string, illum_pct:string, precision_sec:int, source:string}>
      */
     private function findEventsBetween(
         \DateTimeInterface $startTime,
         \DateTimeInterface $endTime,
         float $startAngle,
         float $endAngle,
+        array $definitions,
         \DateTimeZone $utc
     ): array {
         $events = [];
@@ -192,17 +213,22 @@ final class MoonPhaseEventCalculatorService
         $endCycle = (int) floor($max / 360.0);
 
         for ($cycle = $startCycle; $cycle <= $endCycle; $cycle++) {
-            foreach (self::EVENT_THRESHOLDS as $type => $threshold) {
+            foreach ($definitions as $type => $definition) {
+                $threshold = $definition['angle'];
                 $target = ($cycle * 360.0) + $threshold;
                 if ($target <= $min || $target > $max) {
                     continue;
                 }
 
                 $timestamp = $this->interpolateTimestamp($startTime, $endTime, $startAngle, $endAngle, $target, $utc);
+                $illumPct = $this->computeIlluminationPercent($threshold);
                 $events[] = [
                     'type' => $type,
                     'timestamp' => $timestamp,
+                    'display_at' => $timestamp,
+                    'phase_name' => $definition['label'],
                     'phase_deg' => $this->formatDecimal($threshold, 2),
+                    'illum_pct' => $this->formatDecimal($illumPct, 2),
                     'precision_sec' => 60,
                     'source' => 'geocentric',
                 ];
@@ -250,5 +276,11 @@ final class MoonPhaseEventCalculatorService
     {
         $formatted = sprintf('%.' . $scale . 'f', $value);
         return rtrim(rtrim($formatted, '0'), '.');
+    }
+
+    private function computeIlluminationPercent(float $elongationDeg): float
+    {
+        $radians = deg2rad($elongationDeg);
+        return 50.0 * (1.0 - cos($radians));
     }
 }

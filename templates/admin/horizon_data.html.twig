@@ -71,14 +71,27 @@
     <div class="admin-grid admin-grid--two">
         <section class="admin-card">
             <div class="admin-card__header">
-                <h2 class="admin-card__title">Import mensuel (Moon + Sun)</h2>
+                <h2 class="admin-card__title">Import mensuel (Moon)</h2>
                 <p class="admin-card__subtitle">Plage calee de 00:00 a 23:00 pour couvrir un mois complet.</p>
             </div>
             <div class="admin-month-import" data-month-initial="{{ next_month_start }}">
                 <div class="admin-month-import__label">Prochain mois:</div>
                 <div class="admin-month-import__value" data-month-label>{{ next_month_label }}</div>
+                <div class="admin-month-import__field">
+                    <label class="admin-form__label" for="bulk_step">Step</label>
+                    <input class="admin-form__input" id="bulk_step" name="step" type="text" value="10m" list="step-options" form="month-import-form">
+                    <datalist id="step-options">
+                        <option value="5m"></option>
+                        <option value="10m"></option>
+                        <option value="15m"></option>
+                        <option value="30m"></option>
+                        <option value="1h"></option>
+                        <option value="2h"></option>
+                        <option value="1d"></option>
+                    </datalist>
+                </div>
             </div>
-            <form class="admin-month-actions" method="post" action="{{ path('admin_horizon_data_bulk_month') }}">
+            <form class="admin-month-actions" id="month-import-form" method="post" action="{{ path('admin_horizon_data_bulk_month') }}">
                 <input type="hidden" name="start" value="{{ next_month_start }}" data-month-input>
                 <button class="admin-button admin-button--ghost" type="button" data-month-prev aria-label="Mois precedent">&lt;</button>
                 <button class="admin-button admin-button--primary" type="submit">Ajouter ce mois</button>
@@ -89,11 +102,10 @@
         <section class="admin-card">
             <div class="admin-card__header">
                 <h2 class="admin-card__title">Couverture des mois</h2>
-                <p class="admin-card__subtitle">Presence des donnees Moon (L) et Sun (S).</p>
+                <p class="admin-card__subtitle">Presence des donnees Moon (L).</p>
             </div>
             <div class="admin-month-legend">
                 <span class="admin-month-legend__item admin-month-legend__item--moon">L</span>
-                <span class="admin-month-legend__item admin-month-legend__item--solar">S</span>
             </div>
             <div class="admin-month-grid__row admin-month-grid__row--header">
                 <div class="admin-month-grid__year">Annee</div>
@@ -112,7 +124,6 @@
                                 {% set month_key = year ~ '-' ~ '%02d'|format(month) %}
                                 <div class="admin-month-grid__cell" title="{{ month_key }}">
                                     <span class="admin-month-dot admin-month-dot--moon {{ month_key in moon_months ? 'admin-month-dot--active' : '' }}"></span>
-                                    <span class="admin-month-dot admin-month-dot--solar {{ month_key in solar_months ? 'admin-month-dot--active' : '' }}"></span>
                                 </div>
                             {% endfor %}
                         </div>
@@ -217,6 +228,20 @@
         {% endif %}
     </section>
 
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Suppression globale</h2>
+            <p class="admin-card__subtitle">Supprime tous les runs + ephemerides Moon.</p>
+        </div>
+        <button
+            class="admin-button admin-button--danger"
+            type="button"
+            data-delete-all-button
+            data-delete-all-token="{{ csrf_token('delete_all_imports') }}"
+            data-delete-all-action="{{ path('admin_horizon_data_delete_all') }}"
+        >Tout supprimer</button>
+    </section>
+
     <div class="admin-modal" data-delete-modal aria-hidden="true">
         <div class="admin-modal__backdrop" data-modal-close></div>
         <div class="admin-modal__dialog" role="dialog" aria-modal="true">
@@ -227,6 +252,22 @@
             <form class="admin-modal__actions" method="post" data-modal-form>
                 <input type="hidden" name="_token" value="" data-modal-token>
                 <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+                <button class="admin-button" type="button" data-modal-close>Annuler</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="admin-modal" data-delete-all-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Tout supprimer</div>
+            <div class="admin-modal__body">
+                Cette action supprime toutes les donnees Moon et les runs d'import.
+                Confirmer ?
+            </div>
+            <form class="admin-modal__actions" method="post" data-delete-all-form>
+                <input type="hidden" name="_token" value="" data-delete-all-token-input>
+                <button class="admin-button admin-button--danger" type="submit">Supprimer tout</button>
                 <button class="admin-button" type="button" data-modal-close>Annuler</button>
             </form>
         </div>
@@ -339,6 +380,46 @@
                     modal.setAttribute('aria-hidden', 'false');
                     modal.classList.add('is-open');
                 });
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-modal-close]')) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeModal();
+                }
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var modal = document.querySelector('[data-delete-all-modal]');
+            var form = document.querySelector('[data-delete-all-form]');
+            var tokenInput = modal ? modal.querySelector('[data-delete-all-token-input]') : null;
+            var button = document.querySelector('[data-delete-all-button]');
+            if (!modal || !form || !tokenInput || !button) {
+                return;
+            }
+
+            function closeModal() {
+                modal.setAttribute('aria-hidden', 'true');
+                modal.classList.remove('is-open');
+            }
+
+            button.addEventListener('click', function () {
+                var action = button.getAttribute('data-delete-all-action');
+                var token = button.getAttribute('data-delete-all-token');
+                if (!action || !token) {
+                    return;
+                }
+                form.setAttribute('action', action);
+                tokenInput.value = token;
+                modal.setAttribute('aria-hidden', 'false');
+                modal.classList.add('is-open');
             });
 
             modal.addEventListener('click', function (event) {

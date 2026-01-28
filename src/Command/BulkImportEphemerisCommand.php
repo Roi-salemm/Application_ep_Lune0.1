@@ -4,9 +4,10 @@ namespace App\Command;
 
 use App\Service\Moon\Horizons\MoonHorizonsClientService;
 use App\Service\Moon\Horizons\MoonHorizonsDateTimeParserService;
+use App\Repository\MoonEphemerisHourRepository;
 use App\Service\Moon\Horizons\MoonHorizonsImportService;
 use App\Service\Moon\Horizons\MoonHorizonsParserService;
-use App\Service\Solar\Horizons\SolarHorizonsImportService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -15,7 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
     name: 'app:ephemeris:bulk-import',
-    description: 'Import Moon + Sun ephemeris data month by month.',
+    description: 'Import Moon ephemeris data month by month.',
 )]
 class BulkImportEphemerisCommand extends Command
 {
@@ -23,8 +24,9 @@ class BulkImportEphemerisCommand extends Command
         private MoonHorizonsClientService $clientService,
         private MoonHorizonsParserService $parserService,
         private MoonHorizonsImportService $moonImportService,
-        private SolarHorizonsImportService $solarImportService,
         private MoonHorizonsDateTimeParserService $dateTimeParserService,
+        private MoonEphemerisHourRepository $moonRepository,
+        private EntityManagerInterface $entityManager,
     ) {
         parent::__construct();
     }
@@ -36,10 +38,8 @@ class BulkImportEphemerisCommand extends Command
             ->addOption('months', null, InputOption::VALUE_OPTIONAL, 'Number of months to import', '1')
             ->addOption('step', null, InputOption::VALUE_OPTIONAL, 'Horizons step size', '1h')
             ->addOption('moon-target', null, InputOption::VALUE_OPTIONAL, 'Moon target body', '301')
-            ->addOption('sun-target', null, InputOption::VALUE_OPTIONAL, 'Sun target body', '10')
             ->addOption('center', null, InputOption::VALUE_OPTIONAL, 'Center body or site', '500@399')
-            ->addOption('moon-quantities', null, InputOption::VALUE_OPTIONAL, 'Moon quantities list', '1,20,23,24,29')
-            ->addOption('sun-quantities', null, InputOption::VALUE_OPTIONAL, 'Sun quantities list', '1,20,23,24,29')
+            ->addOption('moon-quantities', null, InputOption::VALUE_OPTIONAL, 'Moon quantities list', '1,13,14,15,17,18,20,23,24,29,30,49')
             ->addOption('time-zone', null, InputOption::VALUE_OPTIONAL, 'Time zone label stored in the run', 'UTC')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Fetch and parse without saving to the database');
     }
@@ -52,10 +52,8 @@ class BulkImportEphemerisCommand extends Command
         $months = max(1, (int) $input->getOption('months'));
         $step = trim((string) $input->getOption('step')) ?: '1h';
         $moonTarget = trim((string) $input->getOption('moon-target')) ?: '301';
-        $sunTarget = trim((string) $input->getOption('sun-target')) ?: '10';
         $center = trim((string) $input->getOption('center')) ?: '500@399';
-        $moonQuantities = trim((string) $input->getOption('moon-quantities')) ?: '1,20,23,24,29';
-        $sunQuantities = trim((string) $input->getOption('sun-quantities')) ?: '1,20,23,24,29';
+        $moonQuantities = trim((string) $input->getOption('moon-quantities')) ?: '1,13,14,15,17,18,20,23,24,29,30,49';
         $timeZoneLabel = trim((string) $input->getOption('time-zone')) ?: 'UTC';
 
         $start = $this->dateTimeParserService->parseInput($startInput, $utc);
@@ -65,10 +63,15 @@ class BulkImportEphemerisCommand extends Command
         }
 
         $start = (clone $start)->setTimezone($utc)->modify('first day of this month')->setTime(0, 0, 0);
+        $stepSeconds = $this->parseStepToSeconds($step);
+        if ($stepSeconds <= 0) {
+            $stepSeconds = 3600;
+        }
 
         for ($index = 0; $index < $months; $index++) {
             $chunkStart = (clone $start)->modify(sprintf('+%d months', $index));
-            $chunkStop = (clone $chunkStart)->modify('+1 month')->modify('-1 hour');
+            $nextMonthStart = (clone $chunkStart)->modify('+1 month');
+            $chunkStop = (clone $nextMonthStart)->modify(sprintf('-%d seconds', $stepSeconds));
 
             $output->writeln(sprintf(
                 'Import %s -> %s (UTC)',
@@ -114,37 +117,367 @@ class BulkImportEphemerisCommand extends Command
                 $moonResult = $this->moonImportService->importParsedRows($moonRun, $moonParse, $utc);
                 $output->writeln(sprintf('Moon saved %d, updated %d.', $moonResult['saved'], $moonResult['updated']));
             }
-
-            try {
-                $sunResponse = $this->clientService->fetchEphemeris(
-                    $chunkStart,
-                    $chunkStop,
-                    $sunTarget,
-                    $center,
-                    $step,
-                    $sunQuantities
-                );
-            } catch (\RuntimeException $e) {
-                $output->writeln('<error>Sun fetch failed: ' . $e->getMessage() . '</error>');
-                return Command::FAILURE;
-            }
-
-            if ($sunResponse['status'] >= 400) {
-                $output->writeln('<error>Sun Horizons HTTP ' . $sunResponse['status'] . '.</error>');
-                return Command::FAILURE;
-            }
-
-            $sunParse = $this->parserService->parseResponse($sunResponse['body']);
-
             if ($dryRun) {
-                $output->writeln(sprintf('Sun rows: %d', count($sunParse->getRows())));
+                $this->fetchSunEclipticFromEarth($chunkStart, $chunkStop, $step, $utc, $output, true);
+                $this->fetchSunRaDecGeocentric($chunkStart, $chunkStop, $step, $utc, $output, true);
                 continue;
             }
 
-            $sunResult = $this->solarImportService->importParsedRows($sunParse, $utc, $chunkStart, $chunkStop);
-            $output->writeln(sprintf('Sun saved %d, updated %d.', $sunResult['saved'], $sunResult['updated']));
+            $result = $this->fetchSunEclipticFromEarth($chunkStart, $chunkStop, $step, $utc, $output, false);
+            if ($result === null) {
+                return Command::FAILURE;
+            }
+
+            $result = $this->fetchSunRaDecGeocentric($chunkStart, $chunkStop, $step, $utc, $output, false);
+            if ($result === null) {
+                return Command::FAILURE;
+            }
         }
 
         return Command::SUCCESS;
+    }
+
+    private function fetchSunEclipticFromEarth(
+        \DateTimeInterface $start,
+        \DateTimeInterface $stop,
+        string $step,
+        \DateTimeZone $utc,
+        OutputInterface $output,
+        bool $dryRun
+    ): ?int {
+        $output->writeln('<comment>Fetch Sun ecliptic lon/lat from Earth heliocentric (target=399, center=500@10, quantities=1,18,20).</comment>');
+
+        try {
+            $response = $this->clientService->fetchEphemeris($start, $stop, '399', '500@10', $step, '1,18,20');
+        } catch (\RuntimeException $e) {
+            $output->writeln('<error>Sun ecliptic fetch failed: ' . $e->getMessage() . '</error>');
+            return null;
+        }
+
+        if ($response['status'] >= 400) {
+            $output->writeln('<error>Sun ecliptic Horizons HTTP ' . $response['status'] . '.</error>');
+            return null;
+        }
+
+        $parse = $this->parserService->parseResponse($response['body']);
+        $columnMap = $parse->getColumnMap();
+        $lonIndex = $columnMap['elon_deg'] ?? null;
+        $latIndex = $columnMap['elat_deg'] ?? null;
+
+        if ($lonIndex === null || $latIndex === null) {
+            $output->writeln('<error>Sun ecliptic lon/lat columns not found in Horizons response.</error>');
+            return null;
+        }
+
+        if ($dryRun) {
+            $output->writeln(sprintf('Sun ecliptic rows: %d', count($parse->getRows())));
+            return 0;
+        }
+
+        $moonRows = $this->moonRepository->findByTimestampRangeIndexed($start, $stop);
+        if (!$moonRows) {
+            $output->writeln('<comment>No moon rows found for sun ecliptic update.</comment>');
+            return 0;
+        }
+
+        $updated = 0;
+        foreach ($parse->getRows() as $row) {
+            $timestamp = $this->parseTimestamp($row, $columnMap, $utc);
+            if (!$timestamp) {
+                continue;
+            }
+            $timestampKey = $timestamp->format('Y-m-d H:i');
+            if (!isset($moonRows[$timestampKey])) {
+                continue;
+            }
+
+            $cols = $row['cols'] ?? [];
+            $earthLon = $this->parseNumeric($this->extractColumnValue($cols, $lonIndex));
+            $earthLat = $this->parseNumeric($this->extractColumnValue($cols, $latIndex));
+            if ($earthLon === null || $earthLat === null) {
+                continue;
+            }
+
+            $sunLon = $this->normalizeAngle($earthLon + 180.0);
+            $sunLat = -1.0 * $earthLat;
+            $sunDistAu = $this->parseSunDistanceAu($cols, $columnMap);
+
+            $moon = $moonRows[$timestampKey];
+            $moon->setSunEclLonDeg($this->formatDecimal($sunLon, 6));
+            $moon->setSunEclLatDeg($this->formatDecimal($sunLat, 6));
+            if ($sunDistAu !== null) {
+                $moon->setSunDistAu($this->formatDecimal($sunDistAu, 14));
+            }
+            $updated++;
+        }
+
+        $this->entityManager->flush();
+        $output->writeln(sprintf('Sun ecliptic updated on %d moon rows.', $updated));
+
+        return $updated;
+    }
+
+    private function fetchSunRaDecGeocentric(
+        \DateTimeInterface $start,
+        \DateTimeInterface $stop,
+        string $step,
+        \DateTimeZone $utc,
+        OutputInterface $output,
+        bool $dryRun
+    ): ?int {
+        $output->writeln('<comment>Fetch Sun RA/DEC geocentric (target=10, center=500@399, quantities=1).</comment>');
+
+        try {
+            $response = $this->clientService->fetchEphemeris($start, $stop, '10', '500@399', $step, '1');
+        } catch (\RuntimeException $e) {
+            $output->writeln('<error>Sun RA/DEC fetch failed: ' . $e->getMessage() . '</error>');
+            return null;
+        }
+
+        if ($response['status'] >= 400) {
+            $output->writeln('<error>Sun RA/DEC Horizons HTTP ' . $response['status'] . '.</error>');
+            return null;
+        }
+
+        $parse = $this->parserService->parseResponse($response['body']);
+        $columnMap = $parse->getColumnMap();
+        $raIndex = $columnMap['ra_hours'] ?? null;
+        $decIndex = $columnMap['dec_deg'] ?? null;
+
+        if ($raIndex === null || $decIndex === null) {
+            $output->writeln('<error>Sun RA/DEC columns not found in Horizons response.</error>');
+            return null;
+        }
+
+        if ($dryRun) {
+            $output->writeln(sprintf('Sun RA/DEC rows: %d', count($parse->getRows())));
+            return 0;
+        }
+
+        $moonRows = $this->moonRepository->findByTimestampRangeIndexed($start, $stop);
+        if (!$moonRows) {
+            $output->writeln('<comment>No moon rows found for sun RA/DEC update.</comment>');
+            return 0;
+        }
+
+        $updated = 0;
+        foreach ($parse->getRows() as $row) {
+            $timestamp = $this->parseTimestamp($row, $columnMap, $utc);
+            if (!$timestamp) {
+                continue;
+            }
+            $timestampKey = $timestamp->format('Y-m-d H:i');
+            if (!isset($moonRows[$timestampKey])) {
+                continue;
+            }
+
+            $cols = $row['cols'] ?? [];
+            $ra = $this->parseRaHours($this->extractColumnValue($cols, $raIndex));
+            $dec = $this->parseDecDegrees($this->extractColumnValue($cols, $decIndex));
+            if ($ra === null && $dec === null) {
+                continue;
+            }
+
+            $moon = $moonRows[$timestampKey];
+            if ($ra !== null) {
+                $moon->setSunRaHours($this->formatDecimal($ra, 6));
+            }
+            if ($dec !== null) {
+                $moon->setSunDecDeg($this->formatDecimal($dec, 6));
+            }
+            $updated++;
+        }
+
+        $this->entityManager->flush();
+        $output->writeln(sprintf('Sun RA/DEC updated on %d moon rows.', $updated));
+
+        return $updated;
+    }
+
+    private function parseTimestamp(array $row, array $columnMap, \DateTimeZone $utc): ?\DateTime
+    {
+        $cols = $row['cols'] ?? [];
+        $timestampValue = $this->extractColumnValue($cols, $columnMap['timestamp'] ?? null);
+        if ($timestampValue === null && $cols) {
+            $timestampValue = $cols[0];
+        }
+
+        return $this->dateTimeParserService->parseHorizonsTimestamp($timestampValue, $utc);
+    }
+
+    private function extractColumnValue(array $cols, ?int $index): ?string
+    {
+        if ($index === null) {
+            return null;
+        }
+
+        return $cols[$index] ?? null;
+    }
+
+    private function parseNumeric(?string $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $clean = trim($value);
+        if ($clean === '' || strtolower($clean) === 'n.a.' || strtolower($clean) === 'na') {
+            return null;
+        }
+
+        $clean = str_replace(['km', 'KM', 'deg', 'DEG', 'au', 'AU'], '', $clean);
+        $clean = trim($clean, " \t\n\r\0\x0B\"'");
+        $clean = trim($clean);
+
+        if ($clean === '') {
+            return null;
+        }
+
+        if (!preg_match('/^[+-]?\d+(\.\d+)?([Ee][+-]?\d+)?$/', $clean)) {
+            return null;
+        }
+
+        return (float) $clean;
+    }
+
+    private function parseRaHours(?string $value): ?float
+    {
+        $decimal = $this->parseNumeric($value);
+        if ($decimal !== null) {
+            return $decimal;
+        }
+
+        return $this->parseHmsToDecimal($value);
+    }
+
+    private function parseDecDegrees(?string $value): ?float
+    {
+        $decimal = $this->parseNumeric($value);
+        if ($decimal !== null) {
+            return $decimal;
+        }
+
+        return $this->parseDmsToDecimal($value);
+    }
+
+    private function parseHmsToDecimal(?string $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $clean = trim($value);
+        if ($clean === '') {
+            return null;
+        }
+
+        $clean = str_replace(['h', 'm', 's'], ' ', $clean);
+        $parts = preg_split('/[:\s]+/', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (!$parts) {
+            return null;
+        }
+
+        $hours = (float) $parts[0];
+        $minutes = isset($parts[1]) ? (float) $parts[1] : 0.0;
+        $seconds = isset($parts[2]) ? (float) $parts[2] : 0.0;
+
+        return $hours + ($minutes / 60.0) + ($seconds / 3600.0);
+    }
+
+    private function parseDmsToDecimal(?string $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $clean = trim($value);
+        if ($clean === '') {
+            return null;
+        }
+
+        $clean = str_replace(['d', "'", '"'], ' ', $clean);
+        $parts = preg_split('/[:\s]+/', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (!$parts) {
+            return null;
+        }
+
+        $sign = 1.0;
+        if (str_starts_with($parts[0], '-')) {
+            $sign = -1.0;
+        }
+
+        $degrees = abs((float) $parts[0]);
+        $minutes = isset($parts[1]) ? (float) $parts[1] : 0.0;
+        $seconds = isset($parts[2]) ? (float) $parts[2] : 0.0;
+
+        return $sign * ($degrees + ($minutes / 60.0) + ($seconds / 3600.0));
+    }
+
+    private function parseSunDistanceAu(array $cols, array $columnMap): ?float
+    {
+        $deltaIndex = $columnMap['delta_au'] ?? null;
+        $distIndex = $columnMap['dist_km'] ?? null;
+        $raw = null;
+
+        if ($deltaIndex !== null) {
+            $raw = $this->extractColumnValue($cols, $deltaIndex);
+        }
+        if ($raw === null && $distIndex !== null) {
+            $raw = $this->extractColumnValue($cols, $distIndex);
+        }
+
+        $value = $this->parseNumeric($raw);
+        if ($value === null) {
+            return null;
+        }
+
+        if ($value > 1000.0) {
+            return $value / 149597870.7;
+        }
+
+        return $value;
+    }
+
+    private function normalizeAngle(float $angle): float
+    {
+        $normalized = fmod($angle, 360.0);
+        if ($normalized < 0.0) {
+            $normalized += 360.0;
+        }
+
+        return $normalized;
+    }
+
+    private function formatDecimal(float $value, int $scale): string
+    {
+        $formatted = sprintf('%.' . $scale . 'f', $value);
+        return rtrim(rtrim($formatted, '0'), '.');
+    }
+
+    private function parseStepToSeconds(string $step): int
+    {
+        $value = trim($step);
+        if ($value === '') {
+            return 0;
+        }
+
+        if (ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        if (preg_match('/^(\d+)\s*([hmsd])$/i', $value, $matches) !== 1) {
+            return 0;
+        }
+
+        $amount = (int) $matches[1];
+        $unit = strtolower($matches[2]);
+
+        return match ($unit) {
+            'd' => $amount * 86400,
+            'h' => $amount * 3600,
+            'm' => $amount * 60,
+            's' => $amount,
+            default => 0,
+        };
     }
 }

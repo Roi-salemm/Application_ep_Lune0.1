@@ -29,8 +29,15 @@ final class MoonEphemerisHourController extends AbstractController
             return $this->redirectToRoute('admin_moon_ephemeris_hours');
         }
 
+        $stepInput = trim((string) $request->request->get('step', '1h'));
+        $stepSeconds = $this->parseStepToSeconds($stepInput);
+        if ($stepSeconds <= 0) {
+            $this->addFlash('verification_error', 'Pas attendu invalide.');
+            return $this->redirectToRoute('admin_moon_ephemeris_hours');
+        }
+
         try {
-            $result = $verifier->verifyTable('moon_ephemeris_hour', 'Moon', 3600, 20);
+            $result = $verifier->verifyTable('moon_ephemeris_hour', 'Moon', $stepSeconds, 20);
             $report = $verifier->formatReport($result);
         } catch (\Throwable $e) {
             $this->addFlash('verification_error', 'Verification echouee: ' . $e->getMessage());
@@ -53,5 +60,32 @@ final class MoonEphemerisHourController extends AbstractController
         ];
 
         return $this->render('admin/moon_ephemeris_hours.html.twig', $payload);
+    }
+
+    private function parseStepToSeconds(string $step): int
+    {
+        $value = trim($step);
+        if ($value === '') {
+            return 0;
+        }
+
+        if (ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        if (preg_match('/^(\d+)\s*([hmsd])$/i', $value, $matches) !== 1) {
+            return 0;
+        }
+
+        $amount = (int) $matches[1];
+        $unit = strtolower($matches[2]);
+
+        return match ($unit) {
+            'd' => $amount * 86400,
+            'h' => $amount * 3600,
+            'm' => $amount * 60,
+            's' => $amount,
+            default => 0,
+        };
     }
 }

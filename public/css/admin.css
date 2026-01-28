@@ -337,6 +337,7 @@ body {
     align-items: baseline;
     gap: 12px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
 }
 
 .admin-month-import__label {
@@ -350,6 +351,20 @@ body {
     font-size: 20px;
     font-weight: 600;
     color: var(--admin-text);
+}
+
+.admin-month-import__field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-month-import__field .admin-form__label {
+    margin-bottom: 0;
+}
+
+.admin-month-import__field .admin-form__input {
+    min-width: 90px;
 }
 
 .admin-month-actions {
@@ -398,6 +413,30 @@ body {
 .admin-month-legend__item--solar {
     border-color: rgba(76, 212, 176, 0.5);
     color: var(--admin-accent-alt);
+}
+
+.admin-month-legend__item--validated {
+    border-color: rgba(111, 168, 255, 0.6);
+    color: #9bb7ff;
+}
+.admin-month-legend__item--geo {
+    border-color: rgba(122, 72, 34, 0.9);
+    background-color: rgba(122, 72, 34, 0.22);
+    color: #d7a06a;
+}
+.admin-month-legend__item--topo {
+    border-color: rgba(245, 210, 80, 0.95);
+    background-color: rgba(245, 210, 80, 0.22);
+    color: #ffea9f;
+}
+.admin-month-legend__item--direct {
+    border-color: rgba(165, 120, 255, 0.9);
+    background-color: rgba(165, 120, 255, 0.2);
+    color: #cbb2ff;
+}
+.admin-month-legend__item--phase {
+    border-color: rgba(111, 168, 255, 0.5);
+    color: #9bb7ff;
 }
 
 .admin-month-grid {
@@ -465,12 +504,20 @@ body {
     box-shadow: 0 0 0 4px rgba(76, 212, 176, 0.08);
 }
 
+.admin-month-dot--phase {
+    box-shadow: 0 0 0 4px rgba(111, 168, 255, 0.08);
+}
+
 .admin-month-dot--active.admin-month-dot--moon {
     background: var(--admin-accent);
 }
 
 .admin-month-dot--active.admin-month-dot--solar {
     background: var(--admin-accent-alt);
+}
+
+.admin-month-dot--active.admin-month-dot--phase {
+    background: #9bb7ff;
 }
 
 .admin-form {

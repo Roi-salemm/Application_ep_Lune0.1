@@ -1,14 +1,72 @@
 {% extends 'admin/base.html.twig' %}
 
 {% set page_title = 'Phases lunaires' %}
-{% set page_subtitle = 'Evenements de phase (limite: ' ~ limit ~ ').' %}
+{% set page_subtitle = 'Evenements 8 phases (limite: ' ~ limit ~ ').' %}
 {% set active_menu = 'phase_events' %}
 
 {% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="admin-grid admin-grid--two">
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Calculer un mois</h2>
+                <p class="admin-card__subtitle">8 phases lunaires a 45deg depuis Moon + Sun.</p>
+            </div>
+            <div class="admin-month-import" data-month-initial="{{ next_month_start }}">
+                <div class="admin-month-import__label">Mois selectionne:</div>
+                <div class="admin-month-import__value" data-month-label>{{ next_month_label }}</div>
+            </div>
+            <form class="admin-month-actions" method="post" action="{{ path('admin_moon_phase_events_compute_month') }}">
+                <input type="hidden" name="start" value="{{ next_month_start }}" data-month-input>
+                <button class="admin-button admin-button--ghost" type="button" data-month-prev aria-label="Mois precedent">&lt;</button>
+                <button class="admin-button admin-button--primary" type="submit">Calculer ce mois</button>
+                <button class="admin-button admin-button--ghost" type="button" data-month-next aria-label="Mois suivant">&gt;</button>
+            </form>
+        </section>
+
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Couverture des mois</h2>
+                <p class="admin-card__subtitle">Presence des phases calculees.</p>
+            </div>
+            <div class="admin-month-legend">
+                <span class="admin-month-legend__item admin-month-legend__item--phase">P</span>
+            </div>
+            <div class="admin-month-grid__row admin-month-grid__row--header">
+                <div class="admin-month-grid__year">Annee</div>
+                <div class="admin-month-grid__months admin-month-grid__months--header">
+                    {% for month in 1..12 %}
+                        <div class="admin-month-grid__label">{{ '%02d'|format(month) }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="admin-month-grid">
+                {% for year in years %}
+                    <div class="admin-month-grid__row">
+                        <div class="admin-month-grid__year">{{ year }}</div>
+                        <div class="admin-month-grid__months">
+                            {% for month in 1..12 %}
+                                {% set month_key = year ~ '-' ~ '%02d'|format(month) %}
+                                <div class="admin-month-grid__cell" title="{{ month_key }}">
+                                    <span class="admin-month-dot admin-month-dot--phase {{ month_key in phase_months ? 'admin-month-dot--active' : '' }}"></span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
     <section class="admin-card admin-card--table">
         <div class="admin-card__header">
             <h2 class="admin-card__title">Moon phase event</h2>
-            <p class="admin-card__subtitle">Calendrier des transitions principales.</p>
+            <p class="admin-card__subtitle">Calendrier des phases calculees.</p>
         </div>
 
         {% if events is empty %}
@@ -20,8 +78,11 @@
                         <tr>
                             <th class="admin-table__cell">ID</th>
                             <th class="admin-table__cell">Type</th>
+                            <th class="admin-table__cell">Nom</th>
+                            <th class="admin-table__cell">Affichage UTC</th>
                             <th class="admin-table__cell">Timestamp UTC</th>
                             <th class="admin-table__cell">Phase deg</th>
+                            <th class="admin-table__cell">Illum %</th>
                             <th class="admin-table__cell">Precision sec</th>
                             <th class="admin-table__cell">Source</th>
                             <th class="admin-table__cell">Created</th>
@@ -32,8 +93,11 @@
                             <tr>
                                 <td class="admin-table__cell">{{ event.id }}</td>
                                 <td class="admin-table__cell">{{ event.eventType }}</td>
+                                <td class="admin-table__cell">{{ event.phaseName }}</td>
+                                <td class="admin-table__cell">{{ event.displayAtUtc ? event.displayAtUtc|date('Y-m-d H:i') : '' }}</td>
                                 <td class="admin-table__cell">{{ event.tsUtc ? event.tsUtc|date('Y-m-d H:i') : '' }}</td>
                                 <td class="admin-table__cell">{{ event.phaseDeg }}</td>
+                                <td class="admin-table__cell">{{ event.illumPct is not null ? event.illumPct ~ '%' : '' }}</td>
                                 <td class="admin-table__cell">{{ event.precisionSec }}</td>
                                 <td class="admin-table__cell">{{ event.source }}</td>
                                 <td class="admin-table__cell">{{ event.createdAtUtc ? event.createdAtUtc|date('Y-m-d H:i') : '' }}</td>
@@ -44,4 +108,59 @@
             </div>
         {% endif %}
     </section>
+
+    <script>
+        (function () {
+            var container = document.querySelector('.admin-month-import');
+            var input = document.querySelector('[data-month-input]');
+            var label = document.querySelector('[data-month-label]');
+            var prev = document.querySelector('[data-month-prev]');
+            var next = document.querySelector('[data-month-next]');
+            if (!container || !input || !label || !prev || !next) {
+                return;
+            }
+
+            var monthNames = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+
+            function formatLabel(date) {
+                var year = date.getUTCFullYear();
+                var month = date.getUTCMonth() + 1;
+                var padded = month < 10 ? '0' + month : String(month);
+                return year + ' ' + padded + ' (' + monthNames[month - 1] + ')';
+            }
+
+            function readDate() {
+                var value = input.value || container.getAttribute('data-month-initial');
+                var parts = value.split('-');
+                if (parts.length < 2) {
+                    return new Date();
+                }
+                var year = parseInt(parts[0], 10);
+                var month = parseInt(parts[1], 10) - 1;
+                return new Date(Date.UTC(year, month, 1));
+            }
+
+            function writeDate(date) {
+                var year = date.getUTCFullYear();
+                var month = date.getUTCMonth() + 1;
+                var padded = month < 10 ? '0' + month : String(month);
+                input.value = year + '-' + padded + '-01';
+                label.textContent = formatLabel(date);
+            }
+
+            prev.addEventListener('click', function () {
+                var date = readDate();
+                date.setUTCMonth(date.getUTCMonth() - 1);
+                writeDate(date);
+            });
+
+            next.addEventListener('click', function () {
+                var date = readDate();
+                date.setUTCMonth(date.getUTCMonth() + 1);
+                writeDate(date);
+            });
+
+            writeDate(readDate());
+        })();
+    </script>
 {% endblock %}

@@ -3,7 +3,7 @@
 {% block title %}{{ page_title|default('Administration') }}{% endblock %}
 
 {% block stylesheets %}
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260128-gto">
 {% endblock %}
 
 {% block body %}
@@ -44,15 +44,14 @@
                 </span>
                 <span class="admin-sidebar__label">Phases lunaires</span>
             </a>
-            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'solar' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_solar_ephemeris_hours') }}" style="--delay: 4">
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'horizons_quantities' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_horizons_observer_quantities') }}" style="--delay: 4">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
-                        <circle cx="12" cy="12" r="4.5" />
-                        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M19.5 4.5l-2 2M4.5 19.5l2-2" />
+                        <path d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </span>
-                <span class="admin-sidebar__label">Solar ephemeris</span>
+                <span class="admin-sidebar__label">Horizons OBSERVER</span>
             </a>
         </nav>
         <div class="admin-sidebar__footer">

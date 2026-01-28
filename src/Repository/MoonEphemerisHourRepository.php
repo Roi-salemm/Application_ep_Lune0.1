@@ -96,6 +96,18 @@ class MoonEphemerisHourRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function countByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $stop): int
+    {
+        return (int) $this->createQueryBuilder('m')
+            ->select('COUNT(m.id)')
+            ->andWhere('m.ts_utc >= :start')
+            ->andWhere('m.ts_utc < :stop')
+            ->setParameter('start', $start)
+            ->setParameter('stop', $stop)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /**
      * @return string[]
      */
@@ -122,6 +134,17 @@ class MoonEphemerisHourRepository extends ServiceEntityRepository
         }
 
         return new \DateTimeImmutable((string) $value, new \DateTimeZone('UTC'));
+    }
+
+    public function findLatestAtOrBefore(\DateTimeInterface $timestamp): ?MoonEphemerisHour
+    {
+        return $this->createQueryBuilder('m')
+            ->andWhere('m.ts_utc <= :ts')
+            ->setParameter('ts', $timestamp)
+            ->orderBy('m.ts_utc', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 
     //    /**

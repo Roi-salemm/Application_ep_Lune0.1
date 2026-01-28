@@ -1,0 +1,119 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Horizons OBSERVER' %}
+{% set page_subtitle = 'Liste exhaustive des quantites (1-49) et macros A-F.' %}
+{% set active_menu = 'horizons_quantities' %}
+
+{% block admin_content %}
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Legende</h2>
+            <p class="admin-card__subtitle">Marqueurs issus du manuel Horizons.</p>
+        </div>
+        <div class="admin-month-legend">
+            <span class="admin-month-legend__item admin-month-legend__item--moon">D</span>
+            <span class="admin-month-legend__item admin-month-legend__item--solar">S</span>
+            <span class="admin-month-legend__item admin-month-legend__item--validated">A</span>
+            <span class="admin-month-legend__item admin-month-legend__item--geo">G</span>
+            <span class="admin-month-legend__item admin-month-legend__item--topo">T</span>
+            <span class="admin-month-legend__item admin-month-legend__item--direct">O</span>
+        </div>
+        <p class="admin-empty">
+            D = quantite mise en avant dans ce catalogue.
+            &nbsp;&nbsp;S = quantite statistique (covariance requise).
+            &nbsp;&nbsp;A = valeur validee pour l app.
+            &nbsp;&nbsp;G = requis pour calculs geocentriques.
+            &nbsp;&nbsp;T = requis pour calculs topocentriques.
+            &nbsp;&nbsp;O = donnee exploitable telle quelle (sans calcul).
+        </p>
+    </section>
+
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Macros</h2>
+            <p class="admin-card__subtitle">Presets Horizons pour QUANTITIES.</p>
+        </div>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell">Macro</th>
+                        <th class="admin-table__cell">Label (EN)</th>
+                        <th class="admin-table__cell">Nom (FR)</th>
+                        <th class="admin-table__cell">Explication (FR)</th>
+                        <th class="admin-table__cell">Liste</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, macro in macros %}
+                        <tr>
+                            <td class="admin-table__cell">{{ key }}</td>
+                            <td class="admin-table__cell">{{ macro.label }}</td>
+                            <td class="admin-table__cell">{{ macro.label_fr }}</td>
+                            <td class="admin-table__cell">{{ macro.description_fr }}</td>
+                            <td class="admin-table__cell admin-table__cell--mono">{{ macro.list }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Quantites OBSERVER</h2>
+            <p class="admin-card__subtitle">Liste exhaustive des codes 1-49.</p>
+        </div>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell">Code</th>
+                        <th class="admin-table__cell">Label (EN)</th>
+                        <th class="admin-table__cell">Nom (FR)</th>
+                        <th class="admin-table__cell">Explication (FR)</th>
+                        <th class="admin-table__cell">Flags</th>
+                        <th class="admin-table__cell">Valide</th>
+                        <th class="admin-table__cell">Valide IA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in quantities %}
+                        <tr>
+                            <td class="admin-table__cell">{{ item.code }}</td>
+                            <td class="admin-table__cell">{{ item.label }}</td>
+                            <td class="admin-table__cell">{{ item.label_fr }}</td>
+                            <td class="admin-table__cell">{{ item.description_fr }}</td>
+                            <td class="admin-table__cell">
+                                {% if item.flags.default is defined and item.flags.default %}
+                                    <span class="admin-month-legend__item admin-month-legend__item--moon">D</span>
+                                {% endif %}
+                                {% if item.flags.stat is defined and item.flags.stat %}
+                                    <span class="admin-month-legend__item admin-month-legend__item--solar">S</span>
+                                {% endif %}
+                            </td>
+                            <td class="admin-table__cell">
+                                {% if item.validated %}
+                                    <span class="admin-month-legend__item admin-month-legend__item--validated">A</span>
+                                {% endif %}
+                            </td>
+                            <td class="admin-table__cell">
+                                {% if item.ia is defined and item.ia %}
+                                    {% if 'g' in item.ia %}
+                                        <span class="admin-month-legend__item admin-month-legend__item--geo">G</span>
+                                    {% endif %}
+                                    {% if 't' in item.ia %}
+                                        <span class="admin-month-legend__item admin-month-legend__item--topo">T</span>
+                                    {% endif %}
+                                    {% if 'o' in item.ia %}
+                                        <span class="admin-month-legend__item admin-month-legend__item--direct">O</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+{% endblock %}

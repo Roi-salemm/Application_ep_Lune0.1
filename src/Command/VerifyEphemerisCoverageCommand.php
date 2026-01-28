@@ -23,30 +23,27 @@ final class VerifyEphemerisCoverageCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('table', null, InputOption::VALUE_REQUIRED, 'moon | solar | both', 'both')
+            ->addOption('table', null, InputOption::VALUE_REQUIRED, 'moon', 'moon')
             ->addOption('step', null, InputOption::VALUE_REQUIRED, 'Pas attendu (ex: 1h, 30m)', '1h')
             ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Max anomalies affichees', 20);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $tableOption = strtolower((string) $input->getOption('table'));
         $stepSeconds = $this->parseStepToSeconds((string) $input->getOption('step'));
         $limit = max(1, (int) $input->getOption('limit'));
+        $tableOption = strtolower((string) $input->getOption('table'));
+        if ($tableOption !== 'moon') {
+            $output->writeln('<error>Seule la table moon est supportee.</error>');
+            return Command::FAILURE;
+        }
 
         if ($stepSeconds <= 0) {
             $output->writeln('<error>Pas attendu invalide.</error>');
             return Command::FAILURE;
         }
 
-        $tables = match ($tableOption) {
-            'moon' => ['moon_ephemeris_hour' => 'Moon'],
-            'solar' => ['solar_ephemeris_hour' => 'Solar'],
-            default => [
-                'moon_ephemeris_hour' => 'Moon',
-                'solar_ephemeris_hour' => 'Solar',
-            ],
-        };
+        $tables = ['moon_ephemeris_hour' => 'Moon'];
 
         foreach ($tables as $table => $label) {
             try {

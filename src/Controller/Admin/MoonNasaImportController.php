@@ -4,7 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Repository\MoonEphemerisHourRepository;
 use App\Repository\MoonNasaImportRepository;
-use App\Repository\SolarEphemerisHourRepository;
+use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,8 +19,7 @@ final class MoonNasaImportController extends AbstractController
     public function index(
         Request $request,
         MoonNasaImportRepository $repository,
-        MoonEphemerisHourRepository $moonRepository,
-        SolarEphemerisHourRepository $solarRepository
+        MoonEphemerisHourRepository $moonRepository
     ): Response
     {
         $limit = 200;
@@ -46,9 +45,8 @@ final class MoonNasaImportController extends AbstractController
         $defaultStart->setTime((int) $defaultStart->format('H'), 0, 0);
 
         $moonMonths = $moonRepository->findMonthCoverage();
-        $solarMonths = $solarRepository->findMonthCoverage();
-        $years = $this->buildYears($moonMonths, $solarMonths, $utc);
-        $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $solarRepository, $utc);
+        $years = $this->buildYears($moonMonths, $utc);
+        $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $utc);
 
         return $this->render('admin/horizon_data.html.twig', [
             'imports' => $imports,
@@ -56,7 +54,6 @@ final class MoonNasaImportController extends AbstractController
             'default_days' => 7,
             'default_step' => '1h',
             'moon_months' => $moonMonths,
-            'solar_months' => $solarMonths,
             'years' => $years,
             'next_month_label' => $this->formatMonthLabel($nextMonthStart),
             'next_month_start' => $nextMonthStart->format('Y-m-01'),
@@ -82,9 +79,9 @@ final class MoonNasaImportController extends AbstractController
         }
 
         $days = max(1, (int) $request->request->get('days', 7));
-        $step = trim((string) $request->request->get('step', '1h'));
+        $step = trim((string) $request->request->get('step', '10m'));
         if ($step === '') {
-            $step = '1h';
+            $step = '10m';
         }
 
         $start->setTimezone($utc);
@@ -151,8 +148,7 @@ final class MoonNasaImportController extends AbstractController
     public function bulkMonth(
         Request $request,
         KernelInterface $kernel,
-        MoonEphemerisHourRepository $moonRepository,
-        SolarEphemerisHourRepository $solarRepository
+        MoonEphemerisHourRepository $moonRepository
     ): Response
     {
         $utc = new \DateTimeZone('UTC');
@@ -163,7 +159,12 @@ final class MoonNasaImportController extends AbstractController
                 ->modify('first day of this month')
                 ->setTime(0, 0, 0);
         } else {
-            $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $solarRepository, $utc);
+            $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $utc);
+        }
+
+        $step = trim((string) $request->request->get('step', '1h'));
+        if ($step === '') {
+            $step = '1h';
         }
 
         $command = [
@@ -172,6 +173,7 @@ final class MoonNasaImportController extends AbstractController
             'app:ephemeris:bulk-import',
             '--start=' . $nextMonthStart->format('Y-m-d'),
             '--months=1',
+            '--step=' . $step,
         ];
 
         $process = new Process($command, $kernel->getProjectDir());
@@ -218,6 +220,40 @@ final class MoonNasaImportController extends AbstractController
         return $this->redirectToRoute('admin_horizon_data');
     }
 
+    #[Route('/admin/horizon_data/delete-all', name: 'admin_horizon_data_delete_all', methods: ['POST'])]
+    public function deleteAll(
+        Request $request,
+        MoonNasaImportRepository $repository,
+        Connection $connection
+    ): Response {
+        $token = (string) $request->request->get('_token', '');
+        if (!$this->isCsrfTokenValid('delete_all_imports', $token)) {
+            $this->addFlash('error', 'Jeton CSRF invalide.');
+            return $this->redirectToRoute('admin_horizon_data');
+        }
+
+        $connection->beginTransaction();
+        try {
+            $connection->executeStatement('DELETE FROM moon_ephemeris_hour');
+            $connection->executeStatement('DELETE FROM moon_nasa_import');
+            $connection->commit();
+        } catch (\Throwable $e) {
+            $connection->rollBack();
+            $this->addFlash('error', 'Suppression totale echouee: ' . $e->getMessage());
+            return $this->redirectToRoute('admin_horizon_data');
+        }
+
+        $remaining = $repository->countAll();
+        $this->addFlash(
+            'success',
+            $remaining === 0
+                ? 'Toutes les donnees Horizons ont ete supprimees.'
+                : 'Suppression terminee, mais des runs restent en base.'
+        );
+
+        return $this->redirectToRoute('admin_horizon_data');
+    }
+
     private function parseDateTimeInput(string $input, \DateTimeZone $tz): ?\DateTime
     {
         $value = trim($input);
@@ -251,13 +287,12 @@ final class MoonNasaImportController extends AbstractController
 
     /**
      * @param string[] $moonMonths
-     * @param string[] $solarMonths
      * @return int[]
      */
-    private function buildYears(array $moonMonths, array $solarMonths, \DateTimeZone $utc): array
+    private function buildYears(array $moonMonths, \DateTimeZone $utc): array
     {
         $years = [];
-        foreach (array_merge($moonMonths, $solarMonths) as $monthKey) {
+        foreach ($moonMonths as $monthKey) {
             if (preg_match('/^(\d{4})-\d{2}$/', $monthKey, $matches) !== 1) {
                 continue;
             }
@@ -277,30 +312,18 @@ final class MoonNasaImportController extends AbstractController
 
     private function resolveNextMonthStart(
         MoonEphemerisHourRepository $moonRepository,
-        SolarEphemerisHourRepository $solarRepository,
         \DateTimeZone $utc
-    ): \DateTimeImmutable {
+    ): \DateTimeImmutable
+    {
         $moonMax = $moonRepository->findMaxTimestamp();
-        $solarMax = $solarRepository->findMaxTimestamp();
 
-        if (!$moonMax && !$solarMax) {
+        if (!$moonMax) {
             return (new \DateTimeImmutable('now', $utc))
                 ->modify('first day of this month')
                 ->setTime(0, 0, 0);
         }
 
-        $reference = $moonMax;
-        if ($solarMax && ($reference === null || $solarMax < $reference)) {
-            $reference = $solarMax;
-        }
-
-        if ($reference === null) {
-            return (new \DateTimeImmutable('now', $utc))
-                ->modify('first day of this month')
-                ->setTime(0, 0, 0);
-        }
-
-        return $reference
+        return $moonMax
             ->setTimezone($utc)
             ->modify('first day of this month')
             ->setTime(0, 0, 0)

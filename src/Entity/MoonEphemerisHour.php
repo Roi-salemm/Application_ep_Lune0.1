@@ -49,6 +49,12 @@ class MoonEphemerisHour
     private ?string $slat_deg = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $sub_obs_lon_deg = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $sub_obs_lat_deg = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $elon_deg = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
@@ -69,11 +75,38 @@ class MoonEphemerisHour
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $sun_target_obs_deg = null;
 
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $sun_ra_hours = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $sun_dec_deg = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $sun_ecl_lon_deg = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $sun_ecl_lat_deg = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 14, nullable: true)]
+    private ?string $sun_dist_au = null;
+
     #[ORM\Column(length: 8, nullable: true)]
     private ?string $sun_trail = null;
 
     #[ORM\Column(length: 8, nullable: true)]
     private ?string $constellation = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $delta_t_sec = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $dut1_sec = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $pressure_hpa = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    private ?string $temperature_c = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $raw_line = null;
@@ -206,6 +239,30 @@ class MoonEphemerisHour
         return $this;
     }
 
+    public function getSubObsLonDeg(): ?string
+    {
+        return $this->sub_obs_lon_deg;
+    }
+
+    public function setSubObsLonDeg(?string $sub_obs_lon_deg): static
+    {
+        $this->sub_obs_lon_deg = $sub_obs_lon_deg;
+
+        return $this;
+    }
+
+    public function getSubObsLatDeg(): ?string
+    {
+        return $this->sub_obs_lat_deg;
+    }
+
+    public function setSubObsLatDeg(?string $sub_obs_lat_deg): static
+    {
+        $this->sub_obs_lat_deg = $sub_obs_lat_deg;
+
+        return $this;
+    }
+
     public function getElonDeg(): ?string
     {
         return $this->elon_deg;
@@ -290,6 +347,66 @@ class MoonEphemerisHour
         return $this;
     }
 
+    public function getSunRaHours(): ?string
+    {
+        return $this->sun_ra_hours;
+    }
+
+    public function setSunRaHours(?string $sun_ra_hours): static
+    {
+        $this->sun_ra_hours = $sun_ra_hours;
+
+        return $this;
+    }
+
+    public function getSunDecDeg(): ?string
+    {
+        return $this->sun_dec_deg;
+    }
+
+    public function setSunDecDeg(?string $sun_dec_deg): static
+    {
+        $this->sun_dec_deg = $sun_dec_deg;
+
+        return $this;
+    }
+
+    public function getSunEclLonDeg(): ?string
+    {
+        return $this->sun_ecl_lon_deg;
+    }
+
+    public function setSunEclLonDeg(?string $sun_ecl_lon_deg): static
+    {
+        $this->sun_ecl_lon_deg = $sun_ecl_lon_deg;
+
+        return $this;
+    }
+
+    public function getSunEclLatDeg(): ?string
+    {
+        return $this->sun_ecl_lat_deg;
+    }
+
+    public function setSunEclLatDeg(?string $sun_ecl_lat_deg): static
+    {
+        $this->sun_ecl_lat_deg = $sun_ecl_lat_deg;
+
+        return $this;
+    }
+
+    public function getSunDistAu(): ?string
+    {
+        return $this->sun_dist_au;
+    }
+
+    public function setSunDistAu(?string $sun_dist_au): static
+    {
+        $this->sun_dist_au = $sun_dist_au;
+
+        return $this;
+    }
+
     public function getSunTrail(): ?string
     {
         return $this->sun_trail;
@@ -310,6 +427,54 @@ class MoonEphemerisHour
     public function setConstellation(?string $constellation): static
     {
         $this->constellation = $constellation;
+
+        return $this;
+    }
+
+    public function getDeltaTSec(): ?string
+    {
+        return $this->delta_t_sec;
+    }
+
+    public function setDeltaTSec(?string $delta_t_sec): static
+    {
+        $this->delta_t_sec = $delta_t_sec;
+
+        return $this;
+    }
+
+    public function getDut1Sec(): ?string
+    {
+        return $this->dut1_sec;
+    }
+
+    public function setDut1Sec(?string $dut1_sec): static
+    {
+        $this->dut1_sec = $dut1_sec;
+
+        return $this;
+    }
+
+    public function getPressureHpa(): ?string
+    {
+        return $this->pressure_hpa;
+    }
+
+    public function setPressureHpa(?string $pressure_hpa): static
+    {
+        $this->pressure_hpa = $pressure_hpa;
+
+        return $this;
+    }
+
+    public function getTemperatureC(): ?string
+    {
+        return $this->temperature_c;
+    }
+
+    public function setTemperatureC(?string $temperature_c): static
+    {
+        $this->temperature_c = $temperature_c;
 
         return $this;
     }

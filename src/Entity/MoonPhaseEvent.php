@@ -25,8 +25,17 @@ class MoonPhaseEvent
     #[ORM\Column(length: 32)]
     private ?string $event_type = null;
 
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $phase_name = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTime $display_at_utc = null;
+
     #[ORM\Column(type: Types::DECIMAL, precision: 8, scale: 4, nullable: true)]
     private ?string $phase_deg = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true)]
+    private ?string $illum_pct = null;
 
     #[ORM\Column(type: Types::SMALLINT, nullable: true)]
     private ?int $precision_sec = null;
@@ -66,6 +75,30 @@ class MoonPhaseEvent
         return $this;
     }
 
+    public function getPhaseName(): ?string
+    {
+        return $this->phase_name;
+    }
+
+    public function setPhaseName(?string $phase_name): static
+    {
+        $this->phase_name = $phase_name;
+
+        return $this;
+    }
+
+    public function getDisplayAtUtc(): ?\DateTime
+    {
+        return $this->display_at_utc;
+    }
+
+    public function setDisplayAtUtc(?\DateTime $display_at_utc): static
+    {
+        $this->display_at_utc = $display_at_utc;
+
+        return $this;
+    }
+
     public function getPhaseDeg(): ?string
     {
         return $this->phase_deg;
@@ -74,6 +107,18 @@ class MoonPhaseEvent
     public function setPhaseDeg(?string $phase_deg): static
     {
         $this->phase_deg = $phase_deg;
+
+        return $this;
+    }
+
+    public function getIllumPct(): ?string
+    {
+        return $this->illum_pct;
+    }
+
+    public function setIllumPct(?string $illum_pct): static
+    {
+        $this->illum_pct = $illum_pct;
 
         return $this;
     }

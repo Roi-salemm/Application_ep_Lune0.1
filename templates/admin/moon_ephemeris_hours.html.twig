@@ -12,6 +12,19 @@
         </div>
         <form class="admin-form admin-form--inline" method="post" action="{{ path('admin_moon_ephemeris_hours_verify') }}">
             <input type="hidden" name="_token" value="{{ csrf_token('verify_moon_ephemeris') }}">
+            <div class="admin-form__field">
+                <label class="admin-form__label" for="verify_step">Step</label>
+                <input class="admin-form__input" id="verify_step" name="step" type="text" value="10m" list="verify-step-options">
+                <datalist id="verify-step-options">
+                    <option value="5m"></option>
+                    <option value="10m"></option>
+                    <option value="15m"></option>
+                    <option value="30m"></option>
+                    <option value="1h"></option>
+                    <option value="2h"></option>
+                    <option value="1d"></option>
+                </datalist>
+            </div>
             <button class="admin-button" type="submit">Lancer la verification</button>
         </form>
         {% for message in app.flashes('verification_error') %}

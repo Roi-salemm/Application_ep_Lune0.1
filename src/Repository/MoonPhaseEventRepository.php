@@ -49,4 +49,43 @@ class MoonPhaseEventRepository extends ServiceEntityRepository
 
         return $indexed;
     }
+
+    /**
+     * @return string[]
+     */
+    public function findMonthCoverage(): array
+    {
+        $connection = $this->getEntityManager()->getConnection();
+        $platform = $connection->getDatabasePlatform();
+        if ($platform instanceof \Doctrine\DBAL\Platforms\PostgreSQLPlatform) {
+            $dateExpr = "TO_CHAR(COALESCE(display_at_utc, ts_utc), 'YYYY-MM')";
+        } elseif ($platform instanceof \Doctrine\DBAL\Platforms\SqlitePlatform) {
+            $dateExpr = "strftime('%Y-%m', COALESCE(display_at_utc, ts_utc))";
+        } else {
+            $dateExpr = 'DATE_FORMAT(COALESCE(display_at_utc, ts_utc), "%Y-%m")';
+        }
+
+        $rows = $connection->fetchFirstColumn(sprintf('
+            SELECT %s AS month_key
+            FROM moon_phase_event
+            WHERE COALESCE(display_at_utc, ts_utc) IS NOT NULL
+            GROUP BY month_key
+            ORDER BY month_key
+        ', $dateExpr));
+
+        $clean = array_map(static fn ($value) => is_string($value) ? trim($value) : $value, $rows);
+
+        return array_values(array_filter($clean));
+    }
+
+    public function findMaxTimestamp(): ?\DateTimeImmutable
+    {
+        $connection = $this->getEntityManager()->getConnection();
+        $value = $connection->fetchOne('SELECT MAX(COALESCE(display_at_utc, ts_utc)) FROM moon_phase_event');
+        if (!$value) {
+            return null;
+        }
+
+        return new \DateTimeImmutable((string) $value, new \DateTimeZone('UTC'));
+    }
 }

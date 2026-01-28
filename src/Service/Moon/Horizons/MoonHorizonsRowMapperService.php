@@ -48,6 +48,10 @@ final class MoonHorizonsRowMapperService
         $sunTrail = $this->parseText($this->extractColumnValue($cols, $columnMap['sun_trail'] ?? null));
         $sunTargetObs = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['sun_target_obs_deg'] ?? null));
         $constellation = $this->parseText($this->extractColumnValue($cols, $columnMap['constellation'] ?? null));
+        $subObsLon = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['sub_obs_lon_deg'] ?? null));
+        $subObsLat = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['sub_obs_lat_deg'] ?? null));
+        $deltaTSec = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['delta_t_sec'] ?? null));
+        $dut1Sec = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['dut1_sec'] ?? null));
 
         if ($phaseDeg === null) {
             $phaseDeg = $sunTargetObs;
@@ -65,6 +69,8 @@ final class MoonHorizonsRowMapperService
         $hour->setDecDeg($this->parseDecDegrees($this->extractColumnValue($cols, $columnMap['dec_deg'] ?? null)));
         $hour->setSlonDeg($this->parseDecimal($this->extractColumnValue($cols, $columnMap['slon_deg'] ?? null)));
         $hour->setSlatDeg($this->parseDecimal($this->extractColumnValue($cols, $columnMap['slat_deg'] ?? null)));
+        $hour->setSubObsLonDeg($subObsLon);
+        $hour->setSubObsLatDeg($subObsLat);
         $hour->setElonDeg($this->parseDecimal($this->extractColumnValue($cols, $columnMap['elon_deg'] ?? null)));
         $hour->setElatDeg($this->parseDecimal($this->extractColumnValue($cols, $columnMap['elat_deg'] ?? null)));
         $hour->setAxisADeg($this->parseDecimal($this->extractColumnValue($cols, $columnMap['axis_a_deg'] ?? null)));
@@ -74,6 +80,8 @@ final class MoonHorizonsRowMapperService
         $hour->setSunTrail($sunTrail);
         $hour->setSunTargetObsDeg($sunTargetObs);
         $hour->setConstellation($constellation);
+        $hour->setDeltaTSec($deltaTSec);
+        $hour->setDut1Sec($dut1Sec);
         $hour->setRawLine($row['raw'] ?? null);
         $hour->setCreatedAtUtc(clone $createdAt);
     }
@@ -98,15 +106,31 @@ final class MoonHorizonsRowMapperService
             return null;
         }
 
-        $clean = str_replace(['km', 'KM', 'deg', 'DEG'], '', $clean);
+        $clean = str_replace(['km', 'KM', 'deg', 'DEG', 'au', 'AU'], '', $clean);
+        $clean = trim($clean, " \t\n\r\0\x0B\"'");
         $clean = trim($clean);
 
         if ($clean === '') {
             return null;
         }
 
+        $direction = null;
+        if (preg_match('/^([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)([NSEW])$/i', $clean, $matches) === 1) {
+            $clean = $matches[1];
+            $direction = strtoupper($matches[2]);
+        }
+
         if (!preg_match('/^[+-]?\d+(\.\d+)?([Ee][+-]?\d+)?$/', $clean)) {
             return null;
+        }
+
+        if ($direction) {
+            $unsigned = ltrim($clean, '+-');
+            if (in_array($direction, ['S', 'W'], true)) {
+                $clean = '-' . $unsigned;
+            } else {
+                $clean = $unsigned;
+            }
         }
 
         return $clean;
