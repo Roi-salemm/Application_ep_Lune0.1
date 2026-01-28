@@ -27,6 +27,9 @@ class MoonEphemerisHour
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $phase_deg = null;
 
+    #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true)]
+    private ?string $illum_pct = null;
+
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $age_days = null;
 
@@ -151,6 +154,18 @@ class MoonEphemerisHour
     public function setPhaseDeg(?string $phase_deg): static
     {
         $this->phase_deg = $phase_deg;
+
+        return $this;
+    }
+
+    public function getIllumPct(): ?string
+    {
+        return $this->illum_pct;
+    }
+
+    public function setIllumPct(?string $illum_pct): static
+    {
+        $this->illum_pct = $illum_pct;
 
         return $this;
     }

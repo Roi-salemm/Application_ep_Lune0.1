@@ -40,8 +40,8 @@ class ImportMoonHorizonsCommand extends Command
             ->addOption('step', null, InputOption::VALUE_OPTIONAL, 'Horizons step size', '1h')
             ->addOption('target', null, InputOption::VALUE_OPTIONAL, 'Target body (301 = Moon)', '301')
             ->addOption('center', null, InputOption::VALUE_OPTIONAL, 'Center body or site', '500@399')
-            ->addOption('quantities', null, InputOption::VALUE_OPTIONAL, 'Horizons quantities list', '1,13,14,15,17,18,20,23,24,29,30,49')
-            ->addOption('skip-sun', null, InputOption::VALUE_NONE, 'Skip fetching Sun ecliptic data')
+            ->addOption('quantities', null, InputOption::VALUE_OPTIONAL, 'Horizons quantities list', '1,10,13,14,15,17,20,23,24,29,30,31,49')
+            ->addOption('skip-sun', null, InputOption::VALUE_NONE, 'Skip fetching Sun geocentric data')
             ->addOption('time-zone', null, InputOption::VALUE_OPTIONAL, 'Time zone label stored in the run', 'UTC')
             ->addOption('show-columns', null, InputOption::VALUE_NONE, 'Print parsed column mapping')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Fetch and parse without saving to the database')
@@ -191,11 +191,7 @@ class ImportMoonHorizonsCommand extends Command
 
         if (!$skipSun) {
             $sunStep = $step ?: '1h';
-            $updated = $this->updateSunEclipticFromEarth($start, $stop, $sunStep, $utc, $output);
-            if ($updated === null) {
-                return Command::FAILURE;
-            }
-            $updated = $this->updateSunRaDecGeocentric($start, $stop, $sunStep, $utc, $output);
+            $updated = $this->updateSunGeocentric($start, $stop, $sunStep, $utc, $output);
             if ($updated === null) {
                 return Command::FAILURE;
             }
@@ -204,31 +200,38 @@ class ImportMoonHorizonsCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function updateSunEclipticFromEarth(
+    private function updateSunGeocentric(
         \DateTimeInterface $start,
         \DateTimeInterface $stop,
         string $step,
         \DateTimeZone $utc,
         OutputInterface $output
     ): ?int {
-        $output->writeln('<comment>Fetch Sun ecliptic lon/lat from Earth heliocentric (target=399, center=500@10, quantities=1,18,20).</comment>');
+        $output->writeln('<comment>Fetch Sun geocentric RA/DEC + ecliptic lon/lat (target=10, center=500@399, quantities=1,20,31).</comment>');
 
         try {
-            $response = $this->clientService->fetchEphemeris($start, $stop, '399', '500@10', $step, '1,18,20');
+            $response = $this->clientService->fetchEphemeris($start, $stop, '10', '500@399', $step, '1,20,31');
         } catch (\RuntimeException $e) {
-            $output->writeln('<error>Sun ecliptic fetch failed: ' . $e->getMessage() . '</error>');
+            $output->writeln('<error>Sun geocentric fetch failed: ' . $e->getMessage() . '</error>');
             return null;
         }
 
         if ($response['status'] >= 400) {
-            $output->writeln('<error>Sun ecliptic Horizons HTTP ' . $response['status'] . '.</error>');
+            $output->writeln('<error>Sun geocentric Horizons HTTP ' . $response['status'] . '.</error>');
             return null;
         }
 
         $parse = $this->parserService->parseResponse($response['body']);
         $columnMap = $parse->getColumnMap();
+        $raIndex = $columnMap['ra_hours'] ?? null;
+        $decIndex = $columnMap['dec_deg'] ?? null;
         $lonIndex = $columnMap['elon_deg'] ?? null;
         $latIndex = $columnMap['elat_deg'] ?? null;
+
+        if ($raIndex === null || $decIndex === null) {
+            $output->writeln('<error>Sun RA/DEC columns not found in Horizons response.</error>');
+            return null;
+        }
 
         if ($lonIndex === null || $latIndex === null) {
             $output->writeln('<error>Sun ecliptic lon/lat columns not found in Horizons response.</error>');
@@ -237,81 +240,7 @@ class ImportMoonHorizonsCommand extends Command
 
         $moonRows = $this->moonRepository->findByTimestampRangeIndexed($start, $stop);
         if (!$moonRows) {
-            $output->writeln('<comment>No moon rows found for sun ecliptic update.</comment>');
-            return 0;
-        }
-
-        $updated = 0;
-        foreach ($parse->getRows() as $row) {
-            $timestamp = $this->parseTimestamp($row, $columnMap, $utc);
-            if (!$timestamp) {
-                continue;
-            }
-            $timestampKey = $timestamp->format('Y-m-d H:i');
-            if (!isset($moonRows[$timestampKey])) {
-                continue;
-            }
-
-            $cols = $row['cols'] ?? [];
-            $earthLon = $this->parseNumeric($this->extractColumnValue($cols, $lonIndex));
-            $earthLat = $this->parseNumeric($this->extractColumnValue($cols, $latIndex));
-            if ($earthLon === null || $earthLat === null) {
-                continue;
-            }
-
-            $sunLon = $this->normalizeAngle($earthLon + 180.0);
-            $sunLat = -1.0 * $earthLat;
-            $sunDistAu = $this->parseSunDistanceAu($cols, $columnMap);
-
-            $moon = $moonRows[$timestampKey];
-            $moon->setSunEclLonDeg($this->formatDecimal($sunLon, 6));
-            $moon->setSunEclLatDeg($this->formatDecimal($sunLat, 6));
-            if ($sunDistAu !== null) {
-                $moon->setSunDistAu($this->formatDecimal($sunDistAu, 14));
-            }
-            $updated++;
-        }
-
-        $this->entityManager->flush();
-        $output->writeln(sprintf('Sun ecliptic updated on %d moon rows.', $updated));
-
-        return $updated;
-    }
-
-    private function updateSunRaDecGeocentric(
-        \DateTimeInterface $start,
-        \DateTimeInterface $stop,
-        string $step,
-        \DateTimeZone $utc,
-        OutputInterface $output
-    ): ?int {
-        $output->writeln('<comment>Fetch Sun RA/DEC geocentric (target=10, center=500@399, quantities=1).</comment>');
-
-        try {
-            $response = $this->clientService->fetchEphemeris($start, $stop, '10', '500@399', $step, '1');
-        } catch (\RuntimeException $e) {
-            $output->writeln('<error>Sun RA/DEC fetch failed: ' . $e->getMessage() . '</error>');
-            return null;
-        }
-
-        if ($response['status'] >= 400) {
-            $output->writeln('<error>Sun RA/DEC Horizons HTTP ' . $response['status'] . '.</error>');
-            return null;
-        }
-
-        $parse = $this->parserService->parseResponse($response['body']);
-        $columnMap = $parse->getColumnMap();
-        $raIndex = $columnMap['ra_hours'] ?? null;
-        $decIndex = $columnMap['dec_deg'] ?? null;
-
-        if ($raIndex === null || $decIndex === null) {
-            $output->writeln('<error>Sun RA/DEC columns not found in Horizons response.</error>');
-            return null;
-        }
-
-        $moonRows = $this->moonRepository->findByTimestampRangeIndexed($start, $stop);
-        if (!$moonRows) {
-            $output->writeln('<comment>No moon rows found for sun RA/DEC update.</comment>');
+            $output->writeln('<comment>No moon rows found for sun geocentric update.</comment>');
             return 0;
         }
 
@@ -329,9 +258,9 @@ class ImportMoonHorizonsCommand extends Command
             $cols = $row['cols'] ?? [];
             $ra = $this->parseRaHours($this->extractColumnValue($cols, $raIndex));
             $dec = $this->parseDecDegrees($this->extractColumnValue($cols, $decIndex));
-            if ($ra === null && $dec === null) {
-                continue;
-            }
+            $sunLon = $this->parseNumeric($this->extractColumnValue($cols, $lonIndex));
+            $sunLat = $this->parseNumeric($this->extractColumnValue($cols, $latIndex));
+            $sunDistAu = $this->parseSunDistanceAu($cols, $columnMap);
 
             $moon = $moonRows[$timestampKey];
             if ($ra !== null) {
@@ -340,11 +269,20 @@ class ImportMoonHorizonsCommand extends Command
             if ($dec !== null) {
                 $moon->setSunDecDeg($this->formatDecimal($dec, 6));
             }
+            if ($sunLon !== null) {
+                $moon->setSunEclLonDeg($this->formatDecimal($sunLon, 6));
+            }
+            if ($sunLat !== null) {
+                $moon->setSunEclLatDeg($this->formatDecimal($sunLat, 6));
+            }
+            if ($sunDistAu !== null) {
+                $moon->setSunDistAu($this->formatDecimal($sunDistAu, 14));
+            }
             $updated++;
         }
 
         $this->entityManager->flush();
-        $output->writeln(sprintf('Sun RA/DEC updated on %d moon rows.', $updated));
+        $output->writeln(sprintf('Sun geocentric updated on %d moon rows.', $updated));
 
         return $updated;
     }
@@ -491,16 +429,6 @@ class ImportMoonHorizonsCommand extends Command
         }
 
         return $value;
-    }
-
-    private function normalizeAngle(float $angle): float
-    {
-        $normalized = fmod($angle, 360.0);
-        if ($normalized < 0.0) {
-            $normalized += 360.0;
-        }
-
-        return $normalized;
     }
 
     private function formatDecimal(float $value, int $scale): string

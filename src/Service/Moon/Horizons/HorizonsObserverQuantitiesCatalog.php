@@ -34,11 +34,11 @@ final class HorizonsObserverQuantitiesCatalog
      *
      * Calculs app -> donnees Horizons requises (validation g/t/O):
      * - Phase/illumination/age: 24 (Phase angle S-T-O) OU 23 + /r (Elongation + trail)
-     *   OU (Moon 18 - Sun 18) si coordonnees ecliptiques dispo.
+     *   OU (Moon 31 - Sun 31) si coordonnees ecliptiques observateur dispo.
      * - Evenements de phases: meme prerequis que la phase (ci-dessus).
      * - Diametre apparent: 20 (Observer range) -> dist_km.
      * - Constellation (affichage direct): 29.
-     * - Zodiac/tithi/nakshatra: Moon 18 + Sun 18 + ayanamsa (ayanamsa = source externe).
+     * - Zodiac/tithi/nakshatra: Moon 31 + Sun 31 + ayanamsa (ayanamsa = source externe).
      * - Topocentrique (azimut/hauteur, lever/coucher, angle horaire):
      *   2 (RA/DEC) + 20 (Range) + 30 ou 49 (Delta-T/DUT1) +
      *   position observateur (lat/lon/alt) + pression/temperature (sources externes).
@@ -314,11 +314,12 @@ final class HorizonsObserverQuantitiesCatalog
             ],
             [
                 'code' => 31,
-                'label' => 'Observer-centered Earth ecliptic longitude & latitude',
-                'label_fr' => 'Lon/Lat ecliptique Terre (obs)',
-                'description_fr' => 'Longitude/latitude ecliptique de la Terre centree observateur.',
+                'label' => 'Observer ecliptic longitude & latitude',
+                'label_fr' => 'Lon/Lat ecliptique observateur',
+                'description_fr' => 'Longitude/latitude ecliptique apparente (referent observateur).',
                 'flags' => ['default' => true],
                 'validated' => false,
+                'ia' => 'go',
             ],
             [
                 'code' => 32,

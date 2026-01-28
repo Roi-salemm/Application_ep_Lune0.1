@@ -39,6 +39,7 @@ final class MoonHorizonsRowMapperService
         $cols = $row['cols'] ?? [];
 
         $phaseDeg = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['phase_deg'] ?? null));
+        $illumPct = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['illum_pct'] ?? null));
         $ageDays = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['age_days'] ?? null));
         $diamValue = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['diam_km'] ?? null));
         $distKmValue = $this->parseDecimal($this->extractColumnValue($cols, $columnMap['dist_km'] ?? null));
@@ -62,6 +63,7 @@ final class MoonHorizonsRowMapperService
         $diamComputed = $this->calculator->computeAngularDiameterArcsec($distKm);
 
         $hour->setPhaseDeg($phaseDeg);
+        $hour->setIllumPct($illumPct);
         $hour->setAgeDays($ageDays ?? $this->formatDecimal($ageComputed, 6));
         $hour->setDiamKm($diamValue ?? $this->formatDecimal($diamComputed, 6));
         $hour->setDistKm($distKm);

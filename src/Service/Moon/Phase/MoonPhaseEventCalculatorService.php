@@ -39,6 +39,8 @@ final class MoonPhaseEventCalculatorService
         $updated = 0;
         $total = 0;
         $cycleOffset = 0.0;
+        $prevElong = null;
+        $prevTrend = null;
         $prevAngle = null;
         $prevAngleUnwrapped = null;
         $prevTimestamp = null;
@@ -50,7 +52,8 @@ final class MoonPhaseEventCalculatorService
             }
 
             $timestampKey = $timestamp->format('Y-m-d H:i');
-            $angle = $this->computeElongationAngle($moonRow);
+            $angleData = $this->computePhaseAngle($moonRow, $prevElong, $prevTrend);
+            $angle = $angleData['angle'];
             if ($angle === null) {
                 continue;
             }
@@ -119,6 +122,8 @@ final class MoonPhaseEventCalculatorService
             $prevAngle = $angle;
             $prevAngleUnwrapped = $angleUnwrapped;
             $prevTimestamp = $timestamp;
+            $prevElong = $angleData['elong'] ?? $prevElong;
+            $prevTrend = $angleData['trend'] ?? $prevTrend;
         }
 
         if (!$dryRun) {
@@ -149,48 +154,55 @@ final class MoonPhaseEventCalculatorService
         return $this->calculateAndPersist($dataStart, $dataStop, $utc, $dryRun, $monthStart, $monthStop);
     }
 
-    private function computeElongationAngle(MoonEphemerisHour $moon): ?float
+    /**
+     * @return array{angle: ?float, elong: ?float, trend: ?string}
+     */
+    private function computePhaseAngle(MoonEphemerisHour $moon, ?float $prevElong, ?string $prevTrend): array
     {
-        $sunElong = $moon->getSunElongDeg();
-        if ($sunElong !== null) {
-            $elong = (float) $sunElong;
-            $trail = $moon->getSunTrail();
-            if ($trail === '/L') {
-                return 360.0 - $elong;
-            }
-            if ($trail === '/T') {
-                return $elong;
-            }
-
-            return $elong;
-        }
-
         $moonLon = $moon->getElonDeg();
         $solarLon = $moon->getSunEclLonDeg();
         if ($moonLon !== null && $solarLon !== null) {
-            return (float) $moonLon - (float) $solarLon;
+            $angle = (float) $moonLon - (float) $solarLon;
+            $angle = $this->normalizeAngle($angle);
+
+            return ['angle' => $angle, 'elong' => null, 'trend' => $prevTrend];
+        }
+
+        $elong = $this->computeElongationBase($moon);
+        if ($elong === null) {
+            return ['angle' => null, 'elong' => null, 'trend' => $prevTrend];
+        }
+
+        $trend = $prevTrend;
+        if ($prevElong !== null) {
+            $delta = $elong - $prevElong;
+            if (abs($delta) > 1e-6) {
+                $trend = $delta > 0 ? 'up' : 'down';
+            }
+        }
+        if ($trend === null) {
+            $trend = 'up';
+        }
+
+        $angle = $trend === 'down' ? (360.0 - $elong) : $elong;
+
+        return ['angle' => $angle, 'elong' => $elong, 'trend' => $trend];
+    }
+
+    private function computeElongationBase(MoonEphemerisHour $moon): ?float
+    {
+        $sunElong = $moon->getSunElongDeg();
+        if ($sunElong !== null) {
+            return $this->clampElongation((float) $sunElong);
         }
 
         $phaseAngle = $moon->getSunTargetObsDeg();
-        if ($phaseAngle === null) {
-            return null;
+        if ($phaseAngle !== null) {
+            $elong = 180.0 - (float) $phaseAngle;
+            return $this->clampElongation($elong);
         }
 
-        $elong = 180.0 - (float) $phaseAngle;
-        if ($elong < 0.0) {
-            $elong = 0.0;
-        }
-
-        $trail = $moon->getSunTrail();
-        if ($trail === '/L') {
-            return 360.0 - $elong;
-        }
-
-        if ($trail === '/T') {
-            return $elong;
-        }
-
-        return $elong;
+        return null;
     }
 
     /**
@@ -257,7 +269,6 @@ final class MoonPhaseEventCalculatorService
         $ratio = ($targetAngle - $startAngle) / ($endAngle - $startAngle);
         $ratio = min(1.0, max(0.0, $ratio));
         $timestamp = (int) round($startTs + ($ratio * $deltaSeconds));
-        $timestamp = (int) round($timestamp / 60) * 60;
 
         return (new \DateTimeImmutable('@' . $timestamp))->setTimezone($utc);
     }
@@ -270,6 +281,18 @@ final class MoonPhaseEventCalculatorService
         }
 
         return $normalized;
+    }
+
+    private function clampElongation(float $elong): float
+    {
+        if ($elong < 0.0) {
+            return 0.0;
+        }
+        if ($elong > 180.0) {
+            return 180.0;
+        }
+
+        return $elong;
     }
 
     private function formatDecimal(float $value, int $scale): string

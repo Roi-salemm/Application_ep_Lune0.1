@@ -66,6 +66,7 @@ final class MoonApiController extends AbstractController
             $items[] = [
                 'ts_utc' => $timestamp->format('Y-m-d H:i:s'),
                 'phase_deg' => $row->getPhaseDeg(),
+                'illum_pct' => $row->getIllumPct(),
                 'age_days' => $row->getAgeDays(),
                 'diam_km' => $row->getDiamKm(),
                 'dist_km' => $row->getDistKm(),
