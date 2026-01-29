@@ -3,6 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Repository\MoonEphemerisHourRepository;
+use App\Repository\MoonPhaseEventRepository;
 use App\Service\Moon\Phase\MoonPhaseLabeler;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -144,6 +145,85 @@ final class MoonApiController extends AbstractController
                 'phaseLabel' => $phaseLabel,
                 'percentage' => $percentage,
                 'asOf' => $row->getTsUtc()?->format('Y-m-d H:i:s'),
+            ],
+            200,
+            $this->corsHeaders()
+        );
+    }
+
+    #[Route('/phase-events', name: 'api_moon_phase_events', methods: ['GET', 'OPTIONS'])]
+    public function phaseEvents(
+        Request $request,
+        MoonPhaseEventRepository $phaseEventRepository
+    ): JsonResponse {
+        if ($request->isMethod('OPTIONS')) {
+            return new JsonResponse(null, 204, $this->corsHeaders());
+        }
+
+        $startParam = (string) $request->query->get('start', '');
+        $endParam = (string) $request->query->get('end', '');
+
+        if ($startParam === '' || $endParam === '') {
+            return new JsonResponse(
+                ['error' => 'start and end query parameters are required.'],
+                400,
+                $this->corsHeaders()
+            );
+        }
+
+        $utc = new \DateTimeZone('UTC');
+
+        try {
+            $start = new \DateTimeImmutable($startParam, $utc);
+            $end = new \DateTimeImmutable($endParam, $utc);
+        } catch (\Throwable) {
+            return new JsonResponse(
+                ['error' => 'Invalid date format. Expected ISO date or YYYY-MM-DD HH:MM:SS.'],
+                400,
+                $this->corsHeaders()
+            );
+        }
+
+        $start = $start->setTimezone($utc);
+        $end = $end->setTimezone($utc);
+
+        if ($end < $start) {
+            return new JsonResponse(
+                ['error' => 'end must be greater than or equal to start.'],
+                400,
+                $this->corsHeaders()
+            );
+        }
+
+        $eventRows = $phaseEventRepository->findByTimestampRange($start, $end);
+        $events = [];
+        foreach ($eventRows as $event) {
+            $ts = $event->getTsUtc();
+            $displayAt = $event->getDisplayAtUtc();
+            if (!$ts instanceof \DateTimeInterface) {
+                continue;
+            }
+
+            $events[] = [
+                'ts_utc' => $ts->format('Y-m-d H:i:s'),
+                'display_at_utc' => $displayAt?->format('Y-m-d H:i:s'),
+                'event_type' => $event->getEventType(),
+                'phase_name' => $event->getPhaseName(),
+                'phase_deg' => $event->getPhaseDeg(),
+                'illum_pct' => $event->getIllumPct(),
+                'precision_sec' => $event->getPrecisionSec(),
+                'source' => $event->getSource(),
+            ];
+        }
+
+        return new JsonResponse(
+            [
+                'range' => [
+                    'start_utc' => $start->format('Y-m-d H:i:s'),
+                    'end_utc' => $end->format('Y-m-d H:i:s'),
+                ],
+                'phase_event_count' => count($events),
+                'phase_events' => $events,
             ],
             200,
             $this->corsHeaders()

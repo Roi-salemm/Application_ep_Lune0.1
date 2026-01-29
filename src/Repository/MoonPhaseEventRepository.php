@@ -25,6 +25,36 @@ class MoonPhaseEventRepository extends ServiceEntityRepository
     }
 
     /**
+     * @return MoonPhaseEvent[]
+     */
+    public function findByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $stop): array
+    {
+        $qb = $this->createQueryBuilder('e');
+        $expr = $qb->expr();
+
+        $qb->andWhere(
+            $expr->orX(
+                $expr->andX(
+                    $expr->isNotNull('e.display_at_utc'),
+                    $expr->gte('e.display_at_utc', ':start'),
+                    $expr->lte('e.display_at_utc', ':stop')
+                ),
+                $expr->andX(
+                    $expr->isNull('e.display_at_utc'),
+                    $expr->gte('e.ts_utc', ':start'),
+                    $expr->lte('e.ts_utc', ':stop')
+                )
+            )
+        )
+        ->setParameter('start', $start)
+        ->setParameter('stop', $stop)
+        ->orderBy('e.display_at_utc', 'ASC')
+        ->addOrderBy('e.ts_utc', 'ASC');
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
      * @return array<string, MoonPhaseEvent>
      */
     public function findByTimestampRangeIndexed(\DateTimeInterface $start, \DateTimeInterface $stop): array
