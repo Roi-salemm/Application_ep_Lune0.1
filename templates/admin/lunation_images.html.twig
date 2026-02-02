@@ -1,0 +1,63 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Images lunaison' %}
+{% set page_subtitle = 'Telecharger une lunaison complete en pas 2h (deg ou age_days + heure).' %}
+{% set active_menu = 'lunation_images' %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            {% if label == 'lunation_output' %}
+                <pre class="admin-console">{{ message }}</pre>
+            {% else %}
+                <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+
+    <div class="admin-grid admin-grid--two">
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Telechargement (deg)</h2>
+                <p class="admin-card__subtitle">Nom: deg 0..360 (temps normalise).</p>
+            </div>
+            <div class="admin-card__body">
+                <div class="admin-form">
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="lunation_output_dir">Dossier de sortie</label>
+                        <input class="admin-form__input" id="lunation_output_dir" type="text" value="{{ output_dir }}" readonly>
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="lunation_params">Parametres</label>
+                        <input class="admin-form__input" id="lunation_params" type="text" value="Annee {{ year }} - Lunaison #{{ lunation_index }} - Pas {{ step_hours }}h" readonly>
+                    </div>
+                </div>
+                <form class="admin-form" method="post" action="{{ path('admin_lunation_images_run') }}">
+                    <button class="admin-button admin-button--primary" type="submit">Telecharger la lunaison</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Telechargement (age_days + heure)</h2>
+                <p class="admin-card__subtitle">Nom: age_days + heure UTC.</p>
+            </div>
+            <div class="admin-card__body">
+                <div class="admin-form">
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="lunation_output_dir_age">Dossier de sortie</label>
+                        <input class="admin-form__input" id="lunation_output_dir_age" type="text" value="{{ output_dir_age }}" readonly>
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="lunation_params_age">Parametres</label>
+                        <input class="admin-form__input" id="lunation_params_age" type="text" value="Annee {{ year }} - Lunaison #{{ lunation_index }} - Pas {{ step_hours }}h" readonly>
+                    </div>
+                </div>
+                <form class="admin-form" method="post" action="{{ path('admin_lunation_images_run_age') }}">
+                    <button class="admin-button admin-button--primary" type="submit">Telecharger la lunaison</button>
+                </form>
+            </div>
+        </section>
+    </div>
+{% endblock %}

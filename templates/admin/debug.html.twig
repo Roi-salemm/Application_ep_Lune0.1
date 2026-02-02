@@ -1,0 +1,29 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Debug' %}
+{% set page_subtitle = 'Outils de verification ponctuelle.' %}
+{% set active_menu = 'debug' %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            {% if label == 'debug_output' %}
+                <pre class="admin-console">{{ message }}</pre>
+            {% else %}
+                <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Verifier age_days (raw_line vs DB)</h2>
+            <p class="admin-card__subtitle">Lance la commande app:moon:verify-age-days sur le dernier run.</p>
+        </div>
+        <div class="admin-card__body">
+            <form class="admin-form" method="post" action="{{ path('admin_debug_verify_age_days') }}">
+                <button class="admin-button admin-button--primary" type="submit">Lancer la verification</button>
+            </form>
+        </div>
+    </section>
+{% endblock %}
