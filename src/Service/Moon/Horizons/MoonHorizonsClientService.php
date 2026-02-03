@@ -22,7 +22,8 @@ final class MoonHorizonsClientService
         string $target,
         string $center,
         string $step,
-        string $quantities
+        string $quantities,
+        array $extraQuery = []
     ): array {
         $query = [
             'format' => 'text',
@@ -37,6 +38,9 @@ final class MoonHorizonsClientService
             'CSV_FORMAT' => $this->quoteParam('YES'),
             'OUT_UNITS' => $this->quoteParam('KM-S'),
         ];
+        foreach ($extraQuery as $key => $value) {
+            $query[$key] = $this->quoteParam((string) $value);
+        }
 
         try {
             $response = $this->httpClient->request('GET', self::HORIZONS_ENDPOINT, [

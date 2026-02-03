@@ -162,9 +162,9 @@ final class MoonNasaImportController extends AbstractController
             $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $utc);
         }
 
-        $step = trim((string) $request->request->get('step', '1h'));
+        $step = trim((string) $request->request->get('step', '10m'));
         if ($step === '') {
-            $step = '1h';
+            $step = '10m';
         }
 
         $command = [

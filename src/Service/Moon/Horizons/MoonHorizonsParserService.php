@@ -65,7 +65,7 @@ final class MoonHorizonsParserService
             'timestamp' => $this->findColumnIndex($header, ['~Date__\(UT\)__HR:MN~i', '~Date__\(UT\)~i', '~\bDATE\b~i', '~\bTIME\b~i', '~DATE__~i']),
             'ra_hours' => $this->findColumnIndex($header, ['~R\.?A\._\(ICRF\)~i', '~\bR\.?A\.?\b~i', '~RIGHT\s*ASCENSION~i']),
             'dec_deg' => $this->findColumnIndex($header, ['~DEC__\(ICRF\)~i', '~\bDEC\b~i', '~DECLINATION~i']),
-            'dist_km' => $this->findColumnIndex($header, ['~\bRANGE\b~i', '~DIST~i']),
+            'dist_km' => $this->findColumnIndex($header, ['~\bRANGE\b~i', '~(?<!NP\.)\bDIST\b~i']),
             'delta_au' => $this->findColumnIndex($header, ['~\bdelta\b~i']),
             'deldot_km_s' => $this->findColumnIndex($header, ['~deldot~i']),
             'sun_elong_deg' => $this->findColumnIndex($header, ['~S-O-T~i']),

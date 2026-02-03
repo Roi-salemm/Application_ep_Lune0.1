@@ -114,6 +114,9 @@ class MoonEphemerisHour
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $raw_line = null;
 
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $raw_data = null;
+
     #[ORM\Column]
     private ?\DateTime $created_at_utc = null;
 
@@ -502,6 +505,18 @@ class MoonEphemerisHour
     public function setRawLine(?string $raw_line): static
     {
         $this->raw_line = $raw_line;
+
+        return $this;
+    }
+
+    public function getRawData(): ?array
+    {
+        return $this->raw_data;
+    }
+
+    public function setRawData(?array $raw_data): static
+    {
+        $this->raw_data = $raw_data;
 
         return $this;
     }

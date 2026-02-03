@@ -7,6 +7,8 @@ use App\Service\Ephemeris\EphemerisCoverageVerifierService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class MoonEphemerisHourController extends AbstractController
@@ -45,6 +47,48 @@ final class MoonEphemerisHourController extends AbstractController
         }
 
         $this->addFlash('verification_report', $report);
+
+        return $this->redirectToRoute('admin_moon_ephemeris_hours');
+    }
+
+    #[Route('/admin/moon_ephemeris_hours/parse-raw', name: 'admin_moon_ephemeris_hours_parse_raw', methods: ['POST'])]
+    public function parseRaw(Request $request, KernelInterface $kernel): Response
+    {
+        $token = (string) $request->request->get('_token', '');
+        if (!$this->isCsrfTokenValid('parse_moon_ephemeris_raw', $token)) {
+            $this->addFlash('parse_raw_error', 'Jeton CSRF invalide.');
+            return $this->redirectToRoute('admin_moon_ephemeris_hours');
+        }
+
+        $runId = (int) $request->request->get('run_id', 0);
+
+        $command = [
+            'php',
+            $kernel->getProjectDir() . '/bin/console',
+            'app:moon:parse-raw',
+        ];
+
+        if ($runId > 0) {
+            $command[] = '--run-id=' . $runId;
+        }
+
+        $process = new Process($command, $kernel->getProjectDir());
+        $process->setTimeout(3600);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $message = trim($process->getErrorOutput() ?: $process->getOutput());
+            $this->addFlash('parse_raw_error', 'Parsing raw echoue.');
+            if ($message !== '') {
+                $this->addFlash('parse_raw_output', $message);
+            }
+        } else {
+            $message = trim($process->getOutput());
+            $this->addFlash('parse_raw_success', 'Parsing raw termine.');
+            if ($message !== '') {
+                $this->addFlash('parse_raw_output', $message);
+            }
+        }
 
         return $this->redirectToRoute('admin_moon_ephemeris_hours');
     }

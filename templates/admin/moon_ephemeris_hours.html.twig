@@ -41,6 +41,30 @@
         {% endif %}
     </section>
 
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Parser raw_response (sans calcul)</h2>
+            <p class="admin-card__subtitle">Copie directe des valeurs Horizons vers moon_ephemeris_hour. Utilise aussi les runs Sun (target=10) pour remplir sun_*.</p>
+        </div>
+        <form class="admin-form admin-form--inline" method="post" action="{{ path('admin_moon_ephemeris_hours_parse_raw') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('parse_moon_ephemeris_raw') }}">
+            <div class="admin-form__field">
+                <label class="admin-form__label" for="parse_raw_run_id">Run id (optionnel)</label>
+                <input class="admin-form__input" id="parse_raw_run_id" name="run_id" type="number" min="1" placeholder="Dernier run">
+            </div>
+            <button class="admin-button" type="submit">Parser raw</button>
+        </form>
+        {% for message in app.flashes('parse_raw_error') %}
+            <div class="admin-flash admin-flash--error">{{ message }}</div>
+        {% endfor %}
+        {% for message in app.flashes('parse_raw_success') %}
+            <div class="admin-flash admin-flash--success">{{ message }}</div>
+        {% endfor %}
+        {% for message in app.flashes('parse_raw_output') %}
+            <pre class="admin-console">{{ message }}</pre>
+        {% endfor %}
+    </section>
+
     <section class="admin-card admin-card--table">
         <div class="admin-card__header">
             <h2 class="admin-card__title">Table moon_ephemeris_hour</h2>
