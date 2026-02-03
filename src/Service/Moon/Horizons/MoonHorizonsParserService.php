@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * Parse les reponses Horizons pour extraire entete et lignes CSV.
+ * Pourquoi: centraliser la detection de header et la lecture des donnees.
+ * Infos: repere $$SOE/$$EOE et supporte les variations d'emplacement du header.
+ */
+
 namespace App\Service\Moon\Horizons;
 
 final class MoonHorizonsParserService
@@ -39,6 +45,9 @@ final class MoonHorizonsParserService
 
             $trimmed = trim($line);
             if ($trimmed === '') {
+                continue;
+            }
+            if ($headerLine !== null && $trimmed === $headerLine) {
                 continue;
             }
 
@@ -200,13 +209,50 @@ final class MoonHorizonsParserService
      */
     private function findHeaderLine(array $lines): ?string
     {
-        $candidate = null;
-
-        foreach ($lines as $line) {
-            if (str_contains($line, '$$SOE')) {
+        $lineCount = count($lines);
+        $soeIndex = null;
+        for ($i = 0; $i < $lineCount; $i++) {
+            if (str_contains($lines[$i], '$$SOE')) {
+                $soeIndex = $i;
                 break;
             }
+        }
 
+        if ($soeIndex !== null) {
+            for ($i = $soeIndex - 1; $i >= 0; $i--) {
+                $trimmed = trim($lines[$i]);
+                if ($trimmed === '' || str_contains($trimmed, '$$')) {
+                    continue;
+                }
+                if (!str_contains($trimmed, ',')) {
+                    continue;
+                }
+                if (preg_match('/[A-Za-z]/', $trimmed) !== 1) {
+                    continue;
+                }
+                return $trimmed;
+            }
+
+            for ($i = $soeIndex + 1; $i < $lineCount; $i++) {
+                if (str_contains($lines[$i], '$$EOE')) {
+                    break;
+                }
+                $trimmed = trim($lines[$i]);
+                if ($trimmed === '' || str_contains($trimmed, '$$')) {
+                    continue;
+                }
+                if (!str_contains($trimmed, ',')) {
+                    continue;
+                }
+                if (preg_match('/[A-Za-z]/', $trimmed) !== 1) {
+                    continue;
+                }
+                return $trimmed;
+            }
+        }
+
+        $candidate = null;
+        foreach ($lines as $line) {
             $trimmed = trim($line);
             if ($trimmed === '' || str_contains($trimmed, '$$')) {
                 continue;

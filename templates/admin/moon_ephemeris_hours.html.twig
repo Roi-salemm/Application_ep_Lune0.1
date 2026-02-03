@@ -1,7 +1,10 @@
+{# Page admin: affiche la table moon_ephemeris_hour et met en avant les colonnes Horizons. #}
+{# Pourquoi: rendre visible le lien direct entre champs et quantites sans changer la logique. #}
+{# Infos: seuls les libelles non ambigus sont renommes. #}
 {% extends 'admin/base.html.twig' %}
 
 {% set page_title = 'Moon ephemeris hours' %}
-{% set page_subtitle = 'Dernieres valeurs calculees (limite: ' ~ limit ~ ').' %}
+{% set page_subtitle = 'Dernieres valeurs calculees (page ' ~ page ~ '/' ~ total_pages ~ ', limite: ' ~ limit ~ ').' %}
 {% set active_menu = 'ephemeris' %}
 
 {% block admin_content %}
@@ -78,36 +81,107 @@
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th class="admin-table__cell">ID</th>
-                            <th class="admin-table__cell">Run</th>
-                            <th class="admin-table__cell">Timestamp UTC</th>
-                            <th class="admin-table__cell">Phase deg</th>
-                            <th class="admin-table__cell">Age days</th>
-                            <th class="admin-table__cell">Dist km</th>
-                            <th class="admin-table__cell">RA</th>
-                            <th class="admin-table__cell">DEC</th>
-                            <th class="admin-table__cell">Sun elong</th>
-                            <th class="admin-table__cell">Constellation</th>
+                            <th class="admin-table__cell">id</th>
+                            <th class="admin-table__cell">run_id_id</th>
+                            <th class="admin-table__cell">ts_utc</th>
+                            <th class="admin-table__cell">phase_deg</th>
+                            <th class="admin-table__cell">m10_illum_pct</th>
+                            <th class="admin-table__cell">age_days</th>
+                            <th class="admin-table__cell">diam_km</th>
+                            <th class="admin-table__cell">m20_dist_km</th>
+                            <th class="admin-table__cell">ra_hours</th>
+                            <th class="admin-table__cell">dec_deg</th>
+                            <th class="admin-table__cell">m15_slon_deg</th>
+                            <th class="admin-table__cell">m15_slat_deg</th>
+                            <th class="admin-table__cell">m14_sub_obs_lon_deg</th>
+                            <th class="admin-table__cell">m14_sub_obs_lat_deg</th>
+                            <th class="admin-table__cell">m31_elon_deg</th>
+                            <th class="admin-table__cell">m31_elat_deg</th>
+                            <th class="admin-table__cell">axis_a_deg</th>
+                            <th class="admin-table__cell">m20_delta_au</th>
+                            <th class="admin-table__cell">m20_deldot_km_s</th>
+                            <th class="admin-table__cell">m23_sun_elong_deg</th>
+                            <th class="admin-table__cell">m24_sun_target_obs_deg</th>
+                            <th class="admin-table__cell">s1_sun_ra_hours</th>
+                            <th class="admin-table__cell">s1_sun_dec_deg</th>
+                            <th class="admin-table__cell">s31_sun_ecl_lon_deg</th>
+                            <th class="admin-table__cell">s31_sun_ecl_lat_deg</th>
+                            <th class="admin-table__cell">s20_sun_dist_au</th>
+                            <th class="admin-table__cell">m23_sun_trail</th>
+                            <th class="admin-table__cell">m29_constellation</th>
+                            <th class="admin-table__cell">m30_delta_t_sec</th>
+                            <th class="admin-table__cell">m49_dut1_sec</th>
+                            <th class="admin-table__cell">pressure_hpa</th>
+                            <th class="admin-table__cell">temperature_c</th>
+                            <th class="admin-table__cell">raw_data</th>
+                            <th class="admin-table__cell">created_at_utc</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for hour in hours %}
+                            {% set raw_json = hour.rawData is not null ? hour.rawData|json_encode : '' %}
+                            {% set raw_short = raw_json|length > 200 ? raw_json|slice(0, 200) ~ '...' : raw_json %}
                             <tr>
                                 <td class="admin-table__cell">{{ hour.id }}</td>
                                 <td class="admin-table__cell">{{ hour.runId ? hour.runId.id : '' }}</td>
                                 <td class="admin-table__cell">{{ hour.tsUtc ? hour.tsUtc|date('Y-m-d H:i') : '' }}</td>
                                 <td class="admin-table__cell">{{ hour.phaseDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.illumPct }}</td>
                                 <td class="admin-table__cell">{{ hour.ageDays }}</td>
+                                <td class="admin-table__cell">{{ hour.diamKm }}</td>
                                 <td class="admin-table__cell">{{ hour.distKm }}</td>
                                 <td class="admin-table__cell">{{ hour.raHours }}</td>
                                 <td class="admin-table__cell">{{ hour.decDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.slonDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.slatDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.subObsLonDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.subObsLatDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.elonDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.elatDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.axisADeg }}</td>
+                                <td class="admin-table__cell">{{ hour.deltaAu }}</td>
+                                <td class="admin-table__cell">{{ hour.deldotKmS }}</td>
                                 <td class="admin-table__cell">{{ hour.sunElongDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.sunTargetObsDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.sunRaHours }}</td>
+                                <td class="admin-table__cell">{{ hour.sunDecDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.sunEclLonDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.sunEclLatDeg }}</td>
+                                <td class="admin-table__cell">{{ hour.sunDistAu }}</td>
+                                <td class="admin-table__cell">{{ hour.sunTrail }}</td>
                                 <td class="admin-table__cell">{{ hour.constellation }}</td>
+                                <td class="admin-table__cell">{{ hour.deltaTSec }}</td>
+                                <td class="admin-table__cell">{{ hour.dut1Sec }}</td>
+                                <td class="admin-table__cell">{{ hour.pressureHpa }}</td>
+                                <td class="admin-table__cell">{{ hour.temperatureC }}</td>
+                                <td class="admin-table__cell admin-table__cell--mono admin-table__cell--truncate" title="{{ raw_json }}">{{ raw_short }}</td>
+                                <td class="admin-table__cell">{{ hour.createdAtUtc ? hour.createdAtUtc|date('Y-m-d H:i') : '' }}</td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% if total_pages > 1 %}
+                <div class="admin-pagination">
+                    <a class="admin-pagination__link {{ page <= 1 ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_moon_ephemeris_hours', {'page': page - 1}) }}">&lt;</a>
+                    <div class="admin-pagination__pages">
+                        {% set head_max = total_pages < 5 ? total_pages : 5 %}
+                        {% for p in 1..head_max %}
+                            <a class="admin-pagination__link {{ p == page ? 'is-active' : '' }}"
+                               href="{{ path('admin_moon_ephemeris_hours', {'page': p}) }}">{{ p }}</a>
+                        {% endfor %}
+                        {% if total_pages > head_max %}
+                            <span class="admin-pagination__meta">...</span>
+                            <a class="admin-pagination__link {{ page == total_pages ? 'is-active' : '' }}"
+                               href="{{ path('admin_moon_ephemeris_hours', {'page': total_pages}) }}">{{ total_pages }}</a>
+                        {% endif %}
+                    </div>
+                    <a class="admin-pagination__link {{ page >= total_pages ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_moon_ephemeris_hours', {'page': page + 1}) }}">&gt;</a>
+                    <span class="admin-pagination__meta">{{ total_count }} lignes</span>
+                </div>
+            {% endif %}
         {% endif %}
     </section>
 {% endblock %}

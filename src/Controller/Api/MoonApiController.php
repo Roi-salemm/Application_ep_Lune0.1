@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * Ancien endpoint ephemeris, conserve tel quel pour compatibilite.
+ * Pourquoi: pouvoir re-activer l'historique MoonEphemerisHour si besoin.
+ * Infos: ne pas modifier la logique sans validation.
+ */
+
 namespace App\Controller\Api;
 
 use App\Repository\MoonEphemerisHourRepository;

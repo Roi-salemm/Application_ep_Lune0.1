@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * Gere l'acces aux enregistrements moon_ephemeris_hour.
+ * Pourquoi: centraliser les requetes (pagination, couverture, comptages).
+ * Infos: les requetes admin utilisent un tri par ts_utc desc.
+ */
+
 namespace App\Repository;
 
 use App\Entity\MoonEphemerisHour;
@@ -23,6 +29,27 @@ class MoonEphemerisHourRepository extends ServiceEntityRepository
     public function findLatest(int $limit): array
     {
         return $this->findBy([], ['ts_utc' => 'DESC'], $limit);
+    }
+
+    /**
+     * @return MoonEphemerisHour[]
+     */
+    public function findLatestPaged(int $limit, int $offset): array
+    {
+        return $this->createQueryBuilder('m')
+            ->orderBy('m.ts_utc', 'DESC')
+            ->setMaxResults($limit)
+            ->setFirstResult($offset)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function countAll(): int
+    {
+        return (int) $this->createQueryBuilder('m')
+            ->select('COUNT(m.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 
     /**

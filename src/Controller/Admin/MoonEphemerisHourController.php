@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * Controle l'interface admin des ephemerides horaires de la Lune.
+ * Pourquoi: centralise l'affichage, la pagination et les actions de verification/parsing.
+ * Infos: la pagination est fixe a 200 lignes par page pour faciliter la lecture.
+ */
+
 namespace App\Controller\Admin;
 
 use App\Repository\MoonEphemerisHourRepository;
@@ -14,9 +20,9 @@ use Symfony\Component\Routing\Attribute\Route;
 final class MoonEphemerisHourController extends AbstractController
 {
     #[Route('/admin/moon_ephemeris_hours', name: 'admin_moon_ephemeris_hours', methods: ['GET'])]
-    public function index(MoonEphemerisHourRepository $repository): Response
+    public function index(Request $request, MoonEphemerisHourRepository $repository): Response
     {
-        return $this->renderIndex($repository);
+        return $this->renderIndex($request, $repository);
     }
 
     #[Route('/admin/moon_ephemeris_hours/verify', name: 'admin_moon_ephemeris_hours_verify', methods: ['POST'])]
@@ -93,14 +99,25 @@ final class MoonEphemerisHourController extends AbstractController
         return $this->redirectToRoute('admin_moon_ephemeris_hours');
     }
 
-    private function renderIndex(MoonEphemerisHourRepository $repository): Response
+    private function renderIndex(Request $request, MoonEphemerisHourRepository $repository): Response
     {
         $limit = 200;
-        $hours = $repository->findLatest($limit);
+        $page = max(1, (int) $request->query->get('page', 1));
+        $totalCount = $repository->countAll();
+        $totalPages = $totalCount > 0 ? (int) ceil($totalCount / $limit) : 1;
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+
+        $offset = ($page - 1) * $limit;
+        $hours = $repository->findLatestPaged($limit, $offset);
 
         $payload = [
             'hours' => $hours,
             'limit' => $limit,
+            'page' => $page,
+            'total_pages' => $totalPages,
+            'total_count' => $totalCount,
         ];
 
         return $this->render('admin/moon_ephemeris_hours.html.twig', $payload);

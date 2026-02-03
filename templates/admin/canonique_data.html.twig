@@ -1,0 +1,144 @@
+{# Page admin: affiche la table canonique_data et permet le parse mensuel. #}
+{# Pourquoi: offrir une vue brute des donnees Horizons (Moon + Sun). #}
+{# Infos: les colonnes sont dynamiques, d'ou un rendu table large. #}
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Canonique data' %}
+{% set page_subtitle = 'Donnees brutes Horizons (page ' ~ page ~ '/' ~ total_pages ~ ', limite: ' ~ limit ~ ').' %}
+{% set active_menu = 'canonique' %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Parser un mois</h2>
+            <p class="admin-card__subtitle">Transforme les imports bruts en canonique_data.</p>
+        </div>
+        <div class="admin-month-import" data-month-initial="{{ next_month_start }}">
+            <div class="admin-month-import__label">Prochain mois:</div>
+            <div class="admin-month-import__value" data-month-label>{{ next_month_label }}</div>
+        </div>
+        <form class="admin-month-actions" id="canonique-parse-form" method="post" action="{{ path('admin_canonique_data_parse_month') }}">
+            <input type="hidden" name="start" value="{{ next_month_start }}" data-month-input>
+            <button class="admin-button admin-button--ghost" type="button" data-month-prev aria-label="Mois precedent">&lt;</button>
+            <button class="admin-button admin-button--primary" type="submit">Parser ce mois</button>
+            <button class="admin-button admin-button--ghost" type="button" data-month-next aria-label="Mois suivant">&gt;</button>
+        </form>
+    </section>
+
+    <section class="admin-card admin-card--table">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Table canonique_data</h2>
+            <p class="admin-card__subtitle">Affichage des derniers enregistrements.</p>
+        </div>
+
+        {% if rows is empty %}
+            <p class="admin-empty">Aucune donnee disponible.</p>
+        {% else %}
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            {% for col in columns %}
+                                <th class="admin-table__cell">{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                {% for col in columns %}
+                                    {% set value = row[col] ?? '' %}
+                                    <td class="admin-table__cell {{ col in ['m_raw_line', 's_raw_line'] ? 'admin-table__cell--mono admin-table__cell--truncate' : '' }}"
+                                        title="{{ value }}">{{ value }}</td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if total_pages > 1 %}
+                <div class="admin-pagination">
+                    <a class="admin-pagination__link {{ page <= 1 ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_canonique_data', {'page': page - 1}) }}">&lt;</a>
+                    <div class="admin-pagination__pages">
+                        {% set head_max = total_pages < 5 ? total_pages : 5 %}
+                        {% for p in 1..head_max %}
+                            <a class="admin-pagination__link {{ p == page ? 'is-active' : '' }}"
+                               href="{{ path('admin_canonique_data', {'page': p}) }}">{{ p }}</a>
+                        {% endfor %}
+                        {% if total_pages > head_max %}
+                            <span class="admin-pagination__meta">...</span>
+                            <a class="admin-pagination__link {{ page == total_pages ? 'is-active' : '' }}"
+                               href="{{ path('admin_canonique_data', {'page': total_pages}) }}">{{ total_pages }}</a>
+                        {% endif %}
+                    </div>
+                    <a class="admin-pagination__link {{ page >= total_pages ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_canonique_data', {'page': page + 1}) }}">&gt;</a>
+                    <span class="admin-pagination__meta">{{ total_count }} lignes</span>
+                </div>
+            {% endif %}
+        {% endif %}
+    </section>
+
+    <script>
+        (function () {
+            var container = document.querySelector('.admin-month-import');
+            var input = document.querySelector('[data-month-input]');
+            var label = document.querySelector('[data-month-label]');
+            var prev = document.querySelector('[data-month-prev]');
+            var next = document.querySelector('[data-month-next]');
+            if (!container || !input || !label || !prev || !next) {
+                return;
+            }
+
+            var monthNames = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+
+            function formatLabel(date) {
+                var year = date.getUTCFullYear();
+                var month = date.getUTCMonth() + 1;
+                var padded = month < 10 ? '0' + month : String(month);
+                return year + ' ' + padded + ' (' + monthNames[month - 1] + ')';
+            }
+
+            function readDate() {
+                var value = input.value || container.getAttribute('data-month-initial');
+                var parts = value.split('-');
+                if (parts.length < 2) {
+                    return new Date();
+                }
+                var year = parseInt(parts[0], 10);
+                var month = parseInt(parts[1], 10) - 1;
+                return new Date(Date.UTC(year, month, 1));
+            }
+
+            function writeDate(date) {
+                var year = date.getUTCFullYear();
+                var month = date.getUTCMonth() + 1;
+                var padded = month < 10 ? '0' + month : String(month);
+                input.value = year + '-' + padded + '-01';
+                label.textContent = formatLabel(date);
+            }
+
+            prev.addEventListener('click', function () {
+                var date = readDate();
+                date.setUTCMonth(date.getUTCMonth() - 1);
+                writeDate(date);
+            });
+
+            next.addEventListener('click', function () {
+                var date = readDate();
+                date.setUTCMonth(date.getUTCMonth() + 1);
+                writeDate(date);
+            });
+
+            writeDate(readDate());
+        })();
+    </script>
+{% endblock %}

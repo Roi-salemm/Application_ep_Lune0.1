@@ -1,3 +1,6 @@
+{# Page admin: import_horizon (telechargement + historique). #}
+{# Pourquoi: declencher les imports bruts Moon/Sun et suivre les runs. #}
+{# Infos: ce volet ne parse pas, il stocke uniquement raw_response. #}
 {% extends 'admin/base.html.twig' %}
 
 {% set page_title = 'Horizon data' %}
@@ -40,30 +43,21 @@
 
         <section class="admin-card admin-card--collapsible">
             <div class="admin-card__header">
-                <h2 class="admin-card__title">Parser un run</h2>
-                <p class="admin-card__subtitle">Transformer raw_response en moon_ephemeris_hour.</p>
+                <h2 class="admin-card__title">Parser un mois</h2>
+                <p class="admin-card__subtitle">Transformer raw_response en canonique_data (mois complet).</p>
             </div>
             <div class="admin-card__body">
-                {% if imports is not empty %}
-                    <form class="admin-form" method="post" action="{{ path('admin_horizon_data_parse') }}">
-                        <div class="admin-form__field">
-                            <label class="admin-form__label" for="run_id">Run</label>
-                            <select class="admin-form__select" id="run_id" name="run_id" data-run-select>
-                                {% for import in imports %}
-                                    <option value="{{ import.id }}">
-                                        #{{ import.id }}
-                                        {{ import.startUtc ? import.startUtc|date('Y-m-d H:i') : '' }}
-                                        ->
-                                        {{ import.stopUtc ? import.stopUtc|date('Y-m-d H:i') : '' }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <button class="admin-button" type="submit">Parser</button>
-                    </form>
-                {% else %}
-                    <p class="admin-empty">Aucun import disponible.</p>
-                {% endif %}
+                <form class="admin-form" method="post" action="{{ path('admin_horizon_data_parse') }}">
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="parse_start">Mois (UTC)</label>
+                        <input class="admin-form__input" id="parse_start" name="start" type="date" value="{{ next_month_start }}">
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="parse_step">Step</label>
+                        <input class="admin-form__input" id="parse_step" name="step" type="text" value="10m">
+                    </div>
+                    <button class="admin-button" type="submit">Parser ce mois</button>
+                </form>
             </div>
         </section>
     </div>
@@ -71,8 +65,8 @@
     <div class="admin-grid admin-grid--two">
         <section class="admin-card">
             <div class="admin-card__header">
-                <h2 class="admin-card__title">Import mensuel (Moon)</h2>
-                <p class="admin-card__subtitle">Telecharge raw_response Moon + Sun (sans parser) sur un mois complet.</p>
+                <h2 class="admin-card__title">Import mensuel (Moon + Sun)</h2>
+                <p class="admin-card__subtitle">Telecharge raw_response Moon (1,2,10,20,31,43) + Sun (31) sur un mois complet.</p>
             </div>
             <div class="admin-month-import" data-month-initial="{{ next_month_start }}">
                 <div class="admin-month-import__label">Prochain mois:</div>
@@ -325,32 +319,6 @@
             });
 
             writeDate(readDate());
-        })();
-    </script>
-    <script>
-        (function () {
-            var select = document.querySelector('[data-run-select]');
-            var rows = document.querySelectorAll('[data-run-id]');
-            if (!select || !rows.length) {
-                return;
-            }
-
-            rows.forEach(function (row) {
-                row.addEventListener('click', function (event) {
-                    if (event.target.closest('[data-delete-button]')) {
-                        return;
-                    }
-                    var id = row.getAttribute('data-run-id');
-                    if (!id) {
-                        return;
-                    }
-                    select.value = id;
-                    rows.forEach(function (item) {
-                        item.classList.remove('admin-table__row--selected');
-                    });
-                    row.classList.add('admin-table__row--selected');
-                });
-            });
         })();
     </script>
     <script>

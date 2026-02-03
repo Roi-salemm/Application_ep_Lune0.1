@@ -1,10 +1,17 @@
 <?php
 
+/**
+ * Importe en masse des reponses Horizons mois par mois (Moon + Sun).
+ * Pourquoi: constituer un historique d'import brut geocentrique.
+ * Infos: ne parse pas, il stocke uniquement dans import_horizon.
+ */
+
 namespace App\Command;
 
+use App\Service\Horizon\ImportHorizonService;
 use App\Service\Moon\Horizons\MoonHorizonsClientService;
 use App\Service\Moon\Horizons\MoonHorizonsDateTimeParserService;
-use App\Service\Moon\Horizons\MoonHorizonsImportService;
+use App\Service\Moon\Horizons\MoonHorizonsParserService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -12,15 +19,20 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
-    name: 'app:ephemeris:bulk-import',
-    description: 'Download raw Moon ephemeris data month by month (store-only).',
+    name: 'app:horizon:bulk-import',
+    description: 'Download raw Horizons data month by month (store-only).',
 )]
 class BulkImportEphemerisCommand extends Command
 {
+    private const MOON_QUANTITIES = '1,2,10,20,31,43';
+    private const SUN_QUANTITIES = '31';
+    private const ANG_FORMAT = 'DEG';
+
     public function __construct(
         private MoonHorizonsClientService $clientService,
-        private MoonHorizonsImportService $moonImportService,
+        private MoonHorizonsParserService $parserService,
         private MoonHorizonsDateTimeParserService $dateTimeParserService,
+        private ImportHorizonService $importService,
     ) {
         parent::__construct();
     }
@@ -33,10 +45,9 @@ class BulkImportEphemerisCommand extends Command
             ->addOption('step', null, InputOption::VALUE_OPTIONAL, 'Horizons step size', '10m')
             ->addOption('moon-target', null, InputOption::VALUE_OPTIONAL, 'Moon target body', '301')
             ->addOption('center', null, InputOption::VALUE_OPTIONAL, 'Center body or site', '500@399')
-            ->addOption('moon-quantities', null, InputOption::VALUE_OPTIONAL, 'Moon quantities list', '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49')
+            ->addOption('moon-quantities', null, InputOption::VALUE_OPTIONAL, 'Moon quantities list (must match the expected GEO list)', self::MOON_QUANTITIES)
             ->addOption('sun-target', null, InputOption::VALUE_OPTIONAL, 'Sun target body', '10')
-            ->addOption('sun-quantities', null, InputOption::VALUE_OPTIONAL, 'Sun quantities list', '1,20,31')
-            ->addOption('sun-range-units', null, InputOption::VALUE_OPTIONAL, 'Sun range units', 'AU')
+            ->addOption('sun-quantities', null, InputOption::VALUE_OPTIONAL, 'Sun quantities list (must match the expected GEO list)', self::SUN_QUANTITIES)
             ->addOption('time-zone', null, InputOption::VALUE_OPTIONAL, 'Time zone label stored in the run', 'UTC')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Fetch and parse without saving to the database');
     }
@@ -50,10 +61,29 @@ class BulkImportEphemerisCommand extends Command
         $step = trim((string) $input->getOption('step')) ?: '10m';
         $moonTarget = trim((string) $input->getOption('moon-target')) ?: '301';
         $center = trim((string) $input->getOption('center')) ?: '500@399';
-        $moonQuantities = trim((string) $input->getOption('moon-quantities')) ?: '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49';
+        if ($center !== '500@399') {
+            $output->writeln('<error>Center geocentrique requis: 500@399.</error>');
+            return Command::FAILURE;
+        }
+        $moonQuantitiesInput = trim((string) $input->getOption('moon-quantities'));
+        if ($moonQuantitiesInput !== '') {
+            $normalized = $this->clientService->normalizeQuantities($moonQuantitiesInput);
+            if ($normalized !== self::MOON_QUANTITIES) {
+                $output->writeln('<error>Moon quantities non supportees pour cet import.</error>');
+                return Command::FAILURE;
+            }
+        }
+        $moonQuantities = self::MOON_QUANTITIES;
         $sunTarget = trim((string) $input->getOption('sun-target')) ?: '10';
-        $sunQuantities = trim((string) $input->getOption('sun-quantities')) ?: '1,20,31';
-        $sunRangeUnits = trim((string) $input->getOption('sun-range-units')) ?: 'AU';
+        $sunQuantitiesInput = trim((string) $input->getOption('sun-quantities'));
+        if ($sunQuantitiesInput !== '') {
+            $normalized = $this->clientService->normalizeQuantities($sunQuantitiesInput);
+            if ($normalized !== self::SUN_QUANTITIES) {
+                $output->writeln('<error>Sun quantities non supportees pour cet import.</error>');
+                return Command::FAILURE;
+            }
+        }
+        $sunQuantities = self::SUN_QUANTITIES;
         $timeZoneLabel = trim((string) $input->getOption('time-zone')) ?: 'UTC';
 
         $start = $this->dateTimeParserService->parseInput($startInput, $utc);
@@ -86,7 +116,8 @@ class BulkImportEphemerisCommand extends Command
                     $moonTarget,
                     $center,
                     $step,
-                    $moonQuantities
+                    $moonQuantities,
+                    ['ANG_FORMAT' => self::ANG_FORMAT]
                 );
             } catch (\RuntimeException $e) {
                 $output->writeln('<error>Moon fetch failed: ' . $e->getMessage() . '</error>');
@@ -101,7 +132,8 @@ class BulkImportEphemerisCommand extends Command
             if ($dryRun) {
                 $output->writeln(sprintf('Moon raw bytes: %d', strlen($moonResponse['body'])));
             } else {
-                $moonRun = $this->moonImportService->createRun(
+                $moonHeader = $this->parserService->parseResponse($moonResponse['body'])->getHeaderLine();
+                $moonRun = $this->importService->createRun(
                     $moonTarget,
                     $center,
                     $chunkStart,
@@ -109,7 +141,20 @@ class BulkImportEphemerisCommand extends Command
                     $step,
                     $timeZoneLabel,
                     $moonResponse['body'],
-                    true,
+                    $moonHeader,
+                    [
+                        'target' => $moonTarget,
+                        'site' => $center,
+                        'center' => $center,
+                        'start' => $chunkStart->format('Y-m-d H:i'),
+                        'stop' => $chunkStop->format('Y-m-d H:i'),
+                        'step' => $step,
+                        'quantities' => $moonQuantities,
+                        'ephem_type' => 'OBSERVER',
+                        'out_units' => 'KM-S',
+                        'ang_format' => self::ANG_FORMAT,
+                        'time_zone' => $timeZoneLabel,
+                    ],
                     $utc
                 );
                 $output->writeln(sprintf('Moon run saved (id: %d).', $moonRun->getId()));
@@ -123,7 +168,7 @@ class BulkImportEphemerisCommand extends Command
                     $center,
                     $step,
                     $sunQuantities,
-                    ['RANGE_UNITS' => $sunRangeUnits]
+                    ['ANG_FORMAT' => self::ANG_FORMAT]
                 );
             } catch (\RuntimeException $e) {
                 $output->writeln('<error>Sun fetch failed: ' . $e->getMessage() . '</error>');
@@ -138,7 +183,8 @@ class BulkImportEphemerisCommand extends Command
             if ($dryRun) {
                 $output->writeln(sprintf('Sun raw bytes: %d', strlen($sunResponse['body'])));
             } else {
-                $sunRun = $this->moonImportService->createRun(
+                $sunHeader = $this->parserService->parseResponse($sunResponse['body'])->getHeaderLine();
+                $sunRun = $this->importService->createRun(
                     $sunTarget,
                     $center,
                     $chunkStart,
@@ -146,7 +192,20 @@ class BulkImportEphemerisCommand extends Command
                     $step,
                     $timeZoneLabel,
                     $sunResponse['body'],
-                    true,
+                    $sunHeader,
+                    [
+                        'target' => $sunTarget,
+                        'site' => $center,
+                        'center' => $center,
+                        'start' => $chunkStart->format('Y-m-d H:i'),
+                        'stop' => $chunkStop->format('Y-m-d H:i'),
+                        'step' => $step,
+                        'quantities' => $sunQuantities,
+                        'ephem_type' => 'OBSERVER',
+                        'out_units' => 'KM-S',
+                        'ang_format' => self::ANG_FORMAT,
+                        'time_zone' => $timeZoneLabel,
+                    ],
                     $utc
                 );
                 $output->writeln(sprintf('Sun run saved (id: %d).', $sunRun->getId()));

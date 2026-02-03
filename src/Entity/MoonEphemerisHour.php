@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * Definit l'entite moon_ephemeris_hour et ses champs.
+ * Pourquoi: expose les donnees Horizons en base avec un prefixe mXX_/sXX_ pour
+ * identifier clairement la quantite d origine sans toucher aux proprietes PHP.
+ * Infos: seules les colonnes non ambigues ont un name explicite dans le mapping.
+ */
+
 namespace App\Entity;
 
 use App\Repository\MoonEphemerisHourRepository;
@@ -27,7 +34,7 @@ class MoonEphemerisHour
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $phase_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true, name: 'm10_illum_pct')]
     private ?string $illum_pct = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
@@ -36,7 +43,7 @@ class MoonEphemerisHour
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $diam_km = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm20_dist_km')]
     private ?string $dist_km = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
@@ -45,64 +52,64 @@ class MoonEphemerisHour
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $dec_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm15_slon_deg')]
     private ?string $slon_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm15_slat_deg')]
     private ?string $slat_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm14_sub_obs_lon_deg')]
     private ?string $sub_obs_lon_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm14_sub_obs_lat_deg')]
     private ?string $sub_obs_lat_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm31_elon_deg')]
     private ?string $elon_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm31_elat_deg')]
     private ?string $elat_deg = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
     private ?string $axis_a_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 14, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 14, nullable: true, name: 'm20_delta_au')]
     private ?string $delta_au = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 14, scale: 8, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 14, scale: 8, nullable: true, name: 'm20_deldot_km_s')]
     private ?string $deldot_km_s = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm23_sun_elong_deg')]
     private ?string $sun_elong_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm24_sun_target_obs_deg')]
     private ?string $sun_target_obs_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 's1_sun_ra_hours')]
     private ?string $sun_ra_hours = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 's1_sun_dec_deg')]
     private ?string $sun_dec_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 's31_sun_ecl_lon_deg')]
     private ?string $sun_ecl_lon_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 's31_sun_ecl_lat_deg')]
     private ?string $sun_ecl_lat_deg = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 14, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 14, nullable: true, name: 's20_sun_dist_au')]
     private ?string $sun_dist_au = null;
 
-    #[ORM\Column(length: 8, nullable: true)]
+    #[ORM\Column(length: 8, nullable: true, name: 'm23_sun_trail')]
     private ?string $sun_trail = null;
 
-    #[ORM\Column(length: 8, nullable: true)]
+    #[ORM\Column(length: 8, nullable: true, name: 'm29_constellation')]
     private ?string $constellation = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm30_delta_t_sec')]
     private ?string $delta_t_sec = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true, name: 'm49_dut1_sec')]
     private ?string $dut1_sec = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 6, nullable: true)]

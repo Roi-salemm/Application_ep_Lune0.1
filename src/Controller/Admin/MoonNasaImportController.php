@@ -2,8 +2,8 @@
 
 namespace App\Controller\Admin;
 
-use App\Repository\MoonEphemerisHourRepository;
-use App\Repository\MoonNasaImportRepository;
+use App\Repository\CanoniqueDataRepository;
+use App\Repository\ImportHorizonRepository;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -12,14 +12,19 @@ use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
 
+/**
+ * Controle l'onglet admin des imports Horizons (table import_horizon).
+ * Pourquoi: centraliser l'import mensuel et la liste des runs bruts.
+ * Infos: utilise les imports geocentriques fixes (1,2,10,20,31,43 + Sun 31).
+ */
 final class MoonNasaImportController extends AbstractController
 {
     #[Route('/admin/horizon_data', name: 'admin_horizon_data', methods: ['GET'])]
     #[Route('/moon/imports', name: 'moon_imports_index', methods: ['GET'])]
     public function index(
         Request $request,
-        MoonNasaImportRepository $repository,
-        MoonEphemerisHourRepository $moonRepository
+        ImportHorizonRepository $repository,
+        CanoniqueDataRepository $canoniqueRepository
     ): Response
     {
         $limit = 200;
@@ -44,15 +49,15 @@ final class MoonNasaImportController extends AbstractController
         $defaultStart = new \DateTime('now', $utc);
         $defaultStart->setTime((int) $defaultStart->format('H'), 0, 0);
 
-        $moonMonths = $moonRepository->findMonthCoverage();
+        $moonMonths = $canoniqueRepository->findMonthCoverage();
         $years = $this->buildYears($moonMonths, $utc);
-        $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $utc);
+        $nextMonthStart = $this->resolveNextMonthStart($canoniqueRepository, $utc);
 
         return $this->render('admin/horizon_data.html.twig', [
             'imports' => $imports,
             'default_start' => $defaultStart->format('Y-m-d\TH:i'),
             'default_days' => 7,
-            'default_step' => '1h',
+            'default_step' => '10m',
             'moon_months' => $moonMonths,
             'years' => $years,
             'next_month_label' => $this->formatMonthLabel($nextMonthStart),
@@ -90,11 +95,10 @@ final class MoonNasaImportController extends AbstractController
         $command = [
             'php',
             $kernel->getProjectDir() . '/bin/console',
-            'app:moon:import-horizons',
+            'app:horizon:import',
             '--start=' . $startString,
             '--days=' . $days,
             '--step=' . $step,
-            '--store-only',
         ];
 
         $process = new Process($command, $kernel->getProjectDir());
@@ -116,17 +120,24 @@ final class MoonNasaImportController extends AbstractController
     #[Route('/moon/imports/parse', name: 'moon_imports_parse', methods: ['POST'])]
     public function parse(Request $request, KernelInterface $kernel): Response
     {
-        $runId = (int) $request->request->get('run_id', 0);
-        if ($runId <= 0) {
-            $this->addFlash('error', 'Selectionnez un run a parser.');
+        $startInput = (string) $request->request->get('start', '');
+        if ($startInput === '') {
+            $this->addFlash('error', 'Selectionnez un mois a parser.');
             return $this->redirectToRoute('admin_horizon_data');
+        }
+
+        $step = trim((string) $request->request->get('step', '10m'));
+        if ($step === '') {
+            $step = '10m';
         }
 
         $command = [
             'php',
             $kernel->getProjectDir() . '/bin/console',
-            'app:moon:import-horizons',
-            '--run-id=' . $runId,
+            'app:horizon:parse-canonique',
+            '--start=' . $startInput,
+            '--months=1',
+            '--step=' . $step,
         ];
 
         $process = new Process($command, $kernel->getProjectDir());
@@ -148,7 +159,7 @@ final class MoonNasaImportController extends AbstractController
     public function bulkMonth(
         Request $request,
         KernelInterface $kernel,
-        MoonEphemerisHourRepository $moonRepository
+        CanoniqueDataRepository $canoniqueRepository
     ): Response
     {
         $utc = new \DateTimeZone('UTC');
@@ -159,7 +170,7 @@ final class MoonNasaImportController extends AbstractController
                 ->modify('first day of this month')
                 ->setTime(0, 0, 0);
         } else {
-            $nextMonthStart = $this->resolveNextMonthStart($moonRepository, $utc);
+            $nextMonthStart = $this->resolveNextMonthStart($canoniqueRepository, $utc);
         }
 
         $step = trim((string) $request->request->get('step', '10m'));
@@ -170,7 +181,7 @@ final class MoonNasaImportController extends AbstractController
         $command = [
             'php',
             $kernel->getProjectDir() . '/bin/console',
-            'app:ephemeris:bulk-import',
+            'app:horizon:bulk-import',
             '--start=' . $nextMonthStart->format('Y-m-d'),
             '--months=1',
             '--step=' . $step,
@@ -195,8 +206,8 @@ final class MoonNasaImportController extends AbstractController
     public function delete(
         int $id,
         Request $request,
-        MoonNasaImportRepository $repository,
-        MoonEphemerisHourRepository $moonRepository,
+        ImportHorizonRepository $repository,
+        CanoniqueDataRepository $canoniqueRepository,
         \Doctrine\ORM\EntityManagerInterface $entityManager
     ): Response {
         $run = $repository->find($id);
@@ -211,11 +222,10 @@ final class MoonNasaImportController extends AbstractController
             return $this->redirectToRoute('admin_horizon_data');
         }
 
-        $deletedRows = $moonRepository->deleteByRun($run);
         $entityManager->remove($run);
         $entityManager->flush();
 
-        $this->addFlash('success', sprintf('Run supprime (%d lignes associees).', $deletedRows));
+        $this->addFlash('success', 'Run supprime.');
 
         return $this->redirectToRoute('admin_horizon_data');
     }
@@ -223,7 +233,7 @@ final class MoonNasaImportController extends AbstractController
     #[Route('/admin/horizon_data/delete-all', name: 'admin_horizon_data_delete_all', methods: ['POST'])]
     public function deleteAll(
         Request $request,
-        MoonNasaImportRepository $repository,
+        ImportHorizonRepository $repository,
         Connection $connection
     ): Response {
         $token = (string) $request->request->get('_token', '');
@@ -234,8 +244,8 @@ final class MoonNasaImportController extends AbstractController
 
         $connection->beginTransaction();
         try {
-            $connection->executeStatement('DELETE FROM moon_ephemeris_hour');
-            $connection->executeStatement('DELETE FROM moon_nasa_import');
+            $connection->executeStatement('DELETE FROM canonique_data');
+            $connection->executeStatement('DELETE FROM import_horizon');
             $connection->commit();
         } catch (\Throwable $e) {
             $connection->rollBack();
@@ -311,11 +321,11 @@ final class MoonNasaImportController extends AbstractController
     }
 
     private function resolveNextMonthStart(
-        MoonEphemerisHourRepository $moonRepository,
+        CanoniqueDataRepository $canoniqueRepository,
         \DateTimeZone $utc
     ): \DateTimeImmutable
     {
-        $moonMax = $moonRepository->findMaxTimestamp();
+        $moonMax = $canoniqueRepository->findMaxTimestamp();
 
         if (!$moonMax) {
             return (new \DateTimeImmutable('now', $utc))
