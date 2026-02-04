@@ -2,7 +2,7 @@
 
 namespace App\Controller\Admin;
 
-use App\Repository\CanoniqueDataRepository;
+use App\Repository\MsMappingRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -11,14 +11,13 @@ use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * Controle l'onglet admin canonique_data.
- * Pourquoi: afficher les colonnes canoniques et declencher le parse mensuel.
- * Infos: lecture directe en SQL pour rester simple hors ORM.
+ * Controle l'onglet admin ms_mapping.
+ * Pourquoi: afficher l'agregation journaliere et declencher le parse mensuel.
  */
-final class CanoniqueDataController extends AbstractController
+final class MsMappingController extends AbstractController
 {
-    #[Route('/admin/canonique_data', name: 'admin_canonique_data', methods: ['GET'])]
-    public function index(Request $request, CanoniqueDataRepository $repository): Response
+    #[Route('/admin/ms_mapping', name: 'admin_ms_mapping', methods: ['GET'])]
+    public function index(Request $request, MsMappingRepository $repository): Response
     {
         $limit = 200;
         $page = max(1, (int) $request->query->get('page', 1));
@@ -33,7 +32,7 @@ final class CanoniqueDataController extends AbstractController
         $columns = $this->orderColumns($repository->fetchColumnNames());
         $nextMonthStart = $this->resolveNextMonthStart($repository, new \DateTimeZone('UTC'));
 
-        return $this->render('admin/canonique_data.html.twig', [
+        return $this->render('admin/ms_mapping.html.twig', [
             'rows' => $rows,
             'columns' => $columns,
             'limit' => $limit,
@@ -45,22 +44,21 @@ final class CanoniqueDataController extends AbstractController
         ]);
     }
 
-    #[Route('/admin/canonique_data/parse-month', name: 'admin_canonique_data_parse_month', methods: ['POST'])]
+    #[Route('/admin/ms_mapping/parse-month', name: 'admin_ms_mapping_parse_month', methods: ['POST'])]
     public function parseMonth(Request $request, KernelInterface $kernel): Response
     {
         $start = trim((string) $request->request->get('start', ''));
         if ($start === '') {
             $this->addFlash('error', 'Mois invalide.');
-            return $this->redirectToRoute('admin_canonique_data');
+            return $this->redirectToRoute('admin_ms_mapping');
         }
 
         $command = [
             'php',
             $kernel->getProjectDir() . '/bin/console',
-            'app:horizon:parse-canonique',
+            'app:moon:parse-ms-mapping',
             '--start=' . $start,
             '--months=1',
-            '--replace',
         ];
 
         $process = new Process($command, $kernel->getProjectDir());
@@ -71,11 +69,22 @@ final class CanoniqueDataController extends AbstractController
             $message = trim($process->getErrorOutput() ?: $process->getOutput());
             $this->addFlash('error', $message !== '' ? $message : 'Parse echoue.');
         } else {
-            $message = trim($process->getOutput());
-            $this->addFlash('success', $message !== '' ? $message : 'Parse termine.');
+            $output = trim($process->getOutput());
+            $missing = $this->extractMissingDays($output);
+            if ($missing) {
+                $output = trim(preg_replace('/^.*Missing 12:00 UTC days:.*$/mi', '', $output) ?? $output);
+            }
+            $this->addFlash('success', $output !== '' ? $output : 'Parse termine.');
+
+            if ($missing) {
+                $this->addFlash(
+                    'warning',
+                    'Jours manquants (12:00 UTC): ' . implode(', ', $missing)
+                );
+            }
         }
 
-        return $this->redirectToRoute('admin_canonique_data');
+        return $this->redirectToRoute('admin_ms_mapping');
     }
 
     /**
@@ -89,24 +98,14 @@ final class CanoniqueDataController extends AbstractController
         }
 
         $fixed = [
+            'id',
             'ts_utc',
-            'm1_ra_ast_deg',
-            'm1_dec_ast_deg',
-            'm2_ra_app_deg',
-            'm2_dec_app_deg',
-            'm10_illum_frac',
-            'm20_range_km',
-            'm20_range_rate_km_s',
-            'm31_ecl_lon_deg',
-            'm31_ecl_lat_deg',
             'm43_pab_lon_deg',
-            'm43_pab_lat_deg',
-            'm43_phi_deg',
+            'm10_illum_frac',
+            'm31_ecl_lon_deg',
             's31_ecl_lon_deg',
-            's31_ecl_lat_deg',
-            'm_raw_line',
-            's_raw_line',
-            'created_at_utc',
+            'phase',
+            'phase_hour',
         ];
         $ordered = [];
         foreach ($fixed as $name) {
@@ -122,7 +121,7 @@ final class CanoniqueDataController extends AbstractController
     }
 
     private function resolveNextMonthStart(
-        CanoniqueDataRepository $repository,
+        MsMappingRepository $repository,
         \DateTimeZone $utc
     ): \DateTimeImmutable {
         $max = $repository->findMaxTimestamp();
@@ -161,5 +160,18 @@ final class CanoniqueDataController extends AbstractController
         $monthLabel = $monthNames[$monthNumber] ?? $date->format('F');
 
         return sprintf('%s %s (%s)', $date->format('Y'), $date->format('m'), $monthLabel);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function extractMissingDays(string $output): array
+    {
+        if (preg_match('/Missing 12:00 UTC days:\s*(.+)$/mi', $output, $matches) !== 1) {
+            return [];
+        }
+
+        $list = array_map('trim', explode(',', $matches[1]));
+        return array_values(array_filter($list));
     }
 }

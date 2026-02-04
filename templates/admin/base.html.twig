@@ -35,8 +35,20 @@
                 </span>
                 <span class="admin-sidebar__label">OP Canonique data</span>
             </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ms_mapping' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_ms_mapping') }}" style="--delay: 3">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M5 7h14M5 12h14M5 17h14" />
+                        <circle cx="7" cy="7" r="1.2" />
+                        <circle cx="9" cy="12" r="1.2" />
+                        <circle cx="7" cy="17" r="1.2" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">OP ms_mapping</span>
+            </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ephemeris' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_moon_ephemeris_hours') }}" style="--delay: 3">
+               href="{{ path('admin_moon_ephemeris_hours') }}" style="--delay: 4">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
                         <path d="M4 5h16M4 11h16M4 17h16" />
@@ -48,7 +60,7 @@
                 <span class="admin-sidebar__label">Moon ephemeris hours</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'phase_events' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_moon_phase_events') }}" style="--delay: 4">
+               href="{{ path('admin_moon_phase_events') }}" style="--delay: 5">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
                         <path d="M12 3a9 9 0 1 0 0 18a7 7 0 1 1 0-18" />
@@ -57,7 +69,7 @@
                 <span class="admin-sidebar__label">Phases lunaires</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'horizons_quantities' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_horizons_observer_quantities') }}" style="--delay: 5">
+               href="{{ path('admin_horizons_observer_quantities') }}" style="--delay: 6">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
                         <path d="M4 6h16M4 12h16M4 18h16" />
@@ -66,7 +78,7 @@
                 <span class="admin-sidebar__label">Horizons OBSERVER</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'lunation_images' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_lunation_images') }}" style="--delay: 6">
+               href="{{ path('admin_lunation_images') }}" style="--delay: 7">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
                         <path d="M4 7h4l2-2h4l2 2h4v12H4z" />
@@ -76,7 +88,7 @@
                 <span class="admin-sidebar__label">Images lunaison</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'debug' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_debug') }}" style="--delay: 7">
+               href="{{ path('admin_debug') }}" style="--delay: 8">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
                         <path d="M8 3v3M16 3v3M7 7h10M6 21h12M6 7v10a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V7" />

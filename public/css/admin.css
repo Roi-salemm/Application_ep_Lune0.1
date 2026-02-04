@@ -618,6 +618,11 @@ body {
     background: rgba(76, 212, 176, 0.12);
 }
 
+.admin-flash--warning {
+    border-color: rgba(240, 198, 92, 0.6);
+    background: rgba(240, 198, 92, 0.12);
+}
+
 .admin-console {
     margin-top: 14px;
     padding: 12px 14px;

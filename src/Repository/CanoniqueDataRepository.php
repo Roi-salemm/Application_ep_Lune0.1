@@ -67,6 +67,17 @@ final class CanoniqueDataRepository
         return new \DateTimeImmutable((string) $value, new \DateTimeZone('UTC'));
     }
 
+    public function deleteByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $stop): int
+    {
+        return $this->connection->executeStatement(
+            'DELETE FROM canonique_data WHERE ts_utc >= :start AND ts_utc < :stop',
+            [
+                'start' => $start->format('Y-m-d H:i:s'),
+                'stop' => $stop->format('Y-m-d H:i:s'),
+            ]
+        );
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */

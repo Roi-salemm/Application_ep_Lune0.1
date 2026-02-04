@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Repository\CanoniqueDataRepository;
 use App\Repository\ImportHorizonRepository;
 use App\Service\Horizon\CanoniqueDataParseService;
 use App\Service\Moon\Horizons\MoonHorizonsDateTimeParserService;
@@ -24,6 +25,7 @@ class ParseCanoniqueDataCommand extends Command
 {
     public function __construct(
         private ImportHorizonRepository $importRepository,
+        private CanoniqueDataRepository $canoniqueRepository,
         private CanoniqueDataParseService $parseService,
         private MoonHorizonsDateTimeParserService $dateTimeParserService,
     ) {
@@ -38,7 +40,8 @@ class ParseCanoniqueDataCommand extends Command
             ->addOption('step', null, InputOption::VALUE_OPTIONAL, 'Expected step size', '10m')
             ->addOption('center', null, InputOption::VALUE_OPTIONAL, 'Center body or site', '500@399')
             ->addOption('moon-target', null, InputOption::VALUE_OPTIONAL, 'Moon target body', '301')
-            ->addOption('sun-target', null, InputOption::VALUE_OPTIONAL, 'Sun target body', '10');
+            ->addOption('sun-target', null, InputOption::VALUE_OPTIONAL, 'Sun target body', '10')
+            ->addOption('replace', null, InputOption::VALUE_NONE, 'Delete month before parsing to fully replace data');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -50,6 +53,7 @@ class ParseCanoniqueDataCommand extends Command
         $center = trim((string) $input->getOption('center')) ?: '500@399';
         $moonTarget = trim((string) $input->getOption('moon-target')) ?: '301';
         $sunTarget = trim((string) $input->getOption('sun-target')) ?: '10';
+        $replace = (bool) $input->getOption('replace');
 
         $start = $this->dateTimeParserService->parseInput($startInput, $utc);
         if (!$start) {
@@ -84,6 +88,11 @@ class ParseCanoniqueDataCommand extends Command
             if (!$sunRun) {
                 $output->writeln('<error>Run Sun introuvable pour cette periode.</error>');
                 continue;
+            }
+
+            if ($replace) {
+                $deleted = $this->canoniqueRepository->deleteByTimestampRange($chunkStart, $nextMonthStart);
+                $output->writeln(sprintf('Replace mode: %d lignes supprimees.', $deleted));
             }
 
             try {
