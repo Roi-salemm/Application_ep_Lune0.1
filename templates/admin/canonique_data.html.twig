@@ -30,6 +30,7 @@
                 <thead>
                     <tr>
                         <th class="admin-table__cell">Parse</th>
+                        <th class="admin-table__cell">Copier</th>
                         <th class="admin-table__cell">Annee</th>
                         {% for label in month_labels %}
                             <th class="admin-table__cell admin-import-calendar__month-header">{{ label }}</th>
@@ -43,6 +44,14 @@
                         <tr class="admin-table__row">
                             <td class="admin-table__cell">
                                 <button class="admin-button admin-import-calendar__year-button admin-import-calendar__year-button--{{ year_status }}" type="button" data-canonique-year-button data-canonique-year="{{ year }}">Parse</button>
+                            </td>
+                            <td class="admin-table__cell">
+                                <button
+                                    class="admin-button admin-button--ghost admin-import-calendar__copy-button"
+                                    type="button"
+                                    data-copy-button
+                                    data-copy-command="php bin/console app:horizon:parse-canonique --start={{ '%04d-01-01'|format(year) }} --months=12 --replace"
+                                >C</button>
                             </td>
                             <td class="admin-table__cell admin-import-calendar__year-label">{{ year }}</td>
                             {% for month in 1..12 %}
@@ -313,6 +322,61 @@
                 if (event.key === 'Escape') {
                     closeModal();
                 }
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            function fallbackCopy(text) {
+                var textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+
+            function copyCommand(button, command) {
+                if (!command) {
+                    return;
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(command).then(function () {
+                        flashButton(button);
+                    }).catch(function () {
+                        fallbackCopy(command);
+                        flashButton(button);
+                    });
+                } else {
+                    fallbackCopy(command);
+                    flashButton(button);
+                }
+            }
+
+            function flashButton(button) {
+                if (!button) {
+                    return;
+                }
+                var original = button.textContent;
+                button.textContent = 'Copie';
+                button.classList.add('is-copied');
+                setTimeout(function () {
+                    button.textContent = original;
+                    button.classList.remove('is-copied');
+                }, 1200);
+            }
+
+            document.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-copy-button]');
+                if (!button) {
+                    return;
+                }
+                event.preventDefault();
+                var command = button.getAttribute('data-copy-command');
+                copyCommand(button, command);
             });
         })();
     </script>

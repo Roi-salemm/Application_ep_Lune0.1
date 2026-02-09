@@ -574,6 +574,11 @@ body {
     border-color: rgba(111, 168, 255, 0.6);
 }
 
+.admin-import-calendar__legend-item--canonique {
+    color: var(--admin-accent-alt);
+    border-color: rgba(76, 212, 176, 0.6);
+}
+
 .admin-import-calendar__legend-item--parsed {
     color: var(--admin-accent-strong);
     border-color: rgba(225, 176, 76, 0.6);
@@ -614,6 +619,12 @@ body {
     background: rgba(111, 168, 255, 0.22);
     color: #cdd7ff;
     border-color: rgba(111, 168, 255, 0.7);
+}
+
+.admin-import-calendar__year-button--canonique {
+    background: rgba(76, 212, 176, 0.2);
+    color: #d7fff0;
+    border-color: rgba(76, 212, 176, 0.7);
 }
 
 .admin-import-calendar__year-button--parsed {
@@ -714,6 +725,13 @@ body {
     color: #cdd7ff;
 }
 
+.admin-import-calendar__month-button--canonique {
+    background-color: rgba(76, 212, 176, 0.18);
+    background: rgba(76, 212, 176, 0.18);
+    border-color: rgba(76, 212, 176, 0.7);
+    color: #d7fff0;
+}
+
 .admin-import-calendar__month-button--parsed {
     background: linear-gradient(120deg, var(--admin-accent), #f6d27d);
     border-color: rgba(225, 176, 76, 0.8);
@@ -722,6 +740,21 @@ body {
 
 .admin-import-calendar__month-button--ready:hover {
     background: rgba(111, 168, 255, 0.32);
+}
+
+.admin-import-calendar__month-button--canonique:hover {
+    background: rgba(76, 212, 176, 0.28);
+}
+
+.admin-import-calendar__copy-button {
+    padding: 6px 10px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+}
+
+.admin-import-calendar__copy-button.is-copied {
+    color: #9bb7ff;
+    border-color: rgba(111, 168, 255, 0.7);
 }
 
 .admin-import-calendar__month-button--parsed:hover {

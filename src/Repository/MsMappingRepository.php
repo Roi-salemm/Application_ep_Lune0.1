@@ -49,6 +49,22 @@ final class MsMappingRepository extends ServiceEntityRepository
     }
 
     /**
+     * @return string[]
+     */
+    public function findMonthCoverage(): array
+    {
+        $rows = $this->connection()->fetchFirstColumn('
+            SELECT DATE_FORMAT(ts_utc, "%Y-%m") AS month_key
+            FROM ms_mapping
+            WHERE ts_utc IS NOT NULL
+            GROUP BY month_key
+            ORDER BY month_key
+        ');
+
+        return array_values(array_filter($rows));
+    }
+
+    /**
      * @return MsMapping[]
      */
     public function findByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $end): array
