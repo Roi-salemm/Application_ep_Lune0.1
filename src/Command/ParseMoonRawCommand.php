@@ -1,11 +1,17 @@
 <?php
 
+/**
+ * Parse les runs import_horizon pour remplir moon_ephemeris_hour.
+ * Pourquoi: recuperer les valeurs brutes sans calcul et tracer les lignes sources.
+ * Infos: se base sur raw_response et sur le mapping Horizons courant.
+ */
+
 namespace App\Command;
 
+use App\Entity\ImportHorizon;
 use App\Entity\MoonEphemerisHour;
-use App\Entity\MoonNasaImport;
+use App\Repository\ImportHorizonRepository;
 use App\Repository\MoonEphemerisHourRepository;
-use App\Repository\MoonNasaImportRepository;
 use App\Service\Moon\Horizons\MoonHorizonsParserService;
 use App\Service\Moon\Horizons\MoonHorizonsRowMapperService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -17,12 +23,12 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
     name: 'app:moon:parse-raw',
-    description: 'Parse raw_response from moon_nasa_import and report raw values into moon_ephemeris_hour (no calculations).',
+    description: 'Parse raw_response from import_horizon and report raw values into moon_ephemeris_hour (no calculations).',
 )]
 class ParseMoonRawCommand extends Command
 {
     public function __construct(
-        private MoonNasaImportRepository $runRepository,
+        private ImportHorizonRepository $runRepository,
         private MoonEphemerisHourRepository $hourRepository,
         private MoonHorizonsParserService $parserService,
         private MoonHorizonsRowMapperService $rowMapper,
@@ -94,7 +100,7 @@ class ParseMoonRawCommand extends Command
                 if ($mode === 'sun') {
                     $this->hydrateSunValues($hour, $row['cols'] ?? [], $columnMap);
                 } else {
-                    $hour->setRunId($run);
+                    $hour->setRunId($run->getId());
                     $hour->setRawLine($row['raw'] ?? null);
                     $hour->setRawData($this->buildRawData($row['cols'] ?? [], $headerMap));
                     $this->hydrateRawValues($hour, $row['cols'] ?? [], $columnMap);
@@ -130,7 +136,7 @@ class ParseMoonRawCommand extends Command
     /**
      * @return array<string, MoonEphemerisHour>
      */
-    private function findExistingRows(MoonNasaImport $run): array
+    private function findExistingRows(ImportHorizon $run): array
     {
         $start = $run->getStartUtc();
         $stop = $run->getStopUtc();
@@ -142,7 +148,7 @@ class ParseMoonRawCommand extends Command
         return $this->hourRepository->findByRunIndexedByTimestamp($run);
     }
 
-    private function findLatestRun(): ?MoonNasaImport
+    private function findLatestRun(): ?ImportHorizon
     {
         return $this->runRepository->createQueryBuilder('m')
             ->orderBy('m.id', 'DESC')
@@ -151,7 +157,7 @@ class ParseMoonRawCommand extends Command
             ->getOneOrNullResult();
     }
 
-    private function isSunRun(MoonNasaImport $run): bool
+    private function isSunRun(ImportHorizon $run): bool
     {
         $target = trim((string) $run->getTarget());
         if ($target === '') {

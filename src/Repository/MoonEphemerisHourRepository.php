@@ -9,7 +9,7 @@
 namespace App\Repository;
 
 use App\Entity\MoonEphemerisHour;
-use App\Entity\MoonNasaImport;
+use App\Entity\ImportHorizon;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -55,10 +55,10 @@ class MoonEphemerisHourRepository extends ServiceEntityRepository
     /**
      * @return array<string, MoonEphemerisHour>
      */
-    public function findByRunIndexedByTimestamp(MoonNasaImport $run): array
+    public function findByRunIndexedByTimestamp(int $runId): array
     {
         $rows = $this->findBy([
-            'run_id' => $run,
+            'run_id' => $runId,
         ]);
 
         $indexed = [];
@@ -73,12 +73,12 @@ class MoonEphemerisHourRepository extends ServiceEntityRepository
         return $indexed;
     }
 
-    public function deleteByRun(MoonNasaImport $run): int
+    public function deleteByRun(int $runId): int
     {
         return $this->createQueryBuilder('m')
             ->delete()
             ->where('m.run_id = :run')
-            ->setParameter('run', $run)
+            ->setParameter('run', $runId)
             ->getQuery()
             ->execute();
     }

@@ -58,6 +58,87 @@ class ImportHorizonRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
+    /**
+     * @return array<int, array{start_utc: \DateTimeInterface|null, stop_utc: \DateTimeInterface|null}>
+     */
+    public function findRunsOverlappingPeriod(
+        string $target,
+        \DateTimeInterface $start,
+        \DateTimeInterface $stop,
+        ?string $center = null,
+        ?string $step = null
+    ): array {
+        $query = $this->createQueryBuilder('m')
+            ->select('m.start_utc', 'm.stop_utc')
+            ->andWhere('m.target = :target')
+            ->andWhere('m.start_utc <= :stop')
+            ->andWhere('m.stop_utc >= :start')
+            ->setParameter('target', $target)
+            ->setParameter('start', $start)
+            ->setParameter('stop', $stop)
+            ->orderBy('m.start_utc', 'ASC');
+
+        if ($center !== null && $center !== '') {
+            $query->andWhere('m.center = :center')->setParameter('center', $center);
+        }
+        if ($step !== null && $step !== '') {
+            $query->andWhere('m.step_size = :step')->setParameter('step', $step);
+        }
+
+        return $query->getQuery()->getArrayResult();
+    }
+
+    public function findMaxStopUtc(
+        string $target,
+        ?string $center = null,
+        ?string $step = null
+    ): ?\DateTimeInterface {
+        $query = $this->createQueryBuilder('m')
+            ->andWhere('m.target = :target')
+            ->setParameter('target', $target)
+            ->orderBy('m.stop_utc', 'DESC')
+            ->setMaxResults(1);
+
+        if ($center !== null && $center !== '') {
+            $query->andWhere('m.center = :center')->setParameter('center', $center);
+        }
+        if ($step !== null && $step !== '') {
+            $query->andWhere('m.step_size = :step')->setParameter('step', $step);
+        }
+
+        $run = $query->getQuery()->getOneOrNullResult();
+
+        return $run?->getStopUtc();
+    }
+
+    public function deleteRunsOverlappingPeriod(
+        ?array $targets,
+        \DateTimeInterface $start,
+        \DateTimeInterface $stop,
+        ?string $center = null,
+        ?string $step = null
+    ): int {
+        $query = $this->createQueryBuilder('m')
+            ->delete()
+            ->andWhere('m.start_utc <= :stop')
+            ->andWhere('m.stop_utc >= :start')
+            ->setParameter('start', $start)
+            ->setParameter('stop', $stop);
+
+        if ($targets) {
+            $query->andWhere('m.target IN (:targets)')
+                ->setParameter('targets', $targets);
+        }
+        if ($center !== null && $center !== '') {
+            $query->andWhere('m.center = :center')->setParameter('center', $center);
+        }
+        if ($step !== null && $step !== '') {
+            $query->andWhere('m.step_size = :step')->setParameter('step', $step);
+        }
+
+        return $query->getQuery()->execute();
+    }
+
     public function findLatestByTargetAndPeriod(
         string $target,
         \DateTimeInterface $start,

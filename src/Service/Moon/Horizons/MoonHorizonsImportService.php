@@ -1,24 +1,30 @@
 <?php
 
+/**
+ * Service d import Horizons pour moon_ephemeris_hour avec stockage des runs.
+ * Pourquoi: centraliser la creation de runs import_horizon et le parsing brut.
+ * Infos: utilise import_horizon comme source unique des raw_response.
+ */
+
 namespace App\Service\Moon\Horizons;
 
+use App\Entity\ImportHorizon;
 use App\Entity\MoonEphemerisHour;
-use App\Entity\MoonNasaImport;
+use App\Repository\ImportHorizonRepository;
 use App\Repository\MoonEphemerisHourRepository;
-use App\Repository\MoonNasaImportRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 final class MoonHorizonsImportService
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private MoonNasaImportRepository $runRepository,
+        private ImportHorizonRepository $runRepository,
         private MoonEphemerisHourRepository $hourRepository,
         private MoonHorizonsRowMapperService $rowMapper,
     ) {
     }
 
-    public function findRunById(int $runId): ?MoonNasaImport
+    public function findRunById(int $runId): ?ImportHorizon
     {
         return $this->runRepository->find($runId);
     }
@@ -33,8 +39,8 @@ final class MoonHorizonsImportService
         string $rawResponse,
         bool $storeOnly,
         \DateTimeZone $utc
-    ): MoonNasaImport {
-        $run = new MoonNasaImport();
+    ): ImportHorizon {
+        $run = new ImportHorizon();
         $run->setProvider('nasa-horizons');
         $run->setTarget($target);
         $run->setCenter($center);
@@ -57,7 +63,7 @@ final class MoonHorizonsImportService
     /**
      * @return array{saved:int, updated:int}
      */
-    public function importParsedRows(MoonNasaImport $run, MoonHorizonsParseResult $parseResult, \DateTimeZone $utc): array
+    public function importParsedRows(ImportHorizon $run, MoonHorizonsParseResult $parseResult, \DateTimeZone $utc): array
     {
         $createdAt = new \DateTime('now', $utc);
         $saved = 0;
@@ -67,7 +73,7 @@ final class MoonHorizonsImportService
         if ($start instanceof \DateTimeInterface && $stop instanceof \DateTimeInterface) {
             $existingRows = $this->hourRepository->findByTimestampRangeIndexed($start, $stop);
         } else {
-            $existingRows = $this->hourRepository->findByRunIndexedByTimestamp($run);
+            $existingRows = $this->hourRepository->findByRunIndexedByTimestamp($run->getId());
         }
         $columnMap = $parseResult->getColumnMap();
 
@@ -81,11 +87,11 @@ final class MoonHorizonsImportService
                 $timestampKey = $timestamp->format('Y-m-d H:i');
                 if (isset($existingRows[$timestampKey])) {
                     $hour = $existingRows[$timestampKey];
-                    $hour->setRunId($run);
+                    $hour->setRunId($run->getId());
                     $updated++;
                 } else {
                     $hour = new MoonEphemerisHour();
-                    $hour->setRunId($run);
+                    $hour->setRunId($run->getId());
                     $hour->setTsUtc(clone $timestamp);
                     $saved++;
                 }

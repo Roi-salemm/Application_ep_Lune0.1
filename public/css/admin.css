@@ -1,3 +1,4 @@
+/* Styles admin pour l'interface back-office (theme dark + modules). */
 :root {
     --admin-bg: #121417;
     --admin-bg-deep: #0b0d10;
@@ -520,6 +521,188 @@ body {
     background: #9bb7ff;
 }
 
+.admin-import-calendar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-import-calendar__table-wrap {
+    border-radius: 12px;
+    border: 1px solid var(--admin-border);
+    overflow: auto;
+}
+
+.admin-import-calendar__table {
+    min-width: 1100px;
+}
+
+.admin-import-calendar__legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-import-calendar__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--admin-muted);
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-import-calendar__legend-item--complete {
+    color: var(--admin-accent-alt);
+    border-color: rgba(76, 212, 176, 0.6);
+}
+
+.admin-import-calendar__legend-item--partial {
+    color: var(--admin-accent-strong);
+    border-color: rgba(225, 176, 76, 0.6);
+}
+
+.admin-import-calendar__legend-item--missing {
+    color: var(--admin-muted);
+}
+
+.admin-import-calendar__year-label {
+    font-size: 13px;
+    color: var(--admin-text);
+}
+
+.admin-import-calendar__year-button {
+    padding: 6px 12px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    width: auto;
+}
+
+.admin-import-calendar__year-button--complete {
+    background: linear-gradient(120deg, var(--admin-accent), #f6d27d);
+    color: #15181c;
+    border-color: rgba(225, 176, 76, 0.8);
+}
+
+.admin-import-calendar__year-button--partial {
+    background: rgba(225, 176, 76, 0.24);
+    color: var(--admin-accent-strong);
+    border-color: rgba(225, 176, 76, 0.65);
+}
+
+.admin-import-calendar__year-button--missing {
+    background: rgba(28, 32, 36, 0.9);
+    color: var(--admin-muted);
+    border-color: #000;
+}
+
+.admin-import-calendar__month-header {
+    text-align: center;
+    min-width: 100px;
+}
+
+.admin-import-calendar__cell {
+    text-align: center;
+    padding: 4px 6px;
+}
+
+.admin-import-calendar__cell-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 2px 4px;
+}
+
+.admin-import-calendar__dot {
+    display: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.admin-import-calendar__dot--complete {
+    background: var(--admin-accent-alt);
+    box-shadow: 0 0 0 4px rgba(76, 212, 176, 0.08);
+}
+
+.admin-import-calendar__dot--partial {
+    background: var(--admin-accent);
+    box-shadow: 0 0 0 4px rgba(225, 176, 76, 0.08);
+}
+
+.admin-import-calendar__dot--missing {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.admin-import-calendar__month-button {
+    background-color: rgba(28, 32, 36, 0.9);
+    background: rgba(28, 32, 36, 0.9);
+    border: 1px solid #000;
+    color: var(--admin-text);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 999px;
+    transition: color 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    outline: none;
+}
+
+.admin-import-calendar__month-button:hover {
+    color: var(--admin-accent-strong);
+    background: rgba(34, 38, 44, 0.9);
+    border-color: rgba(225, 176, 76, 0.6);
+}
+
+.admin-import-calendar__month-button--complete {
+    background-color: var(--admin-accent);
+    background: linear-gradient(120deg, var(--admin-accent), #f6d27d);
+    border-color: rgba(225, 176, 76, 0.8);
+    color: #15181c;
+}
+
+.admin-import-calendar__month-button--partial {
+    background-color: rgba(225, 176, 76, 0.24);
+    background: rgba(225, 176, 76, 0.24);
+    border-color: rgba(225, 176, 76, 0.65);
+    color: var(--admin-accent-strong);
+}
+
+.admin-import-calendar__month-button--missing {
+    background-color: rgba(28, 32, 36, 0.9);
+    background: rgba(28, 32, 36, 0.9);
+    border-color: #000;
+    color: var(--admin-muted);
+}
+
+.admin-import-calendar__month-button--complete:hover {
+    background: linear-gradient(120deg, #f0c268, #f8de9a);
+}
+
+.admin-import-calendar__month-button--partial:hover {
+    background: rgba(225, 176, 76, 0.32);
+}
+
+.admin-import-calendar__month-button--missing:hover {
+    background: rgba(38, 42, 48, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--admin-text);
+}
+
+.admin-import-calendar__form {
+    display: none;
+}
+
 .admin-form {
     display: grid;
     gap: 14px;
@@ -789,7 +972,7 @@ thead .admin-table__cell {
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 5;
+    z-index: 9999;
 }
 
 .admin-modal.is-open {
@@ -845,11 +1028,9 @@ thead .admin-table__cell {
 @keyframes admin-fade-up {
     from {
         opacity: 0;
-        transform: translateY(12px);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
     }
 }
 

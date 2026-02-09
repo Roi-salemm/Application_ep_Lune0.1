@@ -2,7 +2,6 @@
 
 namespace App\Controller\Admin;
 
-use App\Repository\CanoniqueDataRepository;
 use App\Repository\ImportHorizonRepository;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,13 +18,22 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 final class MoonNasaImportController extends AbstractController
 {
+    private const MOON_TARGET = '301';
+    private const MOON_TARGET_FALLBACK = '300';
+    private const SUN_TARGET = '10';
+    private const CENTER = '500@399';
+    private const STEP = '10m';
+    private const START_YEAR = 1920;
+    private const END_YEAR = 2150;
+    private const DELETE_TARGETS = [
+        self::MOON_TARGET,
+        self::MOON_TARGET_FALLBACK,
+        self::SUN_TARGET,
+    ];
+
     #[Route('/admin/horizon_data', name: 'admin_horizon_data', methods: ['GET'])]
     #[Route('/moon/imports', name: 'moon_imports_index', methods: ['GET'])]
-    public function index(
-        Request $request,
-        ImportHorizonRepository $repository,
-        CanoniqueDataRepository $canoniqueRepository
-    ): Response
+    public function index(Request $request, ImportHorizonRepository $repository): Response
     {
         $limit = 200;
         $page = max(1, (int) $request->query->get('page', 1));
@@ -46,20 +54,16 @@ final class MoonNasaImportController extends AbstractController
 
         $imports = $repository->findPage($page, $limit, $sort, $dir);
         $utc = new \DateTimeZone('UTC');
-        $defaultStart = new \DateTime('now', $utc);
-        $defaultStart->setTime((int) $defaultStart->format('H'), 0, 0);
-
-        $moonMonths = $canoniqueRepository->findMonthCoverage();
-        $years = $this->buildYears($moonMonths, $utc);
-        $nextMonthStart = $this->resolveNextMonthStart($canoniqueRepository, $utc);
+        $nextMonthStart = $this->resolveNextMonthStartFromImports($repository, $utc);
+        $monthCoverage = $this->buildMonthCoverage($repository, $utc);
+        $yearCoverage = $this->buildYearCoverage($monthCoverage);
+        $years = range(self::START_YEAR, self::END_YEAR);
 
         return $this->render('admin/horizon_data.html.twig', [
             'imports' => $imports,
-            'default_start' => $defaultStart->format('Y-m-d\TH:i'),
-            'default_days' => 7,
-            'default_step' => '10m',
-            'moon_months' => $moonMonths,
-            'years' => $years,
+            'month_coverage' => $monthCoverage,
+            'year_coverage' => $yearCoverage,
+            'calendar_years' => $years,
             'next_month_label' => $this->formatMonthLabel($nextMonthStart),
             'next_month_start' => $nextMonthStart->format('Y-m-01'),
             'page' => $page,
@@ -156,11 +160,7 @@ final class MoonNasaImportController extends AbstractController
     }
 
     #[Route('/admin/horizon_data/bulk-month', name: 'admin_horizon_data_bulk_month', methods: ['POST'])]
-    public function bulkMonth(
-        Request $request,
-        KernelInterface $kernel,
-        CanoniqueDataRepository $canoniqueRepository
-    ): Response
+    public function bulkMonth(Request $request, KernelInterface $kernel, ImportHorizonRepository $repository): Response
     {
         $utc = new \DateTimeZone('UTC');
         $startInput = (string) $request->request->get('start', '');
@@ -170,12 +170,23 @@ final class MoonNasaImportController extends AbstractController
                 ->modify('first day of this month')
                 ->setTime(0, 0, 0);
         } else {
-            $nextMonthStart = $this->resolveNextMonthStart($canoniqueRepository, $utc);
+            $nextMonthStart = $this->resolveNextMonthStartFromImports($repository, $utc);
         }
 
         $step = trim((string) $request->request->get('step', '10m'));
         if ($step === '') {
             $step = '10m';
+        }
+        $force = (string) $request->request->get('force', '0') === '1';
+        if ($force) {
+            [$rangeStart, $rangeStop] = $this->resolveMonthRange($nextMonthStart, $step);
+            $repository->deleteRunsOverlappingPeriod(
+                null,
+                $rangeStart,
+                $rangeStop,
+                null,
+                null
+            );
         }
 
         $command = [
@@ -202,12 +213,85 @@ final class MoonNasaImportController extends AbstractController
         return $this->redirectToRoute('admin_horizon_data');
     }
 
+    #[Route('/admin/horizon_data/bulk-year', name: 'admin_horizon_data_bulk_year', methods: ['POST'])]
+    public function bulkYear(Request $request, KernelInterface $kernel): Response
+    {
+        $yearInput = (int) $request->request->get('year', 0);
+        if ($yearInput < self::START_YEAR || $yearInput > self::END_YEAR) {
+            $this->addFlash('error', 'Annee invalide.');
+            return $this->redirectToRoute('admin_horizon_data');
+        }
+
+        $step = trim((string) $request->request->get('step', self::STEP));
+        if ($step === '') {
+            $step = self::STEP;
+        }
+
+        $command = [
+            'php',
+            $kernel->getProjectDir() . '/bin/console',
+            'app:horizon:bulk-import',
+            '--start=' . sprintf('%04d-01-01', $yearInput),
+            '--months=12',
+            '--step=' . $step,
+        ];
+
+        $process = new Process($command, $kernel->getProjectDir());
+        $process->setTimeout(3600);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            $message = trim($process->getErrorOutput() ?: $process->getOutput());
+            $this->addFlash('error', $message !== '' ? $message : 'Import annuel echoue.');
+        } else {
+            $message = trim($process->getOutput());
+            $this->addFlash('success', $message !== '' ? $message : 'Import annuel termine.');
+        }
+
+        return $this->redirectToRoute('admin_horizon_data');
+    }
+
+    #[Route('/admin/horizon_data/delete-year', name: 'admin_horizon_data_delete_year', methods: ['POST'])]
+    public function deleteYear(Request $request, ImportHorizonRepository $repository): Response
+    {
+        $yearInput = (int) $request->request->get('year', 0);
+        $token = (string) $request->request->get('_token', '');
+        if (!$this->isCsrfTokenValid('delete_import_year_' . $yearInput, $token)) {
+            $this->addFlash('error', 'Jeton CSRF invalide.');
+            return $this->redirectToRoute('admin_horizon_data');
+        }
+
+        if ($yearInput < self::START_YEAR || $yearInput > self::END_YEAR) {
+            $this->addFlash('error', 'Annee invalide.');
+            return $this->redirectToRoute('admin_horizon_data');
+        }
+
+        $utc = new \DateTimeZone('UTC');
+        $start = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', $yearInput), $utc);
+        $stop = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', $yearInput + 1), $utc);
+        $stepSeconds = $this->parseStepToSeconds(self::STEP);
+        if ($stepSeconds > 0) {
+            $stop = $stop->modify(sprintf('-%d seconds', $stepSeconds));
+        }
+
+        $deleted = $repository->deleteRunsOverlappingPeriod(
+            null,
+            $start,
+            $stop,
+            null,
+            null
+        );
+
+        $this->addFlash('success', sprintf('Suppression terminee: %d runs supprimes.', $deleted));
+
+        return $this->redirectToRoute('admin_horizon_data');
+    }
+
     #[Route('/admin/horizon_data/delete/{id}', name: 'admin_horizon_data_delete', methods: ['POST'])]
     public function delete(
         int $id,
         Request $request,
         ImportHorizonRepository $repository,
-        CanoniqueDataRepository $canoniqueRepository,
         \Doctrine\ORM\EntityManagerInterface $entityManager
     ): Response {
         $run = $repository->find($id);
@@ -295,49 +379,198 @@ final class MoonNasaImportController extends AbstractController
         }
     }
 
-    /**
-     * @param string[] $moonMonths
-     * @return int[]
-     */
-    private function buildYears(array $moonMonths, \DateTimeZone $utc): array
-    {
-        $years = [];
-        foreach ($moonMonths as $monthKey) {
-            if (preg_match('/^(\d{4})-\d{2}$/', $monthKey, $matches) !== 1) {
-                continue;
-            }
-            $years[] = (int) $matches[1];
-        }
-
-        if (!$years) {
-            $currentYear = (int) (new \DateTime('now', $utc))->format('Y');
-            return [$currentYear];
-        }
-
-        $minYear = min($years);
-        $maxYear = max($years);
-
-        return range($minYear, $maxYear);
-    }
-
-    private function resolveNextMonthStart(
-        CanoniqueDataRepository $canoniqueRepository,
+    private function resolveNextMonthStartFromImports(
+        ImportHorizonRepository $repository,
         \DateTimeZone $utc
-    ): \DateTimeImmutable
-    {
-        $moonMax = $canoniqueRepository->findMaxTimestamp();
-
-        if (!$moonMax) {
+    ): \DateTimeImmutable {
+        $maxStopPrimary = $repository->findMaxStopUtc(self::MOON_TARGET, self::CENTER, self::STEP);
+        $maxStopFallback = $repository->findMaxStopUtc(self::MOON_TARGET_FALLBACK, self::CENTER, self::STEP);
+        $maxStop = $maxStopPrimary;
+        if ($maxStopFallback && (!$maxStop || $maxStopFallback > $maxStop)) {
+            $maxStop = $maxStopFallback;
+        }
+        if (!$maxStop) {
             return (new \DateTimeImmutable('now', $utc))
                 ->modify('first day of this month')
                 ->setTime(0, 0, 0);
         }
 
-        return $moonMax
-            ->setTimezone($utc)
+        return (new \DateTimeImmutable($maxStop->format('Y-m-d H:i:s'), $utc))
             ->modify('first day of this month')
             ->setTime(0, 0, 0)
             ->modify('+1 month');
+    }
+
+    /**
+     * @return array{0:\DateTimeImmutable,1:\DateTimeImmutable}
+     */
+    private function resolveMonthRange(\DateTimeImmutable $monthStart, string $step): array
+    {
+        $stepSeconds = $this->parseStepToSeconds($step);
+        $start = $monthStart->modify('first day of this month')->setTime(0, 0, 0);
+        $stop = $start->modify('+1 month');
+        if ($stepSeconds > 0) {
+            $stop = $stop->modify(sprintf('-%d seconds', $stepSeconds));
+        }
+
+        return [$start, $stop];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function buildMonthCoverage(ImportHorizonRepository $repository, \DateTimeZone $utc): array
+    {
+        $start = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', self::START_YEAR), $utc);
+        $end = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', self::END_YEAR + 1), $utc);
+
+        $moonRuns = array_merge(
+            $this->normalizeRuns(
+                $repository->findRunsOverlappingPeriod(self::MOON_TARGET, $start, $end, self::CENTER, self::STEP),
+                $utc
+            ),
+            $this->normalizeRuns(
+                $repository->findRunsOverlappingPeriod(self::MOON_TARGET_FALLBACK, $start, $end, self::CENTER, self::STEP),
+                $utc
+            )
+        );
+        $sunRuns = $this->normalizeRuns(
+            $repository->findRunsOverlappingPeriod(self::SUN_TARGET, $start, $end, self::CENTER, self::STEP),
+            $utc
+        );
+
+        $coverage = [];
+        $stepSeconds = $this->parseStepToSeconds(self::STEP);
+
+        for ($year = self::START_YEAR; $year <= self::END_YEAR; $year++) {
+            for ($month = 1; $month <= 12; $month++) {
+                $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $utc);
+                $monthEnd = $monthStart->modify('+1 month');
+                $expectedStop = $stepSeconds > 0
+                    ? $monthEnd->modify(sprintf('-%d seconds', $stepSeconds))
+                    : $monthEnd;
+
+                $startTs = $monthStart->getTimestamp();
+                $stopTs = $expectedStop->getTimestamp();
+
+                $moonStatus = $this->resolveCoverageStatus($moonRuns, $startTs, $stopTs);
+                $sunStatus = $this->resolveCoverageStatus($sunRuns, $startTs, $stopTs);
+
+                $key = $monthStart->format('Y-m');
+                if ($moonStatus['full'] && $sunStatus['full']) {
+                    $coverage[$key] = 'complete';
+                } elseif ($moonStatus['any'] || $sunStatus['any']) {
+                    $coverage[$key] = 'partial';
+                } else {
+                    $coverage[$key] = 'missing';
+                }
+            }
+        }
+
+        return $coverage;
+    }
+
+    /**
+     * @param array<string, string> $monthCoverage
+     * @return array<int, string>
+     */
+    private function buildYearCoverage(array $monthCoverage): array
+    {
+        $yearCoverage = [];
+        for ($year = self::START_YEAR; $year <= self::END_YEAR; $year++) {
+            $hasAny = false;
+            $allComplete = true;
+            for ($month = 1; $month <= 12; $month++) {
+                $key = sprintf('%04d-%02d', $year, $month);
+                $status = $monthCoverage[$key] ?? 'missing';
+                if ($status !== 'complete') {
+                    $allComplete = false;
+                }
+                if ($status !== 'missing') {
+                    $hasAny = true;
+                }
+            }
+
+            if ($allComplete) {
+                $yearCoverage[$year] = 'complete';
+            } elseif ($hasAny) {
+                $yearCoverage[$year] = 'partial';
+            } else {
+                $yearCoverage[$year] = 'missing';
+            }
+        }
+
+        return $yearCoverage;
+    }
+
+    /**
+     * @param array<int, array{start_utc: \DateTimeInterface|null, stop_utc: \DateTimeInterface|null}> $runs
+     * @return array<int, array{0: int, 1: int}>
+     */
+    private function normalizeRuns(array $runs, \DateTimeZone $utc): array
+    {
+        $ranges = [];
+        foreach ($runs as $run) {
+            $start = $run['start_utc'] ?? null;
+            $stop = $run['stop_utc'] ?? null;
+            if (!$start || !$stop) {
+                continue;
+            }
+            $startTs = \DateTimeImmutable::createFromInterface($start)->setTimezone($utc)->getTimestamp();
+            $stopTs = \DateTimeImmutable::createFromInterface($stop)->setTimezone($utc)->getTimestamp();
+            $ranges[] = [$startTs, $stopTs];
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * @param array<int, array{0: int, 1: int}> $ranges
+     * @return array{any: bool, full: bool}
+     */
+    private function resolveCoverageStatus(array $ranges, int $monthStart, int $expectedStop): array
+    {
+        $hasAny = false;
+        $hasFull = false;
+        foreach ($ranges as [$start, $stop]) {
+            if ($stop < $monthStart || $start > $expectedStop) {
+                continue;
+            }
+            $hasAny = true;
+            if ($start <= $monthStart && $stop >= $expectedStop) {
+                $hasFull = true;
+                break;
+            }
+        }
+
+        return ['any' => $hasAny, 'full' => $hasFull];
+    }
+
+    private function parseStepToSeconds(string $step): int
+    {
+        $value = trim($step);
+        if ($value === '') {
+            return 0;
+        }
+
+        if (ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        if (preg_match('/^(\d+)\s*([hmsd])$/i', $value, $matches) !== 1) {
+            return 0;
+        }
+
+        $amount = (int) $matches[1];
+        $unit = strtolower($matches[2]);
+
+        return match ($unit) {
+            'd' => $amount * 86400,
+            'h' => $amount * 3600,
+            'm' => $amount * 60,
+            's' => $amount,
+            default => 0,
+        };
     }
 
     private function formatMonthLabel(\DateTimeInterface $date): string

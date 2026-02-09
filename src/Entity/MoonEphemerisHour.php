@@ -24,9 +24,8 @@ class MoonEphemerisHour
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: false)]
-    private ?MoonNasaImport $run_id = null;
+    #[ORM\Column(type: Types::INTEGER, nullable: true, name: 'run_id_id')]
+    private ?int $run_id = null;
 
     #[ORM\Column(nullable: true)]
     private ?\DateTime $ts_utc = null;
@@ -132,12 +131,12 @@ class MoonEphemerisHour
         return $this->id;
     }
 
-    public function getRunId(): ?MoonNasaImport
+    public function getRunId(): ?int
     {
         return $this->run_id;
     }
 
-    public function setRunId(?MoonNasaImport $run_id): static
+    public function setRunId(?int $run_id): static
     {
         $this->run_id = $run_id;
 

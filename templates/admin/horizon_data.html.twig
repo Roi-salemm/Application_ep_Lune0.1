@@ -14,55 +14,7 @@
         {% endfor %}
     {% endfor %}
 
-    <div class="admin-imports admin-grid admin-grid--two">
-        <section class="admin-card admin-card--collapsible">
-            <div class="admin-card__header">
-                <h2 class="admin-card__title">Telecharger des donnees</h2>
-                <p class="admin-card__subtitle">Import direct depuis NASA JPL Horizons.</p>
-            </div>
-            <div class="admin-card__body">
-                <form class="admin-form" method="post" action="{{ path('admin_horizon_data_run') }}">
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="start">Start (UTC)</label>
-                        <input class="admin-form__input" id="start" name="start" type="datetime-local" value="{{ default_start }}">
-                    </div>
-                <div class="admin-form__row">
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="days">Days</label>
-                        <input class="admin-form__input" id="days" name="days" type="number" min="1" max="30" value="{{ default_days }}">
-                    </div>
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="step">Step</label>
-                        <input class="admin-form__input" id="step" name="step" type="text" value="{{ default_step }}">
-                    </div>
-                </div>
-                <button class="admin-button admin-button--primary" type="submit">Importer raw_response</button>
-                </form>
-            </div>
-        </section>
-
-        <section class="admin-card admin-card--collapsible">
-            <div class="admin-card__header">
-                <h2 class="admin-card__title">Parser un mois</h2>
-                <p class="admin-card__subtitle">Transformer raw_response en canonique_data (mois complet).</p>
-            </div>
-            <div class="admin-card__body">
-                <form class="admin-form" method="post" action="{{ path('admin_horizon_data_parse') }}">
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="parse_start">Mois (UTC)</label>
-                        <input class="admin-form__input" id="parse_start" name="start" type="date" value="{{ next_month_start }}">
-                    </div>
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="parse_step">Step</label>
-                        <input class="admin-form__input" id="parse_step" name="step" type="text" value="10m">
-                    </div>
-                    <button class="admin-button" type="submit">Parser ce mois</button>
-                </form>
-            </div>
-        </section>
-    </div>
-
-    <div class="admin-grid admin-grid--two">
+    <div class="admin-grid">
         <section class="admin-card">
             <div class="admin-card__header">
                 <h2 class="admin-card__title">Import mensuel (Moon + Sun)</h2>
@@ -92,40 +44,78 @@
                 <button class="admin-button admin-button--ghost" type="button" data-month-next aria-label="Mois suivant">&gt;</button>
             </form>
         </section>
+    </div>
 
-        <section class="admin-card">
-            <div class="admin-card__header">
-                <h2 class="admin-card__title">Couverture des mois</h2>
-                <p class="admin-card__subtitle">Presence des donnees Moon (L).</p>
-            </div>
-            <div class="admin-month-legend">
-                <span class="admin-month-legend__item admin-month-legend__item--moon">L</span>
-            </div>
-            <div class="admin-month-grid__row admin-month-grid__row--header">
-                <div class="admin-month-grid__year">Annee</div>
-                <div class="admin-month-grid__months admin-month-grid__months--header">
-                    {% for month in 1..12 %}
-                        <div class="admin-month-grid__label">{{ '%02d'|format(month) }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="admin-month-grid">
-                {% for year in years %}
-                    <div class="admin-month-grid__row">
-                        <div class="admin-month-grid__year">{{ year }}</div>
-                        <div class="admin-month-grid__months">
+    <section class="admin-card admin-card--table admin-import-calendar">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Calendrier des imports Horizons</h2>
+            <p class="admin-card__subtitle">Statut Moon + Sun par mois (complet, partiel, absent) avec import mensuel ou annuel.</p>
+        </div>
+        <div class="admin-import-calendar__legend">
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--complete">Complet</span>
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--partial">Partiel</span>
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--missing">Absent</span>
+        </div>
+        <div class="admin-table-wrap admin-import-calendar__table-wrap">
+            <table class="admin-table admin-import-calendar__table">
+                {% set month_labels = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'] %}
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell">Action</th>
+                        <th class="admin-table__cell">Annee</th>
+                        {% for label in month_labels %}
+                            <th class="admin-table__cell admin-import-calendar__month-header">{{ label }}</th>
+                        {% endfor %}
+                        <th class="admin-table__cell">Sup</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in calendar_years %}
+                        {% set year_status = year_coverage[year]|default('missing') %}
+                        <tr class="admin-table__row">
+                            <td class="admin-table__cell">
+                                <button class="admin-button admin-import-calendar__year-button admin-import-calendar__year-button--{{ year_status }}" type="button" data-calendar-year-button data-calendar-year="{{ year }}">Annee</button>
+                            </td>
+                            <td class="admin-table__cell admin-import-calendar__year-label">{{ year }}</td>
                             {% for month in 1..12 %}
                                 {% set month_key = year ~ '-' ~ '%02d'|format(month) %}
-                                <div class="admin-month-grid__cell" title="{{ month_key }}">
-                                    <span class="admin-month-dot admin-month-dot--moon {{ month_key in moon_months ? 'admin-month-dot--active' : '' }}"></span>
-                                </div>
+                                {% set month_status = month_coverage[month_key]|default('missing') %}
+                                <td class="admin-table__cell admin-import-calendar__cell" title="{{ month_key }}">
+                                    <button
+                                        class="admin-import-calendar__month-button admin-import-calendar__month-button--{{ month_status }}"
+                                        type="button"
+                                        data-calendar-month-button
+                                        data-calendar-month="{{ month_key }}-01"
+                                        data-calendar-month-status="{{ month_status }}"
+                                        data-calendar-month-label="{{ month_labels[month - 1] }} {{ year }}"
+                                    >{{ month_labels[month - 1] }}</button>
+                                </td>
                             {% endfor %}
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        </section>
-    </div>
+                            <td class="admin-table__cell admin-import-calendar__cell">
+                                <button
+                                    class="admin-button admin-button--danger admin-import-calendar__delete-button"
+                                    type="button"
+                                    data-delete-year-button
+                                    data-delete-year="{{ year }}"
+                                    data-delete-year-token="{{ csrf_token('delete_import_year_' ~ year) }}"
+                                    onclick="window.openDeleteYearModal && window.openDeleteYearModal('{{ year }}', '{{ csrf_token('delete_import_year_' ~ year) }}')"
+                                >Sup</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <form class="admin-import-calendar__form" method="post" action="{{ path('admin_horizon_data_bulk_month') }}" data-calendar-month-form>
+            <input type="hidden" name="start" value="" data-calendar-month-input>
+            <input type="hidden" name="step" value="10m">
+            <input type="hidden" name="force" value="0" data-calendar-month-force>
+        </form>
+        <form class="admin-import-calendar__form" method="post" action="{{ path('admin_horizon_data_bulk_year') }}" data-calendar-year-form>
+            <input type="hidden" name="year" value="" data-calendar-year-input>
+            <input type="hidden" name="step" value="10m">
+        </form>
+    </section>
 
     <section class="admin-card admin-card--table">
         <div class="admin-card__header">
@@ -267,6 +257,36 @@
         </div>
     </div>
 
+    <div class="admin-modal" data-month-reimport-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Mois deja complet</div>
+            <div class="admin-modal__body" data-month-reimport-label>
+                Ce mois est deja complet. Relancer le telechargement Horizons ?
+            </div>
+            <div class="admin-modal__actions">
+                <button class="admin-button admin-button--primary" type="button" data-month-reimport-confirm>Telecharger</button>
+                <button class="admin-button" type="button" data-modal-close>Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-modal" data-delete-year-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Supprimer une annee</div>
+            <div class="admin-modal__body" data-delete-year-label>
+                Supprimer tous les runs import_horizon pour cette annee ?
+            </div>
+            <form class="admin-modal__actions" method="post" action="{{ path('admin_horizon_data_delete_year') }}" data-delete-year-form>
+                <input type="hidden" name="year" value="" data-delete-year-input>
+                <input type="hidden" name="_token" value="" data-delete-year-token-input>
+                <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+                <button class="admin-button" type="button" data-modal-close>Annuler</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         (function () {
             var container = document.querySelector('.admin-month-import');
@@ -319,6 +339,99 @@
             });
 
             writeDate(readDate());
+        })();
+    </script>
+    <script>
+        (function () {
+            var monthForm = document.querySelector('[data-calendar-month-form]');
+            var monthInput = document.querySelector('[data-calendar-month-input]');
+            var monthForce = document.querySelector('[data-calendar-month-force]');
+            var monthButtons = document.querySelectorAll('[data-calendar-month-button]');
+            var yearForm = document.querySelector('[data-calendar-year-form]');
+            var yearInput = document.querySelector('[data-calendar-year-input]');
+            var yearButtons = document.querySelectorAll('[data-calendar-year-button]');
+            var monthModal = document.querySelector('[data-month-reimport-modal]');
+            var monthModalLabel = document.querySelector('[data-month-reimport-label]');
+            var monthModalConfirm = document.querySelector('[data-month-reimport-confirm]');
+            var pendingMonthValue = null;
+            if (!monthForm || !monthInput || !yearForm || !yearInput) {
+                return;
+            }
+
+            monthButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var value = button.getAttribute('data-calendar-month');
+                    var status = button.getAttribute('data-calendar-month-status');
+                    var labelValue = button.getAttribute('data-calendar-month-label') || value || '';
+                    if (!value) {
+                        return;
+                    }
+                    if (status === 'complete' && monthModal && monthModalConfirm) {
+                        pendingMonthValue = value;
+                        if (monthModalLabel) {
+                            monthModalLabel.textContent = 'Ce mois est deja complet (' + labelValue + '). Relancer le telechargement Horizons ?';
+                        }
+                        monthModal.setAttribute('aria-hidden', 'false');
+                        monthModal.classList.add('is-open');
+                        return;
+                    }
+                    if (monthForce) {
+                        monthForce.value = '0';
+                    }
+                    monthInput.value = value;
+                    monthForm.submit();
+                });
+            });
+
+            function closeMonthModal() {
+                if (!monthModal) {
+                    return;
+                }
+                monthModal.setAttribute('aria-hidden', 'true');
+                monthModal.classList.remove('is-open');
+                if (monthForce) {
+                    monthForce.value = '0';
+                }
+                pendingMonthValue = null;
+            }
+
+            if (monthModalConfirm) {
+                monthModalConfirm.addEventListener('click', function () {
+                    if (!pendingMonthValue) {
+                        return;
+                    }
+                    if (monthForce) {
+                        monthForce.value = '1';
+                    }
+                    monthInput.value = pendingMonthValue;
+                    monthForm.submit();
+                });
+            }
+
+            if (monthModal) {
+                monthModal.addEventListener('click', function (event) {
+                    if (event.target.closest('[data-modal-close]')) {
+                        closeMonthModal();
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeMonthModal();
+                }
+            });
+
+            yearButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var value = button.getAttribute('data-calendar-year');
+                    if (!value) {
+                        return;
+                    }
+                    yearInput.value = value;
+                    yearForm.submit();
+                });
+            });
         })();
     </script>
     <script>
@@ -401,6 +514,99 @@
                     closeModal();
                 }
             });
+        })();
+    </script>
+    <script>
+        (function () {
+            var modal = document.querySelector('[data-delete-year-modal]');
+            var form = document.querySelector('[data-delete-year-form]');
+            var input = document.querySelector('[data-delete-year-input]');
+            var tokenInput = document.querySelector('[data-delete-year-token-input]');
+            var label = document.querySelector('[data-delete-year-label]');
+            if (!modal || !form || !input || !tokenInput) {
+                return;
+            }
+
+            function closeModal() {
+                modal.setAttribute('aria-hidden', 'true');
+                modal.classList.remove('is-open');
+            }
+
+            window.openDeleteYearModal = function (year, token) {
+                if (!year) {
+                    return;
+                }
+                input.value = year;
+                tokenInput.value = token || '';
+                if (label) {
+                    label.textContent = 'Supprimer tous les runs import_horizon pour l\'annee ' + year + ' ?';
+                }
+                modal.setAttribute('aria-hidden', 'false');
+                modal.classList.add('is-open');
+            };
+
+            document.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-delete-year-button]');
+                if (!button) {
+                    return;
+                }
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                var year = button.getAttribute('data-delete-year');
+                var token = button.getAttribute('data-delete-year-token');
+                window.openDeleteYearModal(year, token);
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-modal-close]')) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeModal();
+                }
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var storageKey = 'admin_horizon_scroll_y';
+
+            function saveScroll() {
+                if (typeof sessionStorage === 'undefined') {
+                    return;
+                }
+                sessionStorage.setItem(storageKey, String(window.scrollY || 0));
+            }
+
+            function restoreScroll() {
+                if (typeof sessionStorage === 'undefined') {
+                    return;
+                }
+                var value = sessionStorage.getItem(storageKey);
+                if (!value) {
+                    return;
+                }
+                var y = parseInt(value, 10);
+                if (Number.isNaN(y)) {
+                    return;
+                }
+                window.scrollTo(0, y);
+            }
+
+            window.addEventListener('beforeunload', saveScroll);
+            window.addEventListener('load', function () {
+                setTimeout(restoreScroll, 0);
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            // Script de debug retire: activation normale du modal Sup.
         })();
     </script>
 {% endblock %}

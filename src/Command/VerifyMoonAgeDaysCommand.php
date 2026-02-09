@@ -1,10 +1,16 @@
 <?php
 
+/**
+ * Verifie la coherence de age_days entre raw_response et moon_ephemeris_hour.
+ * Pourquoi: detecter des decallages de parsing ou de mapping Horizons.
+ * Infos: compare les valeurs par timestamp et remonte un echantillon d ecarts.
+ */
+
 namespace App\Command;
 
-use App\Entity\MoonNasaImport;
+use App\Entity\ImportHorizon;
 use App\Repository\MoonEphemerisHourRepository;
-use App\Repository\MoonNasaImportRepository;
+use App\Repository\ImportHorizonRepository;
 use App\Service\Moon\Horizons\MoonHorizonsParserService;
 use App\Service\Moon\Horizons\MoonHorizonsRowMapperService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -23,7 +29,7 @@ class VerifyMoonAgeDaysCommand extends Command
     private const DEFAULT_TOLERANCE = 0.0005;
 
     public function __construct(
-        private MoonNasaImportRepository $runRepository,
+        private ImportHorizonRepository $runRepository,
         private MoonEphemerisHourRepository $hourRepository,
         private MoonHorizonsParserService $parserService,
         private MoonHorizonsRowMapperService $rowMapper,
@@ -82,7 +88,7 @@ class VerifyMoonAgeDaysCommand extends Command
             return Command::FAILURE;
         }
 
-        $hours = $this->hourRepository->findBy(['run_id' => $run], ['ts_utc' => 'ASC']);
+        $hours = $this->hourRepository->findBy(['run_id' => $run->getId()], ['ts_utc' => 'ASC']);
         if (!$hours) {
             $output->writeln('<comment>Aucune ligne moon_ephemeris_hour pour ce run.</comment>');
             return Command::SUCCESS;
@@ -205,7 +211,7 @@ class VerifyMoonAgeDaysCommand extends Command
         return $mismatch > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
-    private function findLatestRun(): ?MoonNasaImport
+    private function findLatestRun(): ?ImportHorizon
     {
         return $this->runRepository->createQueryBuilder('m')
             ->orderBy('m.id', 'DESC')
