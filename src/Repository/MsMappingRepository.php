@@ -1,20 +1,28 @@
 <?php
 
 /**
- * Acces SQL direct a la table ms_mapping.
- * Pourquoi: schema simple, lecture admin et upsert mensuel.
+ * Repository Doctrine pour la table ms_mapping.
+ * Pourquoi: conserver la logique existante tout en typant via ORM.
  */
 
 namespace App\Repository;
 
+use App\Entity\MsMapping;
+use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
-use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\Persistence\ManagerRegistry;
 
-final class MsMappingRepository
+final class MsMappingRepository extends ServiceEntityRepository
 {
-    public function __construct(private Connection $connection)
+    public function __construct(ManagerRegistry $registry)
     {
+        parent::__construct($registry, MsMapping::class);
+    }
+
+    private function connection(): Connection
+    {
+        return $this->getEntityManager()->getConnection();
     }
 
     /**
@@ -22,7 +30,7 @@ final class MsMappingRepository
      */
     public function findLatestPaged(int $limit, int $offset): array
     {
-        return $this->connection->fetchAllAssociative(
+        return $this->connection()->fetchAllAssociative(
             'SELECT * FROM ms_mapping ORDER BY ts_utc ASC LIMIT :limit OFFSET :offset',
             [
                 'limit' => $limit,
@@ -37,7 +45,21 @@ final class MsMappingRepository
 
     public function countAll(): int
     {
-        return (int) $this->connection->fetchOne('SELECT COUNT(*) FROM ms_mapping');
+        return (int) $this->connection()->fetchOne('SELECT COUNT(*) FROM ms_mapping');
+    }
+
+    /**
+     * @return MsMapping[]
+     */
+    public function findByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $end): array
+    {
+        return $this->createQueryBuilder('m')
+            ->andWhere('m.ts_utc BETWEEN :start AND :end')
+            ->setParameter('start', $start)
+            ->setParameter('end', $end)
+            ->orderBy('m.ts_utc', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 
     /**
@@ -45,29 +67,16 @@ final class MsMappingRepository
      */
     public function fetchColumnNames(): array
     {
-        $platform = $this->connection->getDatabasePlatform();
-        if ($platform instanceof PostgreSQLPlatform) {
-            $rows = $this->connection->fetchFirstColumn("
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'ms_mapping'
-                ORDER BY ordinal_position
-            ");
-        } else {
-            $rows = $this->connection->fetchFirstColumn('
-                SELECT COLUMN_NAME
-                FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = "ms_mapping"
-                ORDER BY ORDINAL_POSITION
-            ');
-        }
+        $columns = $this->getEntityManager()
+            ->getClassMetadata(MsMapping::class)
+            ->getColumnNames();
 
-        return array_values(array_filter($rows));
+        return array_values(array_filter($columns));
     }
 
     public function findMaxTimestamp(): ?\DateTimeImmutable
     {
-        $value = $this->connection->fetchOne('SELECT MAX(ts_utc) FROM ms_mapping');
+        $value = $this->connection()->fetchOne('SELECT MAX(ts_utc) FROM ms_mapping');
         if (!$value) {
             return null;
         }
@@ -77,7 +86,7 @@ final class MsMappingRepository
 
     public function deleteByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $stop): int
     {
-        return $this->connection->executeStatement(
+        return $this->connection()->executeStatement(
             'DELETE FROM ms_mapping WHERE ts_utc >= :start AND ts_utc < :stop',
             [
                 'start' => $start->format('Y-m-d H:i:s'),
@@ -95,16 +104,17 @@ final class MsMappingRepository
         $columns = array_keys($data);
         $values = array_values($data);
         $placeholders = array_fill(0, count($columns), '?');
-        $quotedColumns = array_map([$this->connection->getDatabasePlatform(), 'quoteIdentifier'], $columns);
+        $connection = $this->connection();
+        $quotedColumns = array_map([$connection->getDatabasePlatform(), 'quoteIdentifier'], $columns);
 
-        $platform = $this->connection->getDatabasePlatform();
+        $platform = $connection->getDatabasePlatform();
         if ($platform instanceof PostgreSQLPlatform) {
             $updateAssignments = [];
             foreach ($columns as $column) {
                 if ($column === 'ts_utc') {
                     continue;
                 }
-                $quoted = $this->connection->getDatabasePlatform()->quoteIdentifier($column);
+                $quoted = $connection->getDatabasePlatform()->quoteIdentifier($column);
                 $updateAssignments[] = $quoted . ' = EXCLUDED.' . $quoted;
             }
 
@@ -120,7 +130,7 @@ final class MsMappingRepository
                 if ($column === 'ts_utc') {
                     continue;
                 }
-                $quoted = $this->connection->getDatabasePlatform()->quoteIdentifier($column);
+                $quoted = $connection->getDatabasePlatform()->quoteIdentifier($column);
                 $updateAssignments[] = $quoted . ' = VALUES(' . $quoted . ')';
             }
 
@@ -132,12 +142,12 @@ final class MsMappingRepository
             );
         }
 
-        $exists = (bool) $this->connection->fetchOne(
+        $exists = (bool) $connection->fetchOne(
             'SELECT id FROM ms_mapping WHERE ts_utc = ?',
             [$data['ts_utc'] ?? null]
         );
 
-        $this->connection->executeStatement($sql, $values);
+        $connection->executeStatement($sql, $values);
 
         return $exists ? 'update' : 'insert';
     }

@@ -1,0 +1,14 @@
+{# Page d'accueil sombre avec acces admin. #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Accueil{% endblock %}
+
+{% block body %}
+    <div class="home-dark">
+        <div class="home-dark__content">
+            <h1 class="home-dark__title">Lune - Admin</h1>
+            <p class="home-dark__subtitle">Acces rapide a l'interface d'administration.</p>
+            <a class="home-dark__button" href="{{ path('admin_index') }}">Ouvrir l'admin</a>
+        </div>
+    </div>
+{% endblock %}
