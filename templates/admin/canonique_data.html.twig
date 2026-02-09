@@ -14,6 +14,74 @@
         {% endfor %}
     {% endfor %}
 
+    <section class="admin-card admin-card--table admin-import-calendar">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Calendrier de parsing canonique_data</h2>
+            <p class="admin-card__subtitle">Gris: non parse. Bleu: imports disponibles. Dore: mois deja parse.</p>
+        </div>
+        <div class="admin-import-calendar__legend">
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--missing">Non parse</span>
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--ready">Pret a parser</span>
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--parsed">Parse</span>
+        </div>
+        <div class="admin-table-wrap admin-import-calendar__table-wrap">
+            <table class="admin-table admin-import-calendar__table">
+                {% set month_labels = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'] %}
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell">Parse</th>
+                        <th class="admin-table__cell">Annee</th>
+                        {% for label in month_labels %}
+                            <th class="admin-table__cell admin-import-calendar__month-header">{{ label }}</th>
+                        {% endfor %}
+                        <th class="admin-table__cell">Sup</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in calendar_years %}
+                        {% set year_status = year_coverage[year]|default('missing') %}
+                        <tr class="admin-table__row">
+                            <td class="admin-table__cell">
+                                <button class="admin-button admin-import-calendar__year-button admin-import-calendar__year-button--{{ year_status }}" type="button" data-canonique-year-button data-canonique-year="{{ year }}">Parse</button>
+                            </td>
+                            <td class="admin-table__cell admin-import-calendar__year-label">{{ year }}</td>
+                            {% for month in 1..12 %}
+                                {% set month_key = year ~ '-' ~ '%02d'|format(month) %}
+                                {% set month_status = month_coverage[month_key]|default('missing') %}
+                                <td class="admin-table__cell admin-import-calendar__cell" title="{{ month_key }}">
+                                    <button
+                                        class="admin-import-calendar__month-button admin-import-calendar__month-button--{{ month_status }}"
+                                        type="button"
+                                        data-canonique-month-button
+                                        data-canonique-month="{{ month_key }}-01"
+                                        data-canonique-month-status="{{ month_status }}"
+                                        data-canonique-month-label="{{ month_labels[month - 1] }} {{ year }}"
+                                    >{{ month_labels[month - 1] }}</button>
+                                </td>
+                            {% endfor %}
+                            <td class="admin-table__cell admin-import-calendar__cell">
+                                <button
+                                    class="admin-button admin-button--danger admin-import-calendar__delete-button"
+                                    type="button"
+                                    data-delete-canonique-year-button
+                                    data-delete-canonique-year="{{ year }}"
+                                    data-delete-canonique-year-token="{{ csrf_token('delete_canonique_year_' ~ year) }}"
+                                    onclick="window.openDeleteCanoniqueYearModal && window.openDeleteCanoniqueYearModal('{{ year }}', '{{ csrf_token('delete_canonique_year_' ~ year) }}')"
+                                >Sup</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <form class="admin-import-calendar__form" method="post" action="{{ path('admin_canonique_data_parse_month') }}" data-canonique-month-form>
+            <input type="hidden" name="start" value="" data-canonique-month-input>
+        </form>
+        <form class="admin-import-calendar__form" method="post" action="{{ path('admin_canonique_data_parse_year') }}" data-canonique-year-form>
+            <input type="hidden" name="year" value="" data-canonique-year-input>
+        </form>
+    </section>
+
     <section class="admin-card">
         <div class="admin-card__header">
             <h2 class="admin-card__title">Parser un mois</h2>
@@ -87,6 +155,22 @@
         {% endif %}
     </section>
 
+    <div class="admin-modal" data-delete-canonique-year-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Supprimer une annee</div>
+            <div class="admin-modal__body" data-delete-canonique-year-label>
+                Supprimer toutes les lignes canonique_data pour cette annee ?
+            </div>
+            <form class="admin-modal__actions" method="post" action="{{ path('admin_canonique_data_delete_year') }}" data-delete-canonique-year-form>
+                <input type="hidden" name="year" value="" data-delete-canonique-year-input>
+                <input type="hidden" name="_token" value="" data-delete-canonique-year-token-input>
+                <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+                <button class="admin-button" type="button" data-modal-close>Annuler</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         (function () {
             var container = document.querySelector('.admin-month-import');
@@ -139,6 +223,97 @@
             });
 
             writeDate(readDate());
+        })();
+    </script>
+    <script>
+        (function () {
+            var monthForm = document.querySelector('[data-canonique-month-form]');
+            var monthInput = document.querySelector('[data-canonique-month-input]');
+            var monthButtons = document.querySelectorAll('[data-canonique-month-button]');
+            var yearForm = document.querySelector('[data-canonique-year-form]');
+            var yearInput = document.querySelector('[data-canonique-year-input]');
+            var yearButtons = document.querySelectorAll('[data-canonique-year-button]');
+            if (!monthForm || !monthInput || !yearForm || !yearInput) {
+                return;
+            }
+
+            monthButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var value = button.getAttribute('data-canonique-month');
+                    if (!value) {
+                        return;
+                    }
+                    monthInput.value = value;
+                    monthForm.submit();
+                });
+            });
+
+            yearButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var value = button.getAttribute('data-canonique-year');
+                    if (!value) {
+                        return;
+                    }
+                    yearInput.value = value;
+                    yearForm.submit();
+                });
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var modal = document.querySelector('[data-delete-canonique-year-modal]');
+            var form = document.querySelector('[data-delete-canonique-year-form]');
+            var input = document.querySelector('[data-delete-canonique-year-input]');
+            var tokenInput = document.querySelector('[data-delete-canonique-year-token-input]');
+            var label = document.querySelector('[data-delete-canonique-year-label]');
+            if (!modal || !form || !input || !tokenInput) {
+                return;
+            }
+
+            function closeModal() {
+                modal.setAttribute('aria-hidden', 'true');
+                modal.classList.remove('is-open');
+            }
+
+            window.openDeleteCanoniqueYearModal = function (year, token) {
+                if (!year) {
+                    return;
+                }
+                input.value = year;
+                tokenInput.value = token || '';
+                if (label) {
+                    label.textContent = 'Supprimer toutes les lignes canonique_data pour l\'annee ' + year + ' ?';
+                }
+                modal.setAttribute('aria-hidden', 'false');
+                modal.classList.add('is-open');
+            };
+
+            document.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-delete-canonique-year-button]');
+                if (!button) {
+                    return;
+                }
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                var year = button.getAttribute('data-delete-canonique-year');
+                var token = button.getAttribute('data-delete-canonique-year-token');
+                window.openDeleteCanoniqueYearModal(year, token);
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-modal-close]')) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeModal();
+                }
+            });
         })();
     </script>
 {% endblock %}

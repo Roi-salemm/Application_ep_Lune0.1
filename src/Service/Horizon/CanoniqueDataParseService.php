@@ -16,7 +16,6 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 
 final class CanoniqueDataParseService
 {
-    private const AU_TO_KM = 149597870.7;
     /**
      * Ordre des colonnes attendues pour la Lune (hors timestamp).
      *
@@ -100,12 +99,8 @@ final class CanoniqueDataParseService
             $data = [];
             foreach ($map['index_to_column'] as $index => $columnName) {
                 $rawValue = $cols[$index] ?? null;
-                if ($columnName === 'm20_range_km') {
-                    $data[$columnName] = $this->convertAuToKm($rawValue, 6);
-                    continue;
-                }
-                if ($columnName === 'm20_range_rate_km_s') {
-                    $data[$columnName] = $this->convertAuToKm($rawValue, 6);
+                if (in_array($columnName, ['m20_range_km', 'm20_range_rate_km_s'], true)) {
+                    $data[$columnName] = $this->normalizeRawNumeric($rawValue);
                     continue;
                 }
                 $data[$columnName] = $this->normalizeNumeric($rawValue);
@@ -204,7 +199,6 @@ final class CanoniqueDataParseService
             return null;
         }
 
-        $clean = str_replace(['km', 'KM', 'deg', 'DEG', 'au', 'AU'], '', $clean);
         $clean = trim($clean, " \t\n\r\0\x0B\"'");
         $clean = trim($clean);
 
@@ -219,31 +213,23 @@ final class CanoniqueDataParseService
         return $clean;
     }
 
-    private function convertAuToKm(?string $value, int $scale): ?string
+    private function normalizeRawNumeric(?string $value): ?string
     {
-        $numeric = $this->parseNumericValue($value);
-        if ($numeric === null) {
+        if ($value === null) {
             return null;
         }
 
-        $km = $numeric * self::AU_TO_KM;
-        return $this->formatDecimal($km, $scale);
-    }
-
-    private function parseNumericValue(?string $value): ?float
-    {
-        $clean = $this->normalizeNumeric($value);
-        if ($clean === null) {
+        $clean = trim($value);
+        if ($clean === '') {
             return null;
         }
 
-        return (float) $clean;
-    }
+        $lower = strtolower($clean);
+        if (in_array($lower, ['n.a.', 'na', 'n/a', '*', '-'], true)) {
+            return null;
+        }
 
-    private function formatDecimal(float $value, int $scale): string
-    {
-        $formatted = sprintf('%.' . $scale . 'f', $value);
-        return rtrim(rtrim($formatted, '0'), '.');
+        return $clean;
     }
 
     /**

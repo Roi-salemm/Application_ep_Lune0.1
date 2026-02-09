@@ -35,10 +35,10 @@ class CanoniqueData
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 14, nullable: true, name: 'm10_illum_frac')]
     private ?string $m10_illum_frac = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 13, scale: 6, nullable: true, name: 'm20_range_km')]
+    #[ORM\Column(type: Types::DECIMAL, precision: 22, scale: 16, nullable: true, name: 'm20_range_km')]
     private ?string $m20_range_km = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 6, nullable: true, name: 'm20_range_rate_km_s')]
+    #[ORM\Column(type: Types::DECIMAL, precision: 22, scale: 16, nullable: true, name: 'm20_range_rate_km_s')]
     private ?string $m20_range_rate_km_s = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 10, nullable: true, name: 'm31_ecl_lon_deg')]
