@@ -34,6 +34,7 @@ final class CanoniqueDataParseService
         'm43_pab_lon_deg',
         'm43_pab_lat_deg',
         'm43_phi_deg',
+        'm29_constellation',
     ];
 
     /**
@@ -101,6 +102,10 @@ final class CanoniqueDataParseService
                 $rawValue = $cols[$index] ?? null;
                 if (in_array($columnName, ['m20_range_km', 'm20_range_rate_km_s'], true)) {
                     $data[$columnName] = $this->normalizeRawNumeric($rawValue);
+                    continue;
+                }
+                if ($columnName === 'm29_constellation') {
+                    $data[$columnName] = $this->normalizeText($rawValue);
                     continue;
                 }
                 $data[$columnName] = $this->normalizeNumeric($rawValue);
@@ -207,6 +212,25 @@ final class CanoniqueDataParseService
         }
 
         if (!preg_match('/^[+-]?\d+(\.\d+)?([Ee][+-]?\d+)?$/', $clean)) {
+            return null;
+        }
+
+        return $clean;
+    }
+
+    private function normalizeText(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $clean = trim($value);
+        if ($clean === '') {
+            return null;
+        }
+
+        $lower = strtolower($clean);
+        if (in_array($lower, ['n.a.', 'na', 'n/a', '*', '-'], true)) {
             return null;
         }
 

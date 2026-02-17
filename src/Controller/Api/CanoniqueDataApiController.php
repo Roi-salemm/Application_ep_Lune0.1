@@ -83,6 +83,7 @@ final class CanoniqueDataApiController extends AbstractController
                 'm43_pab_lon_deg' => $row['m43_pab_lon_deg'] ?? null,
                 'm43_pab_lat_deg' => $row['m43_pab_lat_deg'] ?? null,
                 'm43_phi_deg' => $row['m43_phi_deg'] ?? null,
+                'm29_constellation' => $row['m29_constellation'] ?? null,
                 's31_ecl_lon_deg' => $row['s31_ecl_lon_deg'] ?? null,
                 's31_ecl_lat_deg' => $row['s31_ecl_lat_deg'] ?? null,
                 'created_at_utc' => $this->normalizeDateValue($row['created_at_utc'] ?? null),

@@ -24,7 +24,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 )]
 class BulkImportEphemerisCommand extends Command
 {
-    private const MOON_QUANTITIES = '1,2,10,20,31,43';
+    private const MOON_QUANTITIES = '1,2,10,20,31,43,29';
     private const SUN_QUANTITIES = '31';
     private const ANG_FORMAT = 'DEG';
 

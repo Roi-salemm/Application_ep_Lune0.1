@@ -179,6 +179,7 @@ final class CanoniqueDataController extends AbstractController
             'm43_pab_lon_deg',
             'm43_pab_lat_deg',
             'm43_phi_deg',
+            'm29_constellation',
             's31_ecl_lon_deg',
             's31_ecl_lat_deg',
             'm_raw_line',

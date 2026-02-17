@@ -56,6 +56,9 @@ class CanoniqueData
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 10, nullable: true, name: 'm43_phi_deg')]
     private ?string $m43_phi_deg = null;
 
+    #[ORM\Column(length: 8, nullable: true, name: 'm29_constellation')]
+    private ?string $m29_constellation = null;
+
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 10, nullable: true, name: 's31_ecl_lon_deg')]
     private ?string $s31_ecl_lon_deg = null;
 
@@ -223,6 +226,18 @@ class CanoniqueData
     public function setM43PhiDeg(?string $m43_phi_deg): static
     {
         $this->m43_phi_deg = $m43_phi_deg;
+
+        return $this;
+    }
+
+    public function getM29Constellation(): ?string
+    {
+        return $this->m29_constellation;
+    }
+
+    public function setM29Constellation(?string $m29_constellation): static
+    {
+        $this->m29_constellation = $m29_constellation;
 
         return $this;
     }
