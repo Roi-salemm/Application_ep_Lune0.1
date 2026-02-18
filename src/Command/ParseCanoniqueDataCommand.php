@@ -100,23 +100,26 @@ class ParseCanoniqueDataCommand extends Command
             }
 
             try {
-                $moonResult = $this->parseService->parseRun($moonRun, 'm', $utc);
-                $sunResult = $this->parseService->parseRun($sunRun, 's', $utc);
+                $logger = static function (string $message) use ($output): void {
+                    $output->writeln($message);
+                };
+                $moonResult = $this->parseService->parseRun($moonRun, 'm', $utc, $logger);
+                $sunResult = $this->parseService->parseRun($sunRun, 's', $utc, $logger);
             } catch (\Throwable $e) {
                 $output->writeln('<error>Parse echoue: ' . $e->getMessage() . '</error>');
                 continue;
             }
 
             $output->writeln(sprintf(
-                'Moon saved %d updated %d | Sun saved %d updated %d',
-                $moonResult['saved'],
-                $moonResult['updated'],
-                $sunResult['saved'],
-                $sunResult['updated']
+                'Moon processed %d errors %d | Sun processed %d errors %d',
+                $moonResult['processed'],
+                $moonResult['errors'],
+                $sunResult['processed'],
+                $sunResult['errors']
             ));
 
-            $moonCount = $moonResult['saved'] + $moonResult['updated'];
-            $sunCount = $sunResult['saved'] + $sunResult['updated'];
+            $moonCount = $moonResult['processed'];
+            $sunCount = $sunResult['processed'];
             if ($moonCount > 0 && $sunCount > 0) {
                 $this->coverageRepository->upsertMonthStatus(
                     MonthParseCoverageRepository::TARGET_CANONIQUE_DATA,

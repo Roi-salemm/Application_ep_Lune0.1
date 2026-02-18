@@ -57,9 +57,14 @@ final class CanoniqueDataParseService
     }
 
     /**
-     * @return array{saved:int, updated:int}
+     * @return array{processed:int, errors:int}
      */
-    public function parseRun(ImportHorizon $run, string $prefix, \DateTimeZone $utc): array
+    public function parseRun(
+        ImportHorizon $run,
+        string $prefix,
+        \DateTimeZone $utc,
+        ?callable $progressLogger = null
+    ): array
     {
         $body = $run->getRawResponse();
         if ($body === null || trim($body) === '') {
@@ -83,11 +88,18 @@ final class CanoniqueDataParseService
 
         $map = $this->buildColumnMap($header, $prefix);
 
-        $saved = 0;
-        $updated = 0;
+        $processed = 0;
+        $errors = 0;
         $rawColumn = $prefix === 's' ? 's_raw_line' : 'm_raw_line';
+        $columns = array_merge(['ts_utc', 'created_at_utc', $rawColumn], $map['columns']);
+        $columnToIndex = array_flip($map['index_to_column']);
+        $updateColumns = array_merge([$rawColumn], $map['columns']);
+        $monthLabel = $this->resolveMonthLabel($run, $utc);
+        $totalBatches = $this->resolveExpectedBatches($run);
 
         $batchCount = 0;
+        $batchIndex = 0;
+        $batchRows = [];
         $this->connection->beginTransaction();
         try {
             foreach ($stream['rows'] as $row) {
@@ -99,45 +111,60 @@ final class CanoniqueDataParseService
                 $timestampValue = $cols[$map['timestamp_index']] ?? $cols[0] ?? null;
                 $timestamp = $this->dateTimeParser->parseHorizonsTimestamp($timestampValue, $utc);
                 if (!$timestamp) {
+                    $errors++;
                     continue;
                 }
 
-                $data = [];
-                foreach ($map['index_to_column'] as $index => $columnName) {
-                    $rawValue = $cols[$index] ?? null;
+                $createdAt = (new \DateTime('now', $utc))->format('Y-m-d H:i:s');
+                $rowValues = [
+                    $timestamp->format('Y-m-d H:i:s'),
+                    $createdAt,
+                    $row['raw'] ?? null,
+                ];
+                foreach ($map['columns'] as $columnName) {
+                    $index = $columnToIndex[$columnName] ?? null;
+                    $rawValue = $index !== null ? ($cols[$index] ?? null) : null;
                     if (in_array($columnName, ['m20_range_km', 'm20_range_rate_km_s'], true)) {
-                        $data[$columnName] = $this->normalizeRawNumeric($rawValue);
+                        $rowValues[] = $this->normalizeRawNumeric($rawValue);
                         continue;
                     }
                     if ($columnName === 'm29_constellation') {
-                        $data[$columnName] = $this->normalizeText($rawValue);
+                        $rowValues[] = $this->normalizeText($rawValue);
                         continue;
                     }
-                    $data[$columnName] = $this->normalizeNumeric($rawValue);
+                    $rowValues[] = $this->normalizeNumeric($rawValue);
                 }
 
-                $result = $this->upsertRow($timestamp, $data, $row['raw'] ?? null, $rawColumn, $utc);
-                if ($result === 'insert') {
-                    $saved++;
-                } else {
-                    $updated++;
-                }
-
+                $batchRows[] = $rowValues;
                 $batchCount++;
+                $processed++;
                 if ($batchCount >= self::BATCH_SIZE) {
+                    $this->upsertBatch($columns, $updateColumns, $batchRows);
                     $this->connection->commit();
                     $this->connection->beginTransaction();
+                    $batchIndex++;
+                    if ($progressLogger) {
+                        $progressLogger($this->formatProgressLog($monthLabel, $batchIndex, $totalBatches, $processed));
+                    }
                     $batchCount = 0;
+                    $batchRows = [];
                 }
             }
 
+            if ($batchRows) {
+                $this->upsertBatch($columns, $updateColumns, $batchRows);
+                $batchIndex++;
+                if ($progressLogger) {
+                    $progressLogger($this->formatProgressLog($monthLabel, $batchIndex, $totalBatches, $processed));
+                }
+            }
             $this->connection->commit();
         } catch (\Throwable $e) {
             $this->connection->rollBack();
             throw $e;
         }
 
-        return ['saved' => $saved, 'updated' => $updated];
+        return ['processed' => $processed, 'errors' => $errors];
     }
 
     /**
@@ -287,60 +314,131 @@ final class CanoniqueDataParseService
     }
 
     /**
-     * @param array<string, string|null> $data
-     * @return "insert"|"update"
+     * @param string[] $columns
+     * @param string[] $updateColumns
+     * @param array<int, array<int, string|null>> $rows
      */
-    private function upsertRow(
-        \DateTimeInterface $timestamp,
-        array $data,
-        ?string $rawLine,
-        string $rawColumn,
-        \DateTimeZone $utc
-    ): string {
-        $tsValue = $timestamp->format('Y-m-d H:i:s');
-        $createdAt = (new \DateTime('now', $utc))->format('Y-m-d H:i:s');
+    private function upsertBatch(array $columns, array $updateColumns, array $rows): void
+    {
+        if (!$rows) {
+            return;
+        }
 
-        $columns = array_merge(['ts_utc', 'created_at_utc', $rawColumn], array_keys($data));
-        $values = array_merge([$tsValue, $createdAt, $rawLine], array_values($data));
-        $placeholders = array_fill(0, count($columns), '?');
-        $quotedColumns = array_map([$this->connection->getDatabasePlatform(), 'quoteIdentifier'], $columns);
+        $placeholdersPerRow = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $placeholders = implode(', ', array_fill(0, count($rows), $placeholdersPerRow));
+
+        $values = [];
+        foreach ($rows as $row) {
+            foreach ($row as $value) {
+                $values[] = $value;
+            }
+        }
 
         $platform = $this->connection->getDatabasePlatform();
+        $quotedColumns = array_map([$platform, 'quoteIdentifier'], $columns);
+
         if ($platform instanceof PostgreSQLPlatform) {
             $updateAssignments = [];
-            foreach (array_merge([$rawColumn], array_keys($data)) as $col) {
-                $quoted = $this->connection->getDatabasePlatform()->quoteIdentifier($col);
+            foreach ($updateColumns as $col) {
+                $quoted = $platform->quoteIdentifier($col);
                 $updateAssignments[] = $quoted . ' = EXCLUDED.' . $quoted;
             }
 
             $sql = sprintf(
-                'INSERT INTO canonique_data (%s) VALUES (%s) ON CONFLICT (ts_utc) DO UPDATE SET %s',
+                'INSERT INTO canonique_data (%s) VALUES %s ON CONFLICT (ts_utc) DO UPDATE SET %s',
                 implode(', ', $quotedColumns),
-                implode(', ', $placeholders),
+                $placeholders,
                 implode(', ', $updateAssignments)
             );
         } else {
             $updateAssignments = [];
-            foreach (array_merge([$rawColumn], array_keys($data)) as $col) {
-                $quoted = $this->connection->getDatabasePlatform()->quoteIdentifier($col);
+            foreach ($updateColumns as $col) {
+                $quoted = $platform->quoteIdentifier($col);
                 $updateAssignments[] = $quoted . ' = VALUES(' . $quoted . ')';
             }
 
             $sql = sprintf(
-                'INSERT INTO canonique_data (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s',
+                'INSERT INTO canonique_data (%s) VALUES %s ON DUPLICATE KEY UPDATE %s',
                 implode(', ', $quotedColumns),
-                implode(', ', $placeholders),
+                $placeholders,
                 implode(', ', $updateAssignments)
             );
         }
 
-        $exists = (bool) $this->connection->fetchOne(
-            'SELECT ts_utc FROM canonique_data WHERE ts_utc = ?',
-            [$tsValue]
-        );
-
         $this->connection->executeStatement($sql, $values);
+    }
 
-        return $exists ? 'update' : 'insert';
+    private function resolveMonthLabel(ImportHorizon $run, \DateTimeZone $utc): string
+    {
+        $start = $run->getStartUtc();
+        if ($start) {
+            return \DateTimeImmutable::createFromInterface($start)->setTimezone($utc)->format('M Y');
+        }
+        return 'Run';
+    }
+
+    private function resolveExpectedBatches(ImportHorizon $run): ?int
+    {
+        $start = $run->getStartUtc();
+        $stop = $run->getStopUtc();
+        $stepSeconds = $this->parseStepToSeconds((string) ($run->getStepSize() ?? ''));
+        if (!$start || !$stop || $stepSeconds <= 0) {
+            return null;
+        }
+
+        $startTs = \DateTimeImmutable::createFromInterface($start)->getTimestamp();
+        $stopTs = \DateTimeImmutable::createFromInterface($stop)->getTimestamp();
+        if ($stopTs < $startTs) {
+            return null;
+        }
+
+        $expectedRows = intdiv($stopTs - $startTs, $stepSeconds) + 1;
+        if ($expectedRows <= 0) {
+            return null;
+        }
+
+        return (int) ceil($expectedRows / self::BATCH_SIZE);
+    }
+
+    private function formatProgressLog(string $label, int $batchIndex, ?int $totalBatches, int $processed): string
+    {
+        $total = $totalBatches ? (string) $totalBatches : '?';
+        $memoryMb = (int) round(memory_get_usage(true) / 1024 / 1024);
+
+        return sprintf(
+            '[%s] batch %d/%s — rows: %d — memory: %dMB',
+            $label,
+            $batchIndex,
+            $total,
+            $processed,
+            $memoryMb
+        );
+    }
+
+    private function parseStepToSeconds(string $step): int
+    {
+        $value = trim($step);
+        if ($value === '') {
+            return 0;
+        }
+
+        if (ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        if (preg_match('/^(\d+)\s*([hmsd])$/i', $value, $matches) !== 1) {
+            return 0;
+        }
+
+        $amount = (int) $matches[1];
+        $unit = strtolower($matches[2]);
+
+        return match ($unit) {
+            'd' => $amount * 86400,
+            'h' => $amount * 3600,
+            'm' => $amount * 60,
+            's' => $amount,
+            default => 0,
+        };
     }
 }
