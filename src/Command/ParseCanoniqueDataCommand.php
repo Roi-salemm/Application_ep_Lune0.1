@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Repository\CanoniqueDataRepository;
 use App\Repository\ImportHorizonRepository;
+use App\Repository\MonthParseCoverageRepository;
 use App\Service\Horizon\CanoniqueDataParseService;
 use App\Service\Moon\Horizons\MoonHorizonsDateTimeParserService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,6 +28,7 @@ class ParseCanoniqueDataCommand extends Command
         private ImportHorizonRepository $importRepository,
         private CanoniqueDataRepository $canoniqueRepository,
         private CanoniqueDataParseService $parseService,
+        private MonthParseCoverageRepository $coverageRepository,
         private MoonHorizonsDateTimeParserService $dateTimeParserService,
     ) {
         parent::__construct();
@@ -71,6 +73,7 @@ class ParseCanoniqueDataCommand extends Command
             $chunkStart = (clone $start)->modify(sprintf('+%d months', $index));
             $nextMonthStart = (clone $chunkStart)->modify('+1 month');
             $chunkStop = (clone $nextMonthStart)->modify(sprintf('-%d seconds', $stepSeconds));
+            $monthKey = $chunkStart->format('Y-m');
 
             $output->writeln(sprintf(
                 'Parse %s -> %s (UTC)',
@@ -93,6 +96,7 @@ class ParseCanoniqueDataCommand extends Command
             if ($replace) {
                 $deleted = $this->canoniqueRepository->deleteByTimestampRange($chunkStart, $nextMonthStart);
                 $output->writeln(sprintf('Replace mode: %d lignes supprimees.', $deleted));
+                $this->coverageRepository->deleteMonth(MonthParseCoverageRepository::TARGET_CANONIQUE_DATA, $monthKey);
             }
 
             try {
@@ -110,6 +114,17 @@ class ParseCanoniqueDataCommand extends Command
                 $sunResult['saved'],
                 $sunResult['updated']
             ));
+
+            $moonCount = $moonResult['saved'] + $moonResult['updated'];
+            $sunCount = $sunResult['saved'] + $sunResult['updated'];
+            if ($moonCount > 0 && $sunCount > 0) {
+                $this->coverageRepository->upsertMonthStatus(
+                    MonthParseCoverageRepository::TARGET_CANONIQUE_DATA,
+                    $monthKey,
+                    MonthParseCoverageRepository::STATUS_PARSED,
+                    new \DateTimeImmutable('now', $utc)
+                );
+            }
         }
 
         return Command::SUCCESS;

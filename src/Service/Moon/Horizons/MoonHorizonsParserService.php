@@ -19,6 +19,21 @@ final class MoonHorizonsParserService
     }
 
     /**
+     * @return array{header: array<int, string>|null, headerLine: string|null, rows: \Generator}
+     */
+    public function streamResponse(string $body): array
+    {
+        $headerLine = $this->findHeaderLineStream($body);
+        $header = $headerLine ? str_getcsv($headerLine) : null;
+
+        return [
+            'header' => $header,
+            'headerLine' => $headerLine,
+            'rows' => $this->streamRows($body, $headerLine),
+        ];
+    }
+
+    /**
      * @return array{0: array<int, string>|null, 1: array<int, array{raw:string, cols:array<int, string>}>, 2: string|null}
      */
     private function extractCsvRows(string $body): array
@@ -58,6 +73,41 @@ final class MoonHorizonsParserService
         }
 
         return [$header, $rows, $headerLine];
+    }
+
+    /**
+     * @return \Generator<int, array{raw:string, cols:array<int, string>}>
+     */
+    private function streamRows(string $body, ?string $headerLine): \Generator
+    {
+        $inData = false;
+        foreach ($this->iterateLines($body) as $line) {
+            if (str_contains($line, '$$SOE')) {
+                $inData = true;
+                continue;
+            }
+
+            if (str_contains($line, '$$EOE')) {
+                break;
+            }
+
+            if (!$inData) {
+                continue;
+            }
+
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                continue;
+            }
+            if ($headerLine !== null && $trimmed === $headerLine) {
+                continue;
+            }
+
+            yield [
+                'raw' => $trimmed,
+                'cols' => str_getcsv($trimmed),
+            ];
+        }
     }
 
     /**
@@ -268,5 +318,67 @@ final class MoonHorizonsParserService
         }
 
         return $candidate;
+    }
+
+    private function findHeaderLineStream(string $body): ?string
+    {
+        $candidateBeforeSoe = null;
+        $candidate = null;
+        $afterSoe = false;
+
+        foreach ($this->iterateLines($body) as $line) {
+            if (str_contains($line, '$$SOE')) {
+                if ($candidateBeforeSoe !== null) {
+                    return $candidateBeforeSoe;
+                }
+                $afterSoe = true;
+                continue;
+            }
+
+            if ($afterSoe && str_contains($line, '$$EOE')) {
+                break;
+            }
+
+            $trimmed = trim($line);
+            if ($trimmed !== '' && !str_contains($trimmed, '$$') && str_contains($trimmed, ',')) {
+                if (preg_match('/[A-Za-z]/', $trimmed) === 1) {
+                    if ($afterSoe) {
+                        return $trimmed;
+                    }
+                    $candidateBeforeSoe = $trimmed;
+                    if (preg_match('/Date__\(UT\)|Date__\(UT\)__HR|R\.?A\._\(ICRF\)|DEC__\(ICRF\)|S-O-T|S-T-O/i', $trimmed) === 1) {
+                        $candidate = $trimmed;
+                    }
+                }
+            }
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * @return \Generator<int, string>
+     */
+    private function iterateLines(string $body): \Generator
+    {
+        $length = strlen($body);
+        $offset = 0;
+
+        while ($offset < $length) {
+            $pos = strpos($body, "\n", $offset);
+            if ($pos === false) {
+                $line = substr($body, $offset);
+                $offset = $length;
+            } else {
+                $line = substr($body, $offset, $pos - $offset);
+                $offset = $pos + 1;
+            }
+
+            if ($line !== '' && str_ends_with($line, "\r")) {
+                $line = substr($line, 0, -1);
+            }
+
+            yield $line;
+        }
     }
 }

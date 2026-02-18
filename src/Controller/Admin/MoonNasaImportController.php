@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Repository\ImportHorizonRepository;
+use App\Repository\MonthParseCoverageRepository;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -318,7 +319,8 @@ final class MoonNasaImportController extends AbstractController
     public function deleteAll(
         Request $request,
         ImportHorizonRepository $repository,
-        Connection $connection
+        Connection $connection,
+        MonthParseCoverageRepository $coverageRepository
     ): Response {
         $token = (string) $request->request->get('_token', '');
         if (!$this->isCsrfTokenValid('delete_all_imports', $token)) {
@@ -330,6 +332,7 @@ final class MoonNasaImportController extends AbstractController
         try {
             $connection->executeStatement('DELETE FROM canonique_data');
             $connection->executeStatement('DELETE FROM import_horizon');
+            $coverageRepository->deleteAllForTarget(MonthParseCoverageRepository::TARGET_CANONIQUE_DATA);
             $connection->commit();
         } catch (\Throwable $e) {
             $connection->rollBack();

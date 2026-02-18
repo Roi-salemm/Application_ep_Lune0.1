@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Repository\MonthParseCoverageRepository;
 use App\Service\Moon\MsMappingParseService;
 use App\Service\Moon\Horizons\MoonHorizonsDateTimeParserService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -22,6 +23,7 @@ class ParseMsMappingCommand extends Command
 {
     public function __construct(
         private MsMappingParseService $parseService,
+        private MonthParseCoverageRepository $coverageRepository,
         private MoonHorizonsDateTimeParserService $dateTimeParserService,
     ) {
         parent::__construct();
@@ -73,6 +75,16 @@ class ParseMsMappingCommand extends Command
 
             if ($result['missing_days']) {
                 $output->writeln('Missing 12:00 UTC days: ' . implode(', ', $result['missing_days']));
+            }
+
+            $count = $result['saved'] + $result['updated'];
+            if ($count > 0) {
+                $this->coverageRepository->upsertMonthStatus(
+                    MonthParseCoverageRepository::TARGET_MS_MAPPING,
+                    $monthStart->format('Y-m'),
+                    MonthParseCoverageRepository::STATUS_PARSED,
+                    new \DateTimeImmutable('now', $utc)
+                );
             }
         }
 

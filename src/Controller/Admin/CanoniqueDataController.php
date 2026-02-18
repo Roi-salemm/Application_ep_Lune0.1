@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Repository\CanoniqueDataRepository;
 use App\Repository\ImportHorizonRepository;
+use App\Repository\MonthParseCoverageRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,7 +31,8 @@ final class CanoniqueDataController extends AbstractController
     public function index(
         Request $request,
         CanoniqueDataRepository $repository,
-        ImportHorizonRepository $importRepository
+        ImportHorizonRepository $importRepository,
+        MonthParseCoverageRepository $coverageRepository
     ): Response
     {
         $limit = 200;
@@ -46,7 +48,7 @@ final class CanoniqueDataController extends AbstractController
         $columns = $this->orderColumns($repository->fetchColumnNames());
         $nextMonthStart = $this->resolveNextMonthStart($repository, new \DateTimeZone('UTC'));
         $utc = new \DateTimeZone('UTC');
-        $monthCoverage = $this->buildCanoniqueMonthCoverage($repository, $importRepository, $utc);
+        $monthCoverage = $this->buildCanoniqueMonthCoverage($coverageRepository, $importRepository, $utc);
         $yearCoverage = $this->buildYearCoverage($monthCoverage);
 
         return $this->render('admin/canonique_data.html.twig', [
@@ -131,7 +133,11 @@ final class CanoniqueDataController extends AbstractController
     }
 
     #[Route('/admin/canonique_data/delete-year', name: 'admin_canonique_data_delete_year', methods: ['POST'])]
-    public function deleteYear(Request $request, CanoniqueDataRepository $repository): Response
+    public function deleteYear(
+        Request $request,
+        CanoniqueDataRepository $repository,
+        MonthParseCoverageRepository $coverageRepository
+    ): Response
     {
         $yearInput = (int) $request->request->get('year', 0);
         $token = (string) $request->request->get('_token', '');
@@ -150,6 +156,7 @@ final class CanoniqueDataController extends AbstractController
         $stop = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', $yearInput + 1), $utc);
 
         $deleted = $repository->deleteByTimestampRange($start, $stop);
+        $coverageRepository->deleteYear(MonthParseCoverageRepository::TARGET_CANONIQUE_DATA, $yearInput);
         $this->addFlash('success', sprintf('Suppression terminee: %d lignes supprimees.', $deleted));
 
         return $this->redirectToRoute('admin_canonique_data');
@@ -245,11 +252,11 @@ final class CanoniqueDataController extends AbstractController
      * @return array<string, string>
      */
     private function buildCanoniqueMonthCoverage(
-        CanoniqueDataRepository $canoniqueRepository,
+        MonthParseCoverageRepository $coverageRepository,
         ImportHorizonRepository $importRepository,
         \DateTimeZone $utc
     ): array {
-        $parsedMonths = $canoniqueRepository->findMonthCoverage();
+        $parsedMonths = $coverageRepository->findMonthCoverage(MonthParseCoverageRepository::TARGET_CANONIQUE_DATA);
         $parsedSet = array_fill_keys($parsedMonths, true);
 
         $start = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', self::START_YEAR), $utc);

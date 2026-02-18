@@ -2,9 +2,9 @@
 
 namespace App\Controller\Admin;
 
-use App\Repository\CanoniqueDataRepository;
 use App\Repository\ImportHorizonRepository;
 use App\Repository\MsMappingRepository;
+use App\Repository\MonthParseCoverageRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,7 +15,7 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * Controle l'onglet admin ms_mapping.
  * Pourquoi: afficher l'agregation journaliere et declencher le parse mensuel.
- * Infos: s'appuie sur canonique_data et les imports Horizons pour les statuts.
+ * Infos: s'appuie sur month_parse_coverage et les imports Horizons pour les statuts.
  */
 final class MsMappingController extends AbstractController
 {
@@ -31,8 +31,8 @@ final class MsMappingController extends AbstractController
     public function index(
         Request $request,
         MsMappingRepository $repository,
-        CanoniqueDataRepository $canoniqueRepository,
-        ImportHorizonRepository $importRepository
+        ImportHorizonRepository $importRepository,
+        MonthParseCoverageRepository $coverageRepository
     ): Response {
         $limit = 200;
         $page = max(1, (int) $request->query->get('page', 1));
@@ -47,7 +47,7 @@ final class MsMappingController extends AbstractController
         $columns = $this->orderColumns($repository->fetchColumnNames());
         $nextMonthStart = $this->resolveNextMonthStart($repository, new \DateTimeZone('UTC'));
         $utc = new \DateTimeZone('UTC');
-        $monthCoverage = $this->buildMsMappingMonthCoverage($repository, $canoniqueRepository, $importRepository, $utc);
+        $monthCoverage = $this->buildMsMappingMonthCoverage($coverageRepository, $importRepository, $utc);
         $yearCoverage = $this->buildYearCoverage($monthCoverage);
 
         return $this->render('admin/ms_mapping.html.twig', [
@@ -152,7 +152,11 @@ final class MsMappingController extends AbstractController
     }
 
     #[Route('/admin/ms_mapping/delete-year', name: 'admin_ms_mapping_delete_year', methods: ['POST'])]
-    public function deleteYear(Request $request, MsMappingRepository $repository): Response
+    public function deleteYear(
+        Request $request,
+        MsMappingRepository $repository,
+        MonthParseCoverageRepository $coverageRepository
+    ): Response
     {
         $yearInput = (int) $request->request->get('year', 0);
         $token = (string) $request->request->get('_token', '');
@@ -171,6 +175,7 @@ final class MsMappingController extends AbstractController
         $stop = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', $yearInput + 1), $utc);
 
         $deleted = $repository->deleteByTimestampRange($start, $stop);
+        $coverageRepository->deleteYear(MonthParseCoverageRepository::TARGET_MS_MAPPING, $yearInput);
         $this->addFlash('success', sprintf('Suppression terminee: %d lignes supprimees.', $deleted));
 
         return $this->redirectToRoute('admin_ms_mapping');
@@ -255,15 +260,14 @@ final class MsMappingController extends AbstractController
      * @return array<string, string>
      */
     private function buildMsMappingMonthCoverage(
-        MsMappingRepository $mappingRepository,
-        CanoniqueDataRepository $canoniqueRepository,
+        MonthParseCoverageRepository $coverageRepository,
         ImportHorizonRepository $importRepository,
         \DateTimeZone $utc
     ): array {
-        $mappingMonths = $mappingRepository->findMonthCoverage();
+        $mappingMonths = $coverageRepository->findMonthCoverage(MonthParseCoverageRepository::TARGET_MS_MAPPING);
         $mappingSet = array_fill_keys($mappingMonths, true);
 
-        $canoniqueMonths = $canoniqueRepository->findMonthCoverage();
+        $canoniqueMonths = $coverageRepository->findMonthCoverage(MonthParseCoverageRepository::TARGET_CANONIQUE_DATA);
         $canoniqueSet = array_fill_keys($canoniqueMonths, true);
 
         $start = new \DateTimeImmutable(sprintf('%04d-01-01 00:00:00', self::START_YEAR), $utc);

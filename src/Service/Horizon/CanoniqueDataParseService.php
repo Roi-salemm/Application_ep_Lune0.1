@@ -16,6 +16,8 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 
 final class CanoniqueDataParseService
 {
+    private const BATCH_SIZE = 500;
+
     /**
      * Ordre des colonnes attendues pour la Lune (hors timestamp).
      *
@@ -67,8 +69,8 @@ final class CanoniqueDataParseService
             throw new \RuntimeException('Reponse Horizons invalide: $$SOE introuvable.');
         }
 
-        $parseResult = $this->parserService->parseResponse($body);
-        $header = $parseResult->getHeader();
+        $stream = $this->parserService->streamResponse($body);
+        $header = $stream['header'];
         if (!$header) {
             $rawHeader = $run->getRawHeader();
             if ($rawHeader !== null && trim($rawHeader) !== '') {
@@ -85,38 +87,54 @@ final class CanoniqueDataParseService
         $updated = 0;
         $rawColumn = $prefix === 's' ? 's_raw_line' : 'm_raw_line';
 
-        foreach ($parseResult->getRows() as $row) {
-            $cols = $row['cols'] ?? [];
-            if (!$cols) {
-                continue;
-            }
-
-            $timestampValue = $cols[$map['timestamp_index']] ?? $cols[0] ?? null;
-            $timestamp = $this->dateTimeParser->parseHorizonsTimestamp($timestampValue, $utc);
-            if (!$timestamp) {
-                continue;
-            }
-
-            $data = [];
-            foreach ($map['index_to_column'] as $index => $columnName) {
-                $rawValue = $cols[$index] ?? null;
-                if (in_array($columnName, ['m20_range_km', 'm20_range_rate_km_s'], true)) {
-                    $data[$columnName] = $this->normalizeRawNumeric($rawValue);
+        $batchCount = 0;
+        $this->connection->beginTransaction();
+        try {
+            foreach ($stream['rows'] as $row) {
+                $cols = $row['cols'] ?? [];
+                if (!$cols) {
                     continue;
                 }
-                if ($columnName === 'm29_constellation') {
-                    $data[$columnName] = $this->normalizeText($rawValue);
+
+                $timestampValue = $cols[$map['timestamp_index']] ?? $cols[0] ?? null;
+                $timestamp = $this->dateTimeParser->parseHorizonsTimestamp($timestampValue, $utc);
+                if (!$timestamp) {
                     continue;
                 }
-                $data[$columnName] = $this->normalizeNumeric($rawValue);
+
+                $data = [];
+                foreach ($map['index_to_column'] as $index => $columnName) {
+                    $rawValue = $cols[$index] ?? null;
+                    if (in_array($columnName, ['m20_range_km', 'm20_range_rate_km_s'], true)) {
+                        $data[$columnName] = $this->normalizeRawNumeric($rawValue);
+                        continue;
+                    }
+                    if ($columnName === 'm29_constellation') {
+                        $data[$columnName] = $this->normalizeText($rawValue);
+                        continue;
+                    }
+                    $data[$columnName] = $this->normalizeNumeric($rawValue);
+                }
+
+                $result = $this->upsertRow($timestamp, $data, $row['raw'] ?? null, $rawColumn, $utc);
+                if ($result === 'insert') {
+                    $saved++;
+                } else {
+                    $updated++;
+                }
+
+                $batchCount++;
+                if ($batchCount >= self::BATCH_SIZE) {
+                    $this->connection->commit();
+                    $this->connection->beginTransaction();
+                    $batchCount = 0;
+                }
             }
 
-            $result = $this->upsertRow($timestamp, $data, $row['raw'] ?? null, $rawColumn, $utc);
-            if ($result === 'insert') {
-                $saved++;
-            } else {
-                $updated++;
-            }
+            $this->connection->commit();
+        } catch (\Throwable $e) {
+            $this->connection->rollBack();
+            throw $e;
         }
 
         return ['saved' => $saved, 'updated' => $updated];
