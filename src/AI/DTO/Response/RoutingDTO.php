@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definit le DTO de routage pour la reponse IA.

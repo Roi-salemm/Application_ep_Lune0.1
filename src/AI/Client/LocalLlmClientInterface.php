@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definira l interface des clients LLM locaux.

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definit le DTO meta pour la reponse IA.

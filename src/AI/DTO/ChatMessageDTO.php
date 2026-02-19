@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definit un message de chat pour l historique.

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier contiendra le router de tradition (v1).

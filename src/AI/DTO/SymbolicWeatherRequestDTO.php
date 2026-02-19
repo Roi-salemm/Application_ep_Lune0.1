@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definit la requete DTO pour /api/ai/weather.

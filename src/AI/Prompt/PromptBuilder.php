@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier contiendra l assemblage des messages systeme et utilisateur.

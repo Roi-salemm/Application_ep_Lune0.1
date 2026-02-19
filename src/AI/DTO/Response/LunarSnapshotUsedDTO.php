@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definit le snapshot lunaire utilise dans la reponse.

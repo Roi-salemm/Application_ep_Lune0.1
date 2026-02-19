@@ -87,8 +87,20 @@
                 </span>
                 <span class="admin-sidebar__label">Images lunaison</span>
             </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ai_console' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_ai_console') }}" style="--delay: 8">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M4 6h16v9H7l-3 3V6z" />
+                        <circle cx="9" cy="10.5" r="1.2" />
+                        <circle cx="12" cy="10.5" r="1.2" />
+                        <circle cx="15" cy="10.5" r="1.2" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">Console IA</span>
+            </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'debug' ? 'admin-sidebar__item--active' : '' }}"
-               href="{{ path('admin_debug') }}" style="--delay: 8">
+               href="{{ path('admin_debug') }}" style="--delay: 9">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
                         <path d="M8 3v3M16 3v3M7 7h10M6 21h12M6 7v10a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V7" />

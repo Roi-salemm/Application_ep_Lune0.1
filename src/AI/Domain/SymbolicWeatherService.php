@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier contiendra le service metier `symbolic_weather`.

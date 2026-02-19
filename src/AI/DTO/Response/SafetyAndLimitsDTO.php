@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier definit le bloc safety_and_limits de la reponse IA.

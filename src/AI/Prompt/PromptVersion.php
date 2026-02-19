@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier contiendra le calcul de version ou hash de prompt pour audit.

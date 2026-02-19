@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 /**
  * Ce fichier contiendra le client HTTP Ollama pour appeler le LLM local.

@@ -1,0 +1,67 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Console IA' %}
+{% set page_subtitle = 'Envoyer un prompt et suivre les reponses et logs.' %}
+{% set active_menu = 'ai_console' %}
+
+{% block admin_content %}
+    <div class="admin-grid admin-grid--two admin-ai-console">
+        <section class="admin-card admin-ai-console__panel">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Dialogue Llama</h2>
+                <p class="admin-card__subtitle">Envoi manuel de prompt et rendu de la reponse.</p>
+            </div>
+            <div class="admin-card__body">
+                <form class="admin-ai-console__form" method="post" action="{{ path('admin_ai_console') }}">
+                    <label class="admin-form__label" for="ai-console-prompt">Prompt</label>
+                    <textarea
+                        id="ai-console-prompt"
+                        name="prompt"
+                        class="admin-form__input admin-ai-console__input"
+                        rows="5"
+                        placeholder="Saisis un prompt pour le LLM..."
+                    >{{ prompt }}</textarea>
+                    <div class="admin-ai-console__actions">
+                        <button class="admin-button admin-button--primary" type="submit">Envoyer</button>
+                        <span class="admin-ai-console__hint">Mode simulation tant que le client Llama n'est pas branche.</span>
+                    </div>
+                </form>
+
+                <div class="admin-ai-console__chat">
+                    {% if prompt %}
+                        <div class="admin-chat__bubble admin-chat__bubble--user">
+                            <span class="admin-chat__label">Vous</span>
+                            <p class="admin-chat__text">{{ prompt }}</p>
+                        </div>
+                        <div class="admin-chat__bubble admin-chat__bubble--ai">
+                            <span class="admin-chat__label">IA</span>
+                            <p class="admin-chat__text">{{ response_text }}</p>
+                        </div>
+                    {% else %}
+                        <p class="admin-empty">Aucun message pour le moment.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-card admin-ai-console__panel">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Logs & JSON</h2>
+                <p class="admin-card__subtitle">Suivi des requetes, reponses et erreurs.</p>
+            </div>
+            <div class="admin-card__body admin-ai-console__logs">
+                {% if error_message %}
+                    <div class="admin-flash admin-flash--error">{{ error_message }}</div>
+                {% endif %}
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Requete</div>
+                    <pre class="admin-console">{{ request_json is not empty ? request_json : 'Aucune requete encore.' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Reponse</div>
+                    <pre class="admin-console">{{ response_json is not empty ? response_json : 'Aucune reponse encore.' }}</pre>
+                </div>
+            </div>
+        </section>
+    </div>
+{% endblock %}
