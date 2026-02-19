@@ -18,11 +18,33 @@ final class AiConsoleController extends AbstractController
     #[Route('/admin/ai-console', name: 'admin_ai_console', methods: ['GET', 'POST'])]
     public function index(Request $request): Response
     {
+        $isPost = $request->isMethod('POST');
         $prompt = trim((string) $request->request->get('prompt', ''));
         $responseText = '';
         $requestJson = '';
         $responseJson = '';
         $errorMessage = '';
+
+        if ($isPost) {
+            $requestJson = $this->encodeJson([
+                'received_post' => $request->request->all(),
+                'received_prompt_raw' => $request->request->get('prompt', null),
+                'received_prompt_trimmed' => $prompt,
+                'content_type' => $request->headers->get('content-type'),
+            ]);
+        }
+
+        if ($isPost && $prompt === '') {
+            $errorMessage = 'Prompt vide (Symfony ne recoit pas de champ "prompt" ou il est vide).';
+            $responseText = 'Aucune requete envoyee a Ollama.';
+            return $this->render('admin/ai_console.html.twig', [
+                'prompt' => $prompt,
+                'response_text' => $responseText,
+                'request_json' => $requestJson,
+                'response_json' => $responseJson,
+                'error_message' => $errorMessage,
+            ]);
+        }
 
         if ($prompt !== '') {
             try {
@@ -41,6 +63,7 @@ final class AiConsoleController extends AbstractController
             } catch (\Throwable $exception) {
                 $errorMessage = sprintf('Erreur Llama: %s', $exception->getMessage());
                 $responseText = 'Erreur lors de l appel au LLM.';
+                $responseJson = $this->encodeJson(['exception' => $exception->getMessage()]);
                 $requestJson = $this->encodeJson([
                     'prompt' => $prompt,
                     'source' => 'admin-console',

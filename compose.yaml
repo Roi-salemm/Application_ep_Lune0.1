@@ -22,8 +22,10 @@ services:
     environment:
       APP_ENV: dev
       # URL interne Docker vers Ollama (pas exposé)
+      # OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      # OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       OLLAMA_BASE_URL: "http://ollama:11434"
-      OLLAMA_MODEL: "mistral"
+      OLLAMA_MODEL: "llama3.1:8b"
     networks:
       - appnet
       - llmnet
@@ -63,12 +65,17 @@ services:
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
+    ports:
+    - "11434:11434"
     networks:
       - llmnet
     # IMPORTANT : pas de ports => inaccessible depuis l’hôte
     # dns:
       # - 1.1.1.1
       # - 8.8.8.8
+
+      # Symfony host → http://localhost:11434
+      # Symfony docker → http://ollama:11434
     
 volumes:
   dbdata:

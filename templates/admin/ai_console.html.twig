@@ -12,7 +12,7 @@
                 <p class="admin-card__subtitle">Envoi manuel de prompt et rendu de la reponse.</p>
             </div>
             <div class="admin-card__body">
-                <form class="admin-ai-console__form" method="post" action="{{ path('admin_ai_console') }}">
+                <form class="admin-ai-console__form" method="post" action="{{ path('admin_ai_console') }}" data-turbo="false">
                     <label class="admin-form__label" for="ai-console-prompt">Prompt</label>
                     <textarea
                         id="ai-console-prompt"

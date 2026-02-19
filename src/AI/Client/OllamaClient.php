@@ -14,7 +14,7 @@ final class OllamaClient implements LocalLlmClientInterface
         #[Autowire('%env(string:OLLAMA_BASE_URL)%')] string $baseUrl,
         #[Autowire('%env(string:OLLAMA_MODEL)%')] private readonly string $model,
     ) {
-        $this->baseUrl = rtrim($baseUrl, '/');
+        $this->baseUrl = rtrim(trim($baseUrl), '/');
     }
 
     public function generate(string $prompt, array $options = []): LlmResponse
