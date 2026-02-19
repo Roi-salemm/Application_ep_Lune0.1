@@ -1,0 +1,8 @@
+﻿# Ce fichier decrit le pack de tradition `western_astrology`.
+# Pourquoi : isoler le lexique autorise/interdit et les regles de formulation par tradition.
+# Informations specifiques : la specification v0 ne fournit que le label ; les listes restent vides par defaut.
+
+label: 'astrologie occidentale tropicale'
+allowed_terms: []
+forbidden_terms: []
+rules: []

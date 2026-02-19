@@ -47,7 +47,7 @@
                 </span>
                 <span class="admin-sidebar__label">OP ms_mapping</span>
             </a>
-            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ephemeris' ? 'admin-sidebar__item--active' : '' }}"
+            {# <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ephemeris' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_moon_ephemeris_hours') }}" style="--delay: 4">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
@@ -58,8 +58,8 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">Moon ephemeris hours</span>
-            </a>
-            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'phase_events' ? 'admin-sidebar__item--active' : '' }}"
+            </a> #}
+            {# <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'phase_events' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_moon_phase_events') }}" style="--delay: 5">
                 <span class="admin-sidebar__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img">
@@ -67,7 +67,7 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">Phases lunaires</span>
-            </a>
+            </a> #}
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'horizons_quantities' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_horizons_observer_quantities') }}" style="--delay: 6">
                 <span class="admin-sidebar__icon" aria-hidden="true">

@@ -1,0 +1,352 @@
+﻿{
+    "additionalProperties":  false,
+    "$comment":  "Schema v0 pour la reponse symbolic_weather. Contenu derive de parametre_llama_v0; ne pas etendre sans spec.",
+    "properties":  {
+                       "meta":  {
+                                    "additionalProperties":  false,
+                                    "properties":  {
+                                                       "schema_version":  {
+                                                                              "type":  "string"
+                                                                          },
+                                                       "language":  {
+                                                                        "type":  "string",
+                                                                        "enum":  [
+                                                                                     "fr"
+                                                                                 ]
+                                                                    },
+                                                       "created_at_utc":  {
+                                                                              "type":  "string"
+                                                                          },
+                                                       "request_id":  {
+                                                                          "type":  "string"
+                                                                      }
+                                                   },
+                                    "type":  "object",
+                                    "required":  [
+                                                     "schema_version",
+                                                     "created_at_utc",
+                                                     "language",
+                                                     "request_id"
+                                                 ]
+                                },
+                       "assumptions":  {
+                                           "type":  "string"
+                                       },
+                       "content":  {
+                                       "additionalProperties":  false,
+                                       "properties":  {
+                                                          "title":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                          "sections":  {
+                                                                           "items":  {
+
+                                                                                     },
+                                                                           "type":  "array"
+                                                                       },
+                                                          "bullets":  {
+                                                                          "items":  {
+
+                                                                                    },
+                                                                          "type":  "array"
+                                                                      },
+                                                          "text":  {
+                                                                       "maxLength":  900,
+                                                                       "minLength":  80,
+                                                                       "type":  "string"
+                                                                   }
+                                                      },
+                                       "type":  "object",
+                                       "required":  [
+                                                        "title",
+                                                        "text",
+                                                        "bullets",
+                                                        "sections"
+                                                    ]
+                                   },
+                       "data_used":  {
+                                         "additionalProperties":  false,
+                                         "properties":  {
+                                                            "inputs_present":  {
+                                                                                   "additionalProperties":  false,
+                                                                                   "properties":  {
+                                                                                                      "history":  {
+                                                                                                                      "type":  "boolean"
+                                                                                                                  },
+                                                                                                      "lunar_snapshot":  {
+                                                                                                                             "type":  "boolean"
+                                                                                                                         },
+                                                                                                      "user_message":  {
+                                                                                                                           "type":  "boolean"
+                                                                                                                       }
+                                                                                                  },
+                                                                                   "type":  "object",
+                                                                                   "required":  [
+                                                                                                    "user_message",
+                                                                                                    "history",
+                                                                                                    "lunar_snapshot"
+                                                                                                ]
+                                                                               },
+                                                            "lunar_snapshot":  {
+                                                                                   "additionalProperties":  false,
+                                                                                   "properties":  {
+                                                                                                      "moon_phase":  {
+                                                                                                                         "type":  "string"
+                                                                                                                     },
+                                                                                                      "moon_sign":  {
+                                                                                                                        "type":  "string"
+                                                                                                                    },
+                                                                                                      "moon_degree":  {
+                                                                                                                          "type":  "number"
+                                                                                                                      }
+                                                                                                  },
+                                                                                   "type":  "object",
+                                                                                   "required":  [
+                                                                                                    "moon_phase",
+                                                                                                    "moon_sign",
+                                                                                                    "moon_degree"
+                                                                                                ]
+                                                                               }
+                                                        },
+                                         "type":  "object",
+                                         "required":  [
+                                                          "lunar_snapshot",
+                                                          "inputs_present"
+                                                      ]
+                                     },
+                       "style_contract":  {
+                                              "additionalProperties":  false,
+                                              "properties":  {
+                                                                 "no_diagnosis":  {
+                                                                                      "type":  "boolean"
+                                                                                  },
+                                                                 "use_possibility_language":  {
+                                                                                                  "type":  "boolean"
+                                                                                              },
+                                                                 "no_injunction":  {
+                                                                                       "type":  "boolean"
+                                                                                   },
+                                                                 "impersonal_tone":  {
+                                                                                         "type":  "boolean"
+                                                                                     },
+                                                                 "no_dogma":  {
+                                                                                  "type":  "boolean"
+                                                                              },
+                                                                 "no_prophecy":  {
+                                                                                     "type":  "boolean"
+                                                                                 },
+                                                                 "no_syncretism":  {
+                                                                                       "type":  "boolean"
+                                                                                   }
+                                                             },
+                                              "type":  "object",
+                                              "required":  [
+                                                               "no_injunction",
+                                                               "impersonal_tone",
+                                                               "no_syncretism",
+                                                               "no_diagnosis",
+                                                               "no_dogma",
+                                                               "no_prophecy",
+                                                               "use_possibility_language"
+                                                           ]
+                                          },
+                       "clarification":  {
+                                             "additionalProperties":  false,
+                                             "properties":  {
+                                                                "question":  {
+                                                                                 "type":  [
+                                                                                              "string",
+                                                                                              "null"
+                                                                                          ]
+                                                                             },
+                                                                "needs_clarification":  {
+                                                                                            "type":  "boolean"
+                                                                                        }
+                                                            },
+                                             "type":  "object",
+                                             "required":  [
+                                                              "needs_clarification",
+                                                              "question"
+                                                          ]
+                                         },
+                       "safety_and_limits":  {
+                                                 "additionalProperties":  false,
+                                                 "properties":  {
+                                                                    "note":  {
+                                                                                 "type":  "string"
+                                                                             },
+                                                                    "policy_flags":  {
+                                                                                         "additionalProperties":  false,
+                                                                                         "properties":  {
+                                                                                                            "diagnosis_request":  {
+                                                                                                                                      "type":  "boolean"
+                                                                                                                                  },
+                                                                                                            "proselitism_request":  {
+                                                                                                                                        "type":  "boolean"
+                                                                                                                                    },
+                                                                                                            "prompt_injection":  {
+                                                                                                                                     "type":  "boolean"
+                                                                                                                                 },
+                                                                                                            "explicit_instruction_request":  {
+                                                                                                                                                 "type":  "boolean"
+                                                                                                                                             }
+                                                                                                        },
+                                                                                         "type":  "object",
+                                                                                         "required":  [
+                                                                                                          "prompt_injection",
+                                                                                                          "proselitism_request",
+                                                                                                          "diagnosis_request",
+                                                                                                          "explicit_instruction_request"
+                                                                                                      ]
+                                                                                     },
+                                                                    "sensitivity":  {
+                                                                                        "type":  "string"
+                                                                                    },
+                                                                    "risk_flags":  {
+                                                                                       "additionalProperties":  false,
+                                                                                       "properties":  {
+                                                                                                          "financial":  {
+                                                                                                                            "type":  "boolean"
+                                                                                                                        },
+                                                                                                          "hate":  {
+                                                                                                                       "type":  "boolean"
+                                                                                                                   },
+                                                                                                          "minors":  {
+                                                                                                                         "type":  "boolean"
+                                                                                                                     },
+                                                                                                          "sexual_content":  {
+                                                                                                                                 "type":  "boolean"
+                                                                                                                             },
+                                                                                                          "self_harm":  {
+                                                                                                                            "type":  "boolean"
+                                                                                                                        },
+                                                                                                          "medical":  {
+                                                                                                                          "type":  "boolean"
+                                                                                                                      },
+                                                                                                          "violence":  {
+                                                                                                                           "type":  "boolean"
+                                                                                                                       },
+                                                                                                          "legal":  {
+                                                                                                                        "type":  "boolean"
+                                                                                                                    }
+                                                                                                      },
+                                                                                       "type":  "object",
+                                                                                       "required":  [
+                                                                                                        "medical",
+                                                                                                        "legal",
+                                                                                                        "financial",
+                                                                                                        "self_harm",
+                                                                                                        "violence",
+                                                                                                        "hate",
+                                                                                                        "sexual_content",
+                                                                                                        "minors"
+                                                                                                    ]
+                                                                                   },
+                                                                    "action":  {
+                                                                                   "additionalProperties":  false,
+                                                                                   "properties":  {
+                                                                                                      "reason":  {
+                                                                                                                     "type":  "string"
+                                                                                                                 },
+                                                                                                      "mode":  {
+                                                                                                                   "enum":  [
+                                                                                                                                "allow",
+                                                                                                                                "soft_refusal",
+                                                                                                                                "refusal",
+                                                                                                                                "safety_redirect"
+                                                                                                                            ]
+                                                                                                               }
+                                                                                                  },
+                                                                                   "type":  "object",
+                                                                                   "required":  [
+                                                                                                    "mode",
+                                                                                                    "reason"
+                                                                                                ]
+                                                                               }
+                                                                },
+                                                 "type":  "object",
+                                                 "required":  [
+                                                                  "sensitivity",
+                                                                  "risk_flags",
+                                                                  "policy_flags",
+                                                                  "action",
+                                                                  "note"
+                                                              ]
+                                             },
+                       "glossary_and_definitions":  {
+                                                        "items":  {
+                                                                      "additionalProperties":  false,
+                                                                      "properties":  {
+                                                                                         "term":  {
+                                                                                                      "type":  "string"
+                                                                                                  },
+                                                                                         "tradition":  {
+                                                                                                           "type":  "string"
+                                                                                                       },
+                                                                                         "definition":  {
+                                                                                                            "type":  "string"
+                                                                                                        }
+                                                                                     },
+                                                                      "type":  "object",
+                                                                      "required":  [
+                                                                                       "term",
+                                                                                       "definition",
+                                                                                       "tradition"
+                                                                                   ]
+                                                                  },
+                                                        "type":  "array"
+                                                    },
+                       "routing":  {
+                                       "additionalProperties":  false,
+                                       "properties":  {
+                                                          "tradition":  {
+                                                                            "enum":  [
+                                                                                         "western_astrology"
+                                                                                     ]
+                                                                        },
+                                                          "confidence":  {
+                                                                             "type":  "number"
+                                                                         },
+                                                          "format":  {
+                                                                         "type":  "string"
+                                                                     },
+                                                          "depth_mode":  {
+                                                                             "type":  "string"
+                                                                         },
+                                                          "user_intent":  {
+                                                                              "type":  "string"
+                                                                          },
+                                                          "context":  {
+                                                                          "const":  "symbolic_weather"
+                                                                      },
+                                                          "tone":  {
+                                                                       "type":  "string"
+                                                                   },
+                                                          "selection_mode":  {
+                                                                                 "type":  "string"
+                                                                             }
+                                                      },
+                                       "type":  "object",
+                                       "required":  [
+                                                        "context",
+                                                        "tradition",
+                                                        "selection_mode",
+                                                        "confidence",
+                                                        "user_intent",
+                                                        "depth_mode",
+                                                        "format",
+                                                        "tone"
+                                                    ]
+                                   }
+                   },
+    "type":  "object",
+    "required":  [
+                     "meta",
+                     "routing",
+                     "safety_and_limits",
+                     "content",
+                     "style_contract",
+                     "data_used"
+                 ],
+    "$schema":  "https://json-schema.org/draft/2020-12/schema"
+}

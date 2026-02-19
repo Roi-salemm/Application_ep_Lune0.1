@@ -1,0 +1,463 @@
+1) DTO Request V1 (/api/ai/chat) + DTO Weather (/api/ai/weather)
+src/AI/DTO/LunarSnapshotDTO.php
+<?php
+
+namespace App\AI\DTO;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class LunarSnapshotDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Type('string')]
+    public string $moon_phase;
+
+    #[Assert\NotBlank]
+    #[Assert\Type('string')]
+    public string $moon_sign;
+
+    #[Assert\NotNull]
+    #[Assert\Type('numeric')]
+    public float $moon_degree;
+}
+
+src/AI/DTO/ChatMessageDTO.php
+<?php
+
+namespace App\AI\DTO;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class ChatMessageDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['user', 'assistant'])]
+    public string $role;
+
+    #[Assert\NotBlank]
+    #[Assert\Type('string')]
+    #[Assert\Length(min: 1, max: 6000)]
+    public string $content;
+}
+
+src/AI/DTO/AiChatRequestDTO.php
+<?php
+
+namespace App\AI\DTO;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class AiChatRequestDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Type('string')]
+    #[Assert\Length(min: 1, max: 8000)]
+    public string $message;
+
+    // null => détection auto en V1
+    #[Assert\Choice(choices: [
+        'symbolic_weather',
+        'symbolic_reading',
+        'personal_question',
+        'divination_interpretation',
+        'non_duality',
+        'technical_science',
+        'other',
+    ])]
+    public ?string $context = null;
+
+    // null => détection auto en V1
+    #[Assert\Choice(choices: [
+        'western_astrology',
+        'jyotish',
+        'yijing',
+        'tarot_marseille',
+        'neutral_symbolic',
+    ])]
+    public ?string $tradition = null;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['fr'])]
+    public string $language = 'fr';
+
+    #[Assert\Choice(choices: ['short', 'standard', 'deep'])]
+    public ?string $depth_mode = null;
+
+    #[Assert\Choice(choices: ['soft', 'neutral', 'direct'])]
+    public ?string $tone = null;
+
+    #[Assert\Choice(choices: ['plain', 'bullet', 'structured'])]
+    public ?string $format = null;
+
+    // optionnel (utile surtout pour symbolic_weather)
+    #[Assert\Valid]
+    public ?LunarSnapshotDTO $lunar_snapshot = null;
+
+    /** @var ChatMessageDTO[] */
+    #[Assert\Type('array')]
+    #[Assert\Valid]
+    public array $history = [];
+}
+
+src/AI/DTO/SymbolicWeatherRequestDTO.php (si tu gardes /api/ai/weather)
+<?php
+
+namespace App\AI\DTO;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class SymbolicWeatherRequestDTO
+{
+    #[Assert\Type('string')]
+    #[Assert\Length(max: 8000)]
+    public ?string $message = null;
+
+    #[Assert\NotNull]
+    #[Assert\Valid]
+    public LunarSnapshotDTO $lunar_snapshot;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['fr'])]
+    public string $language = 'fr';
+}
+
+2) DTO Response V1 (le JSON final)
+src/AI/DTO/Response/MetaDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class MetaDTO
+{
+    #[Assert\NotBlank]
+    public string $schema_version;
+
+    #[Assert\NotBlank]
+    public string $created_at_utc;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['fr'])]
+    public string $language = 'fr';
+
+    #[Assert\NotBlank]
+    public string $request_id;
+}
+
+src/AI/DTO/Response/RoutingDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class RoutingDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: [
+        'symbolic_weather',
+        'symbolic_reading',
+        'personal_question',
+        'divination_interpretation',
+        'non_duality',
+        'technical_science',
+        'other',
+    ])]
+    public string $context;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: [
+        'western_astrology',
+        'jyotish',
+        'yijing',
+        'tarot_marseille',
+        'neutral_symbolic',
+    ])]
+    public string $tradition;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['manual', 'auto', 'fallback'])]
+    public string $selection_mode;
+
+    #[Assert\NotNull]
+    #[Assert\Range(min: 0, max: 1)]
+    public float $confidence;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: [
+        'interpretation',
+        'explanation',
+        'coaching_request',
+        'validation_request',
+        'how_to',
+        'troubleshooting',
+        'other',
+    ])]
+    public string $user_intent;
+
+    #[Assert\Choice(choices: ['short', 'standard', 'deep'])]
+    public ?string $depth_mode = null;
+
+    #[Assert\Choice(choices: ['plain', 'bullet', 'structured'])]
+    public ?string $format = null;
+
+    #[Assert\Choice(choices: ['soft', 'neutral', 'direct'])]
+    public ?string $tone = null;
+}
+
+src/AI/DTO/Response/RiskFlagsDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+final class RiskFlagsDTO
+{
+    public bool $medical = false;
+    public bool $legal = false;
+    public bool $financial = false;
+    public bool $self_harm = false;
+    public bool $violence = false;
+    public bool $hate = false;
+    public bool $sexual_content = false;
+    public bool $minors = false;
+}
+
+src/AI/DTO/Response/PolicyFlagsDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+final class PolicyFlagsDTO
+{
+    public bool $prompt_injection = false;
+    public bool $proselitism_request = false;
+    public bool $diagnosis_request = false;
+    public bool $explicit_instruction_request = false;
+}
+
+src/AI/DTO/Response/SafetyActionDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class SafetyActionDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['allow', 'soft_refusal', 'refusal', 'safety_redirect'])]
+    public string $mode = 'allow';
+
+    #[Assert\Type('string')]
+    public string $reason = '';
+}
+
+src/AI/DTO/Response/SafetyAndLimitsDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class SafetyAndLimitsDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: ['low', 'medium', 'high'])]
+    public string $sensitivity = 'low';
+
+    #[Assert\Valid]
+    public RiskFlagsDTO $risk_flags;
+
+    #[Assert\Valid]
+    public PolicyFlagsDTO $policy_flags;
+
+    #[Assert\Valid]
+    public SafetyActionDTO $action;
+
+    #[Assert\Type('string')]
+    public string $note = '';
+}
+
+src/AI/DTO/Response/ContentDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class ContentDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 1, max: 120)]
+    public string $title;
+
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 50, max: 1200)]
+    public string $text;
+
+    /** @var string[] */
+    #[Assert\Type('array')]
+    public array $bullets = [];
+
+    /** @var array<int, array{title?: string, text?: string, bullets?: array}> */
+    #[Assert\Type('array')]
+    public array $sections = [];
+}
+
+src/AI/DTO/Response/InputsPresentDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+final class InputsPresentDTO
+{
+    public bool $user_message = true;
+    public bool $history = false;
+    public bool $lunar_snapshot = false;
+}
+
+src/AI/DTO/Response/LunarSnapshotUsedDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class LunarSnapshotUsedDTO
+{
+    #[Assert\NotBlank]
+    public string $moon_phase;
+
+    #[Assert\NotBlank]
+    public string $moon_sign;
+
+    #[Assert\NotNull]
+    #[Assert\Type('numeric')]
+    public float $moon_degree;
+}
+
+src/AI/DTO/Response/DataUsedDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class DataUsedDTO
+{
+    #[Assert\Valid]
+    public ?LunarSnapshotUsedDTO $lunar_snapshot = null;
+
+    #[Assert\Valid]
+    public InputsPresentDTO $inputs_present;
+}
+
+src/AI/DTO/Response/GlossaryItemDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class GlossaryItemDTO
+{
+    #[Assert\NotBlank]
+    public string $term;
+
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 10, max: 280)]
+    public string $definition;
+
+    #[Assert\NotBlank]
+    #[Assert\Choice(choices: [
+        'western_astrology',
+        'jyotish',
+        'yijing',
+        'tarot_marseille',
+        'neutral_symbolic',
+    ])]
+    public string $tradition;
+}
+
+src/AI/DTO/Response/ClarificationDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class ClarificationDTO
+{
+    public bool $needs_clarification = false;
+
+    #[Assert\Type('string')]
+    public ?string $question = null;
+}
+
+src/AI/DTO/Response/StyleContractDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+final class StyleContractDTO
+{
+    public bool $no_injunction = true;
+    public bool $impersonal_tone = true;
+    public bool $no_syncretism = true;
+
+    public bool $no_diagnosis = true;
+    public bool $no_dogma = true;
+    public bool $no_prophecy = true;
+    public bool $use_possibility_language = true;
+}
+
+src/AI/DTO/Response/AiResponseDTO.php
+<?php
+
+namespace App\AI\DTO\Response;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class AiResponseDTO
+{
+    #[Assert\Valid]
+    public MetaDTO $meta;
+
+    #[Assert\Valid]
+    public RoutingDTO $routing;
+
+    #[Assert\Valid]
+    public SafetyAndLimitsDTO $safety_and_limits;
+
+    #[Assert\Valid]
+    public ContentDTO $content;
+
+    #[Assert\Valid]
+    public DataUsedDTO $data_used;
+
+    /** @var GlossaryItemDTO[] */
+    #[Assert\Type('array')]
+    #[Assert\Valid]
+    public array $glossary_and_definitions = [];
+
+    #[Assert\Type('string')]
+    #[Assert\Length(max: 500)]
+    public string $assumptions = '';
+
+    #[Assert\Valid]
+    public ClarificationDTO $clarification;
+
+    #[Assert\Valid]
+    public StyleContractDTO $style_contract;
+}
+
+3) Comment l’utiliser (sans entrer dans le code complet)
+
+Désérialiser le JSON reçu du LLM (string) en AiResponseDTO.
+
+Valider via ValidatorInterface.
+
+Si KO : erreur claire + log.
+
+Si OK : renvoyer le JSON (ou re-serializer le DTO).

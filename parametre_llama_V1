@@ -1,0 +1,418 @@
+# Symfony AI — Spécification V1 — Multi-contextes + détection + safety renforcé (sans code)
+
+## 0) Objectif V1 (par rapport à V0)
+V0 = un seul endpoint, un seul contexte (`symbolic_weather`), une seule tradition (`western_astrology`), aucune régénération automatique.
+
+V1 ajoute :
+1) **Multi-contextes** (lecture symbolique, question personnelle, tirages, non-dualité, technique, autres) + `symbolic_weather`.
+2) **Sélection manuelle OU détection automatique** du contexte et de la tradition.
+3) **Fallback + annonce claire du cadre** (“Selon le Jyotish…”) si question confuse.
+4) **Safety robuste** (risques, refus doux, redirection).
+5) **Rewrite/regen contrôlé** (si JSON invalide ou garde-fous échouent).
+6) **Glossary & Definitions** systématisé (court, optionnel, max 5 items).
+7) **Observabilité** plus complète (audit, métriques, traçabilité des versions).
+8) **Stabilité produit** : mêmes dossiers, mêmes conventions, schémas versionnés par fonctionnalité.
+
+---
+
+## 1) Périmètre fonctionnel V1
+
+### 1.1 Contextes (choisis manuellement ou détectés)
+- `symbolic_weather` (météo symbolique)
+- `symbolic_reading` (rêves, symboles, rituels, traditions, nature)
+- `personal_question` (soutien, choix, situation personnelle)
+- `divination_interpretation` (Tarot de Marseille, oracle, runes, hexagrammes)
+- `non_duality` (philosophie, lucidité, recherche de sagesse)
+- `technical_science` (astronomie, espace, science, calculs)
+- `other`
+
+### 1.2 Traditions (sélectionnées manuellement ou détectées)
+- `western_astrology`
+- `jyotish`
+- `yijing`
+- `tarot_marseille`
+- `neutral_symbolic` (optionnel : mode “symbolique laïc” si l’utilisateur mélange tout et qu’on ne veut pas trancher)
+- (V1 peut démarrer avec 2–3 traditions, mais la structure doit permettre l’ajout)
+
+Règle V1 : **une réponse = une tradition** (pas de syncrétisme).  
+Si la question mélange : **choisir un cadre** + l’annoncer dans `assumptions`.
+
+---
+
+## 2) API Symfony V1
+
+### 2.1 Endpoints
+V1 recommande 2 endpoints :
+1) `POST /api/ai/weather`  
+   - spécialisé `symbolic_weather` (rapide, cacheable)
+2) `POST /api/ai/chat`  
+   - général (tous contextes), avec routing auto ou manuel
+
+### (request JSON)
+```json
+{
+  "meta": {
+    "schema_version": "1.0",
+    "created_at_utc": "2026-02-19T00:00:00Z",
+    "language": "fr",
+    "request_id": "req_1234567890"
+  },
+  "routing": {
+    "context": "symbolic_weather",
+    "tradition": "western_astrology",
+    "selection_mode": "auto",
+    "confidence": 0.86,
+    "user_intent": "explanation",
+    "depth_mode": "standard",
+    "format": "plain",
+    "tone": "neutral"
+  },
+  "safety_and_limits": {
+    "sensitivity": "low",
+    "risk_flags": {
+      "medical": false,
+      "legal": false,
+      "financial": false,
+      "self_harm": false,
+      "violence": false,
+      "hate": false,
+      "sexual_content": false,
+      "minors": false
+    },
+    "policy_flags": {
+      "prompt_injection": false,
+      "proselitism_request": false,
+      "diagnosis_request": false,
+      "explicit_instruction_request": false
+    },
+    "action": {
+      "mode": "allow",
+      "reason": ""
+    },
+    "note": "Réponse symbolique descriptive. Aucun conseil, aucune injonction, aucun diagnostic, aucune prédiction factuelle."
+  },
+  "content": {
+    "title": "Climat du moment",
+    "text": "Climat de concentration et de tri. Le temps met en avant la cohérence, la structure et la continuité. La perception devient plus sensible aux écarts entre intention et réalité. L’atmosphère favorise les ajustements progressifs, sans urgence. Des frictions peuvent apparaître autour des limites et des responsabilités, comme un rappel de cadre plutôt qu’un obstacle.",
+    "bullets": [],
+    "sections": []
+  },
+  "data_used": {
+    "lunar_snapshot": {
+      "moon_phase": "waxing_gibbous",
+      "moon_sign": "capricorn",
+      "moon_degree": 13.76
+    },
+    "inputs_present": {
+      "user_message": false,
+      "history": false,
+      "lunar_snapshot": true
+    }
+  },
+  "glossary_and_definitions": [
+    {
+      "term": "Phase lunaire",
+      "definition": "Indication astronomique de l’illumination apparente de la Lune au cours du cycle.",
+      "tradition": "western_astrology"
+    },
+    {
+      "term": "Signe tropical",
+      "definition": "Découpage saisonnier du zodiaque utilisé en astrologie occidentale, basé sur l’équinoxe de printemps.",
+      "tradition": "western_astrology"
+    }
+  ],
+  "assumptions": "Le vocabulaire utilisateur peut être mixte ; pour éviter le syncrétisme, la réponse est formulée strictement dans un seul cadre (ici : astrologie occidentale tropicale).",
+  "clarification": {
+    "needs_clarification": false,
+    "question": null
+  },
+  "style_contract": {
+    "no_injunction": true,
+    "impersonal_tone": true,
+    "no_syncretism": true,
+    "no_diagnosis": true,
+    "no_dogma": true,
+    "no_prophecy": true,
+    "use_possibility_language": true
+  }
+}
+
+Notes V1 :
+
+context et tradition peuvent être null → détection automatique.
+
+lunar_snapshot est requis seulement pour symbolic_weather (ou si l’app veut l’injecter).
+
+history doit être limitée (ex: 6 tours max) pour performance.
+
+3) Contrat JSON de sortie (V1)
+3.1 Principe
+Le modèle renvoie un JSON conforme à un schema.
+
+V1 maintient un contrat stable (mêmes rubriques) et ajoute des champs de décision (détection/fallback) utiles à l’app.
+
+3.2 Réponse V1 (structure recommandée)
+meta : version, timestamp, langue
+
+routing :
+
+context sélectionné
+
+tradition sélectionnée
+
+selection_mode : manual|auto|fallback
+
+confidence (0..1)
+
+user_intent (facultatif)
+
+depth_mode|tone|format (souvent décidés par Symfony, le modèle peut les “écho”)
+
+safety_and_limits :
+
+flags risques + action.mode
+
+note courte (disclaimer)
+
+content :
+
+title, text
+
+bullets (optionnel selon format)
+
+data_used (optionnel, mais utile pour symbolic_weather)
+
+glossary_and_definitions (0..5)
+
+assumptions
+
+style_contract (auto-déclaration, Symfony vérifie aussi)
+
+Important V1 :
+
+routing.selection_mode et assumptions sont cruciaux pour gérer les questions confuses.
+
+safety_and_limits.action.mode doit être exploité par l’app (afficher disclaimer, ou rediriger).
+
+4) Prompts & schémas V1 (versionning strict)
+4.1 Schémas JSON
+2 options :
+A) un schema unique “chat_response.schema.json” (plus simple à maintenir)
+B) un schema par contexte (symbolic_weather.schema.json, chat.schema.json, etc.)
+
+Recommandation V1 :
+
+/api/ai/weather : schema dédié symbolic_weather.schema.json
+
+/api/ai/chat : schema générique chat_response.schema.json
+
+4.2 Prompts versionnés
+Toujours :
+
+base_system.md (règles globales : JSON strict, anti-injonction, anti-syncrétisme, safety)
+
+contexts/<context>.md (style + structure par contexte)
+
+traditions/<tradition>.yml (lexique autorisé/interdit + label)
+
+Ajouts V1 :
+
+routing/router_instructions.md (si on utilise un mini-router interne)
+
+safety/safety_policy.md (règles de refus doux, disclaimers)
+
+5) Détection automatique : ContextRouter + TraditionRouter (V1)
+5.1 Principe
+Quand context ou tradition n’est pas fourni :
+
+Symfony exécute un routage (auto) qui décide :
+
+context
+
+tradition
+
+confidence
+
+selection_mode (auto ou fallback)
+
+5.2 Stratégie recommandée (robuste)
+Hybrid routing :
+
+Heuristiques rapides (mots-clés) → propose 1–2 candidats.
+
+Mini-appel LLM “router” (temp 0, sortie JSON très courte) → tranche.
+
+Alternative (plus rapide, 1 seul appel) :
+
+Le modèle renvoie directement routing + réponse.
+
+MAIS en prod grand public, la version hybrid est plus fiable.
+
+V1 recommandée :
+
+/api/ai/chat utilise un router (même modèle, mais prompt court et strict).
+
+/api/ai/weather n’a pas besoin de router (context fixe).
+
+5.3 Gestion du vocabulaire multi-tradition (cas réel)
+Règle V1 :
+
+Si mix détecté :
+
+choisir la tradition la plus probable OU fallback neutral_symbolic
+
+remplir assumptions : “Pour éviter le syncrétisme, je réponds dans le cadre X.”
+
+routing.selection_mode = "fallback" si confiance faible
+
+6) Safety V1 (garde-fous renforcés)
+6.1 Niveaux d’action
+allow : réponse normale
+
+soft_refusal : répondre partiellement en restant sûr (ex: “je peux donner une explication générale”)
+
+refusal : refuser (contenu interdit)
+
+safety_redirect : redirection sécurité (ex: auto-harm, crise)
+
+6.2 Qui décide ?
+Le modèle peut proposer des flags,
+
+MAIS Symfony doit avoir un SafetyGuard final (règles + mots-clés + patterns),
+
+et peut override action.mode.
+
+7) Guardrails V1 (qualité & conformité)
+7.1 JSON Schema validation
+Toujours obligatoire.
+
+Si invalide → V1 déclenche un mécanisme de regen contrôlé (voir §8).
+
+7.2 StyleGuard (anti-injonction)
+V1 renforce :
+
+détection d’impératif
+
+détection de “tu dois / il faut / je te conseille / évite / fais…”
+
+si trouvé → regen/rewrite
+
+7.3 TraditionGuard (anti-syncrétisme)
+V1 :
+
+lexiques interdits par tradition
+
+détection de collisions (ex: chakras dans western_astrology)
+
+si collision → regen/rewrite ou fallback neutral_symbolic selon contexte
+
+8) Rewrite/Regen contrôlé (nouveau en V1)
+8.1 Quand déclencher ?
+JSON invalide (schema fail)
+
+StyleGuard fail
+
+TraditionGuard fail
+
+SafetyGuard override nécessitant une réponse plus sûre
+
+8.2 Politique recommandée V1
+1 tentative de regen maximum (pour éviter boucles).
+
+La regen utilise un prompt “repair” :
+
+rappelle les erreurs (en interne, pas en sortie)
+
+exige un JSON strict conforme au schema
+
+impose “aucun texte hors JSON”
+
+8.3 Si regen échoue
+Retour HTTP erreur (ex: 502) ou réponse soft_refusal minimale (selon UX).
+Recommandation grand public :
+
+préférer soft_refusal JSON valide si possible, pour éviter des erreurs visibles.
+
+9) Performance & cache (V1)
+9.1 symbolic_weather
+Cache recommandé :
+
+clé = (moon_phase, moon_sign, moon_degree arrondi + seuils)
+
+TTL court (ex: 30–60 min) ou invalidation sur changement de phase/signe
+
+9.2 chat
+Pas de cache par défaut (trop spécifique), sauf :
+
+réponses “glossary” ou “definitions” génériques
+
+ou si l’utilisateur répète exactement la question (hash simple)
+
+9.3 Budget tokens
+V1 introduit TokenBudget :
+
+limite historique
+
+limite max tokens sortie
+
+paramètres par contexte (température plus basse pour symbolique/weather)
+
+10) Observabilité & audit (V1)
+Logs minimum par requête
+request_id
+
+user_id (si authentifié) ou fingerprint (si public)
+
+endpoint (weather/chat)
+
+context/tradition finaux + selection_mode + confidence
+
+prompt_version/hash
+
+latence totale + latence LLM
+
+erreurs schema/guardrails/ollama
+
+tentative regen (oui/non)
+
+Option V1 :
+
+stocker “prompt pack” utilisé (nom des fichiers + sha) pour audit reproductible.
+
+11) Structure dossiers (V1)
+La structure V0 reste la base. V1 active réellement :
+
+Routing/ContextRouter.php
+
+Routing/TraditionRouter.php
+
+TokenBudget.php
+
+enrichissement SafetyGuard.php
+
+ajout d’un schema générique chat_response.schema.json
+
+ajout de prompts contexts supplémentaires
+
+Arborescence V1 (rappel) :
+
+src/AI/Controller/ : SymbolicWeatherController, AiChatController
+
+src/AI/Domain/ : SymbolicWeatherService, AiChatService
+
+src/AI/Routing/ : routers actifs
+
+config/ai/prompts/contexts/ : 6+ fichiers
+
+config/ai/prompts/traditions/ : 3–5 fichiers
+
+config/ai/schemas/ : symbolic_weather.schema.json + chat_response.schema.json
+
+12) Hors-scope V1 (pour rester réaliste)
+Pas de RAG (knowledge retrieval) complet (réservé V2 si besoin).
+
+Pas de mémoire utilisateur persistante (réservé V2/V3).
+
+Pas d’outils externes (tools) ni actions automatiques.
+
+FIN
