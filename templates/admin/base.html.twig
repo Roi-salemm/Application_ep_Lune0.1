@@ -99,6 +99,16 @@
                 </span>
                 <span class="admin-sidebar__label">Console IA</span>
             </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ai_history' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_ai_history') }}" style="--delay: 8.5">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M6 4h12v16H6z" />
+                        <path d="M8 8h8M8 12h8M8 16h6" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">Historique IA</span>
+            </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'debug' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_debug') }}" style="--delay: 9">
                 <span class="admin-sidebar__icon" aria-hidden="true">

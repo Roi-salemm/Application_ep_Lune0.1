@@ -1,0 +1,160 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Detail Historique IA' %}
+{% set page_subtitle = 'Vue complete du prompt et des logs.' %}
+{% set active_menu = 'ai_history' %}
+
+{% block admin_content %}
+    <div class="admin-grid admin-grid--two">
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Historique</h2>
+                <p class="admin-card__subtitle">ID {{ history.id }}</p>
+            </div>
+            <div class="admin-card__body">
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <tbody>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Date</th>
+                                <td class="admin-table__cell">{{ history.createdAt|date('Y-m-d H:i:s') }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Succes</th>
+                                <td class="admin-table__cell">{{ history.success ? 'oui' : 'non' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Provider</th>
+                                <td class="admin-table__cell">{{ history.provider }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Model</th>
+                                <td class="admin-table__cell">{{ history.modelName ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Prompt slug</th>
+                                <td class="admin-table__cell">{{ history.promptSlug ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Prompt version</th>
+                                <td class="admin-table__cell">{{ history.promptVersion ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Intent</th>
+                                <td class="admin-table__cell">{{ history.intent ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Intent raw</th>
+                                <td class="admin-table__cell">{{ history.intentRaw ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Latence (ms)</th>
+                                <td class="admin-table__cell">{{ history.latencyMs ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Tokens</th>
+                                <td class="admin-table__cell">
+                                    {{ history.promptTokens ?? '-' }} / {{ history.completionTokens ?? '-' }} / {{ history.totalTokens ?? '-' }}
+                                </td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Erreur</th>
+                                <td class="admin-table__cell">{{ history.errorCode ?? '-' }}</td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Knowledge keys</th>
+                                <td class="admin-table__cell">
+                                    {% if history.knowledgeKeys %}
+                                        {{ history.knowledgeKeys|join(', ') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr class="admin-table__row">
+                                <th class="admin-table__cell">Keys validees</th>
+                                <td class="admin-table__cell">
+                                    {% if history.knowledgeKeysValidated %}
+                                        {{ history.knowledgeKeysValidated|join(', ') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="admin-ai-console__actions" style="margin-top: 16px;">
+                    <a class="admin-button admin-button--ghost" href="{{ path('admin_ai_history') }}">Retour</a>
+                    <form method="post" action="{{ path('admin_ai_history_delete', {id: history.id}) }}" onsubmit="return confirm('Supprimer cet historique ?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('delete_ai_history_' ~ history.id) }}">
+                        <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Reponse & Prompts</h2>
+                <p class="admin-card__subtitle">Texte complet.</p>
+            </div>
+            <div class="admin-card__body">
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Prompt client</div>
+                    <pre class="admin-console">{{ history.promptClient ?? '—' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Final prompt</div>
+                    <pre class="admin-console">{{ history.finalPrompt ?? '—' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Reponse</div>
+                    <pre class="admin-console">{{ history.response ?? '—' }}</pre>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="admin-grid admin-grid--two" style="margin-top: 20px;">
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Log JSON</h2>
+                <p class="admin-card__subtitle">Bloc complet.</p>
+            </div>
+            <div class="admin-card__body admin-ai-console__logs">
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Received</div>
+                    <pre class="admin-console">{{ log.receivedJson is not null ? log.receivedJson|json_encode(constant('JSON_PRETTY_PRINT')) : '{}' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Intent JSON</div>
+                    <pre class="admin-console">{{ log.intentJson is not null ? log.intentJson|json_encode(constant('JSON_PRETTY_PRINT')) : '{}' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Pipeline JSON</div>
+                    <pre class="admin-console">{{ log.pipelineJson is not null ? log.pipelineJson|json_encode(constant('JSON_PRETTY_PRINT')) : '{}' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Request payload</div>
+                    <pre class="admin-console">{{ log.requestPayloadJson is not null ? log.requestPayloadJson|json_encode(constant('JSON_PRETTY_PRINT')) : '{}' }}</pre>
+                </div>
+                <div class="admin-ai-console__log-block">
+                    <div class="admin-ai-console__log-title">Response payload</div>
+                    <pre class="admin-console">{{ log.responsePayloadJson is not null ? log.responsePayloadJson|json_encode(constant('JSON_PRETTY_PRINT')) : '{}' }}</pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Final Prompt Texte</h2>
+                <p class="admin-card__subtitle">Version lisible (log).</p>
+            </div>
+            <div class="admin-card__body">
+                <pre class="admin-console">{{ log.finalPromptText ?? '—' }}</pre>
+            </div>
+        </section>
+    </div>
+{% endblock %}

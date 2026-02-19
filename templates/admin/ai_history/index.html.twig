@@ -1,0 +1,144 @@
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = 'Historique IA' %}
+{% set page_subtitle = 'Suivi des prompts, intentions, latence et reponses.' %}
+{% set active_menu = 'ai_history' %}
+
+{% block admin_content %}
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Filtres</h2>
+            <p class="admin-card__subtitle">Affiner les logs IA.</p>
+        </div>
+        <div class="admin-card__body">
+            <form class="admin-form admin-form--inline" method="get" action="{{ path('admin_ai_history') }}">
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="ai-history-success">Succes</label>
+                    <select class="admin-form__select" id="ai-history-success" name="success">
+                        <option value="" {{ filters.success == '' ? 'selected' : '' }}>Tous</option>
+                        <option value="1" {{ filters.success == '1' ? 'selected' : '' }}>Oui</option>
+                        <option value="0" {{ filters.success == '0' ? 'selected' : '' }}>Non</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="ai-history-intent">Intent</label>
+                    <input class="admin-form__input" id="ai-history-intent" name="intent" value="{{ filters.intent }}" placeholder="informative" />
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="ai-history-slug">Slug</label>
+                    <input class="admin-form__input" id="ai-history-slug" name="slug" value="{{ filters.slug }}" placeholder="prompt_slug" />
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="ai-history-from">Du</label>
+                    <input class="admin-form__input" id="ai-history-from" name="from" type="date" value="{{ filters.from }}" />
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="ai-history-to">Au</label>
+                    <input class="admin-form__input" id="ai-history-to" name="to" type="date" value="{{ filters.to }}" />
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="ai-history-limit">Page</label>
+                    <input class="admin-form__input" id="ai-history-limit" name="limit" type="number" min="5" max="100" value="{{ limit }}" />
+                </div>
+                <button class="admin-button admin-button--primary" type="submit">Filtrer</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Historique</h2>
+            <p class="admin-card__subtitle">{{ total }} entree(s)</p>
+        </div>
+        <div class="admin-card__body">
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr class="admin-table__row">
+                            <th class="admin-table__cell">Date</th>
+                            <th class="admin-table__cell">Version</th>
+                            <th class="admin-table__cell">Intent</th>
+                            <th class="admin-table__cell">Succes</th>
+                            <th class="admin-table__cell">Latence</th>
+                            <th class="admin-table__cell">Modele</th>
+                            <th class="admin-table__cell">Prompt client</th>
+                            <th class="admin-table__cell">Final prompt</th>
+                            <th class="admin-table__cell">Keys</th>
+                            <th class="admin-table__cell">Keys validees</th>
+                            <th class="admin-table__cell">Constraints</th>
+                            <th class="admin-table__cell admin-table__cell--actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for history in histories %}
+                            <tr class="admin-table__row">
+                                <td class="admin-table__cell admin-table__cell--mono">
+                                    <a href="{{ path('admin_ai_history_show', {id: history.id}) }}">{{ history.createdAt|date('Y-m-d H:i') }}</a>
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--mono">{{ history.promptVersion ?? '-' }}</td>
+                                <td class="admin-table__cell">{{ history.intent ?? '-' }}</td>
+                                <td class="admin-table__cell">{{ history.success ? 'oui' : 'non' }}</td>
+                                <td class="admin-table__cell admin-table__cell--mono">{{ history.latencyMs ?? '-' }}</td>
+                                <td class="admin-table__cell admin-table__cell--mono">{{ history.modelName ?? '-' }}</td>
+                                <td class="admin-table__cell admin-table__cell--truncate">
+                                    {% set promptClient = history.promptClient ?? '' %}
+                                    {{ promptClient|length > 80 ? promptClient|slice(0, 80) ~ '…' : (promptClient != '' ? promptClient : '-') }}
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--truncate">
+                                    {% set finalPrompt = history.finalPrompt ?? '' %}
+                                    {{ finalPrompt|length > 80 ? finalPrompt|slice(0, 80) ~ '…' : (finalPrompt != '' ? finalPrompt : '-') }}
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--truncate">
+                                    {% if history.knowledgeKeys %}
+                                        {{ history.knowledgeKeys|join(', ') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--truncate">
+                                    {% if history.knowledgeKeysValidated %}
+                                        {{ history.knowledgeKeysValidated|join(', ') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--truncate admin-table__cell--mono">
+                                    {% if history.constraints %}
+                                        {{ history.constraints|json_encode(constant('JSON_UNESCAPED_UNICODE'))|slice(0, 120) }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="admin-table__cell admin-table__cell--actions">
+                                    <a class="admin-button admin-button--ghost" href="{{ path('admin_ai_history_show', {id: history.id}) }}">Voir</a>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr class="admin-table__row">
+                                <td class="admin-table__cell" colspan="12">Aucun historique.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="admin-pagination">
+                <div class="admin-pagination__pages">
+                    {% set prevPage = page > 1 ? page - 1 : 1 %}
+                    {% set nextPage = page < pages ? page + 1 : pages %}
+                    <a class="admin-pagination__link {{ page == 1 ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_ai_history', filters|merge({page: prevPage, limit: limit})) }}">Prev</a>
+                    {% for p in 1..pages %}
+                        <a class="admin-pagination__link {{ p == page ? 'is-active' : '' }}"
+                           href="{{ path('admin_ai_history', filters|merge({page: p, limit: limit})) }}">{{ p }}</a>
+                    {% endfor %}
+                    <a class="admin-pagination__link {{ page == pages ? 'is-disabled' : '' }}"
+                       href="{{ path('admin_ai_history', filters|merge({page: nextPage, limit: limit})) }}">Next</a>
+                </div>
+                <div class="admin-pagination__meta">
+                    Page {{ page }} / {{ pages }} · {{ total }} entree(s)
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}
