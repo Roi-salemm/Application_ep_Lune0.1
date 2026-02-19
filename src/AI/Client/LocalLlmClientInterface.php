@@ -1,7 +1,13 @@
 <?php
 
-/**
- * Ce fichier definira l interface des clients LLM locaux.
- * Pourquoi : preparer l abstraction pour d autres backends (llama.cpp server, etc.).
- * Informations specifiques : v0 utilise Ollama mais garde la structure extensible.
- */
+namespace App\AI\Client;
+
+interface LocalLlmClientInterface
+{
+    /**
+     * Envoie un prompt a un LLM local et retourne la reponse brute + texte.
+     *
+     * @param array<string, mixed> $options
+     */
+    public function generate(string $prompt, array $options = []): LlmResponse;
+}

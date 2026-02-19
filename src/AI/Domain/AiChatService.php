@@ -1,7 +1,13 @@
 <?php
 
 /**
- * Ce fichier contiendra le service metier de chat multi contextes (v1).
+ * Service metier de chat multi contextes (placeholder).
  * Pourquoi : v1 ajoute un endpoint general avec routing et safety renforce.
- * Informations specifiques : implementation absente ici, structure preservee.
+ * Informations specifiques : implementation a ajouter.
  */
+
+namespace App\AI\Domain;
+
+final class AiChatService
+{
+}

@@ -1,7 +1,13 @@
 <?php
 
 /**
- * Ce fichier contiendra le service metier `symbolic_weather`.
+ * Service metier `symbolic_weather` (placeholder).
  * Pourquoi : v0 orchestre schema, prompts, appel Ollama, validation et guardrails.
- * Informations specifiques : pas de rewrite ou regen automatique en v0.
+ * Informations specifiques : implementation a ajouter.
  */
+
+namespace App\AI\Domain;
+
+final class SymbolicWeatherService
+{
+}

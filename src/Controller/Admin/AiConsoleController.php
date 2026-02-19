@@ -2,6 +2,7 @@
 
 namespace App\Controller\Admin;
 
+use App\AI\Client\LocalLlmClientInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -9,6 +10,11 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class AiConsoleController extends AbstractController
 {
+    public function __construct(
+        private readonly LocalLlmClientInterface $llmClient,
+    ) {
+    }
+
     #[Route('/admin/ai-console', name: 'admin_ai_console', methods: ['GET', 'POST'])]
     public function index(Request $request): Response
     {
@@ -19,22 +25,28 @@ final class AiConsoleController extends AbstractController
         $errorMessage = '';
 
         if ($prompt !== '') {
-            $requestPayload = [
-                'prompt' => $prompt,
-                'source' => 'admin-console',
-                'timestamp' => (new \DateTimeImmutable())->format(DATE_ATOM),
-            ];
+            try {
+                $llmResponse = $this->llmClient->generate($prompt);
 
-            $responsePayload = [
-                'status' => 'stub',
-                'message' => 'Integration Llama non configuree.',
-                'data' => null,
-            ];
+                $requestPayload = [
+                    'endpoint' => $llmResponse->endpoint,
+                    'payload' => $llmResponse->requestPayload,
+                ];
+                $responsePayload = $llmResponse->responsePayload;
+                $responsePayload['http_status'] = $llmResponse->statusCode;
 
-            $responseText = 'Aucune integration Llama active. Branche le client LLM pour obtenir une reponse reelle.';
-            $errorMessage = 'Reponse simulee: aucun client Llama actif.';
-            $requestJson = $this->encodeJson($requestPayload);
-            $responseJson = $this->encodeJson($responsePayload);
+                $responseText = $llmResponse->text !== '' ? $llmResponse->text : 'Aucune reponse texte renvoyee.';
+                $requestJson = $this->encodeJson($requestPayload);
+                $responseJson = $this->encodeJson($responsePayload);
+            } catch (\Throwable $exception) {
+                $errorMessage = sprintf('Erreur Llama: %s', $exception->getMessage());
+                $responseText = 'Erreur lors de l appel au LLM.';
+                $requestJson = $this->encodeJson([
+                    'prompt' => $prompt,
+                    'source' => 'admin-console',
+                    'timestamp' => (new \DateTimeImmutable())->format(DATE_ATOM),
+                ]);
+            }
         }
 
         return $this->render('admin/ai_console.html.twig', [
