@@ -5,3 +5,9 @@
  * Pourquoi : v0 exige une revalidation cote Symfony apres Ollama.
  * Informations specifiques : schema local charge depuis `config/ai/schemas`.
  */
+
+namespace App\AI\Guardrails;
+
+final class JsonSchemaValidator
+{
+}

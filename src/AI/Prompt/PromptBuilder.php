@@ -5,3 +5,9 @@
  * Pourquoi : separer la composition des prompts du service metier.
  * Informations specifiques : v0 compose base_system + context + tradition + snapshot.
  */
+
+namespace App\AI\Prompt;
+
+final class PromptBuilder
+{
+}

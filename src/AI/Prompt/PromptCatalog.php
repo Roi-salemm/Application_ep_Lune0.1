@@ -5,3 +5,9 @@
  * Pourquoi : centraliser l acces aux fichiers de `config/ai/prompts`.
  * Informations specifiques : v0 charge base_system, context et tradition.
  */
+
+namespace App\AI\Prompt;
+
+final class PromptCatalog
+{
+}

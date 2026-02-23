@@ -5,3 +5,9 @@
  * Pourquoi : limiter l historique et la taille des sorties par contexte.
  * Informations specifiques : v0 peut laisser ce module vide.
  */
+
+namespace App\AI\Observability;
+
+final class TokenBudget
+{
+}

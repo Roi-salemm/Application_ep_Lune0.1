@@ -5,3 +5,9 @@
  * Pourquoi : tracer la version exacte utilisee par chaque reponse.
  * Informations specifiques : v0 garde ce module pour l observabilite.
  */
+
+namespace App\AI\Prompt;
+
+final class PromptVersion
+{
+}

@@ -5,3 +5,9 @@
  * Pourquoi : valider les flags et l action finale cote Symfony.
  * Informations specifiques : v1 peut override `action.mode`.
  */
+
+namespace App\AI\Guardrails;
+
+final class SafetyGuard
+{
+}

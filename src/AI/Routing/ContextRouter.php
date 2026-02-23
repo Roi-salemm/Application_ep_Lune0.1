@@ -5,3 +5,9 @@
  * Pourquoi : selection manuelle ou detection automatique du contexte.
  * Informations specifiques : strategie hybride possible (heuristiques + mini LLM).
  */
+
+namespace App\AI\Routing;
+
+final class ContextRouter
+{
+}

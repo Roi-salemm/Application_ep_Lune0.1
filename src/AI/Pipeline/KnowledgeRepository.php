@@ -25,7 +25,35 @@ final class KnowledgeRepository
         return $this->db->fetchAllAssociative($sql, [$language]);
     }
 
+    
     /**
+     * @return string[]
+     */
+    public function listAllowedKeys(string $language = 'fr'): array
+    {
+        $sql = 'SELECT card_key
+                FROM ai_knowledge_card
+                WHERE is_active = 1 AND language = ?
+                ORDER BY priority ASC, card_key ASC';
+
+        $rows = $this->db->fetchFirstColumn($sql, [$language]);
+
+        $keys = [];
+        foreach ($rows as $k) {
+            if (!is_string($k)) {
+                continue;
+            }
+            $k = trim($k);
+            if ($k === '') {
+                continue;
+            }
+            $keys[] = $k;
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+/**
      * @param string[] $keys
      * @return array<int, array<string, mixed>>
      */

@@ -1,6 +1,6 @@
 {% extends 'admin/base.html.twig' %}
 
-{% set page_title = 'Historique IA' %}
+{% set page_title = 'Historique AI' %}
 {% set page_subtitle = 'Suivi des prompts, intentions, latence et reponses.' %}
 {% set active_menu = 'ai_history' %}
 
@@ -73,44 +73,50 @@
                         {% for history in histories %}
                             <tr class="admin-table__row">
                                 <td class="admin-table__cell admin-table__cell--mono">
-                                    <a href="{{ path('admin_ai_history_show', {id: history.id}) }}">{{ history.createdAt|date('Y-m-d H:i') }}</a>
+                                    <a href="{{ path('admin_ai_history_show', {id: history.id}) }}"
+                                       data-ai-history-view
+                                       data-history-url="{{ path('admin_ai_history_json', {id: history.id}) }}">
+                                        {{ history.createdAt|date('Y-m-d H:i') }}
+                                    </a>
                                 </td>
                                 <td class="admin-table__cell admin-table__cell--mono">{{ history.promptVersion ?? '-' }}</td>
                                 <td class="admin-table__cell">{{ history.intent ?? '-' }}</td>
                                 <td class="admin-table__cell">{{ history.success ? 'oui' : 'non' }}</td>
                                 <td class="admin-table__cell admin-table__cell--mono">{{ history.latencyMs ?? '-' }}</td>
                                 <td class="admin-table__cell admin-table__cell--mono">{{ history.modelName ?? '-' }}</td>
-                                <td class="admin-table__cell admin-table__cell--truncate">
-                                    {% set promptClient = history.promptClient ?? '' %}
+                                {% set promptClient = history.promptClient ?? '' %}
+                                <td class="admin-table__cell admin-table__cell--truncate" data-tooltip="{{ promptClient|e('html_attr') }}">
                                     {{ promptClient|length > 80 ? promptClient|slice(0, 80) ~ '…' : (promptClient != '' ? promptClient : '-') }}
                                 </td>
-                                <td class="admin-table__cell admin-table__cell--truncate">
-                                    {% set finalPrompt = history.finalPrompt ?? '' %}
+                                {% set finalPrompt = history.finalPrompt ?? '' %}
+                                <td class="admin-table__cell admin-table__cell--truncate" data-tooltip="{{ finalPrompt|e('html_attr') }}">
                                     {{ finalPrompt|length > 80 ? finalPrompt|slice(0, 80) ~ '…' : (finalPrompt != '' ? finalPrompt : '-') }}
                                 </td>
-                                <td class="admin-table__cell admin-table__cell--truncate">
+                                <td class="admin-table__cell admin-table__cell--truncate" data-tooltip="{{ history.knowledgeKeys ? history.knowledgeKeys|join(', ')|e('html_attr') : '' }}">
                                     {% if history.knowledgeKeys %}
                                         {{ history.knowledgeKeys|join(', ') }}
                                     {% else %}
                                         -
                                     {% endif %}
                                 </td>
-                                <td class="admin-table__cell admin-table__cell--truncate">
+                                <td class="admin-table__cell admin-table__cell--truncate" data-tooltip="{{ history.knowledgeKeysValidated ? history.knowledgeKeysValidated|join(', ')|e('html_attr') : '' }}">
                                     {% if history.knowledgeKeysValidated %}
                                         {{ history.knowledgeKeysValidated|join(', ') }}
                                     {% else %}
                                         -
                                     {% endif %}
                                 </td>
-                                <td class="admin-table__cell admin-table__cell--truncate admin-table__cell--mono">
-                                    {% if history.constraints %}
-                                        {{ history.constraints|json_encode(constant('JSON_UNESCAPED_UNICODE'))|slice(0, 120) }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
+                                {% set constraintsJson = history.constraints ? history.constraints|json_encode(constant('JSON_UNESCAPED_UNICODE')) : '' %}
+                                <td class="admin-table__cell admin-table__cell--truncate admin-table__cell--mono" data-tooltip="{{ constraintsJson|e('html_attr') }}">
+                                    {{ constraintsJson != '' ? constraintsJson|slice(0, 120) : '-' }}
                                 </td>
                                 <td class="admin-table__cell admin-table__cell--actions">
-                                    <a class="admin-button admin-button--ghost" href="{{ path('admin_ai_history_show', {id: history.id}) }}">Voir</a>
+                                    <a class="admin-button admin-button--ghost"
+                                       href="{{ path('admin_ai_history_show', {id: history.id}) }}"
+                                       data-ai-history-view
+                                       data-history-url="{{ path('admin_ai_history_json', {id: history.id}) }}">
+                                        Voir
+                                    </a>
                                 </td>
                             </tr>
                         {% else %}
@@ -141,4 +147,255 @@
             </div>
         </div>
     </section>
+
+    <div class="admin-modal" data-ai-history-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog admin-modal__dialog--wide" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Historique AI</div>
+            <div class="admin-modal__body">
+                <div class="admin-grid admin-grid--two">
+                    <div class="admin-table-wrap">
+                        <table class="admin-table">
+                            <tbody>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Date</th>
+                                    <td class="admin-table__cell" data-history-field="created_at">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Succes</th>
+                                    <td class="admin-table__cell" data-history-field="success">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Provider</th>
+                                    <td class="admin-table__cell" data-history-field="provider">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Model</th>
+                                    <td class="admin-table__cell" data-history-field="model_name">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Prompt slug</th>
+                                    <td class="admin-table__cell" data-history-field="prompt_slug">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Prompt version</th>
+                                    <td class="admin-table__cell" data-history-field="prompt_version">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Intent</th>
+                                    <td class="admin-table__cell" data-history-field="intent">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Intent raw</th>
+                                    <td class="admin-table__cell" data-history-field="intent_raw">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Latence (ms)</th>
+                                    <td class="admin-table__cell" data-history-field="latency_ms">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Tokens</th>
+                                    <td class="admin-table__cell" data-history-field="tokens">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Erreur</th>
+                                    <td class="admin-table__cell" data-history-field="error_code">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Knowledge keys</th>
+                                    <td class="admin-table__cell" data-history-field="knowledge_keys">-</td>
+                                </tr>
+                                <tr class="admin-table__row">
+                                    <th class="admin-table__cell">Keys validees</th>
+                                    <td class="admin-table__cell" data-history-field="knowledge_keys_validated">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="admin-ai-console__logs">
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Prompt client</div>
+                            <pre class="admin-console" data-history-field="prompt_client">-</pre>
+                        </div>
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Final prompt</div>
+                            <pre class="admin-console" data-history-field="final_prompt">-</pre>
+                        </div>
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Reponse</div>
+                            <pre class="admin-console" data-history-field="response">-</pre>
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-grid admin-grid--two" style="margin-top: 18px;">
+                    <div class="admin-ai-console__logs">
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Received</div>
+                            <pre class="admin-console" data-history-field="received_json">{}</pre>
+                        </div>
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Intent JSON</div>
+                            <pre class="admin-console" data-history-field="intent_json">{}</pre>
+                        </div>
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Pipeline JSON</div>
+                            <pre class="admin-console" data-history-field="pipeline_json">{}</pre>
+                        </div>
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Request payload</div>
+                            <pre class="admin-console" data-history-field="request_payload_json">{}</pre>
+                        </div>
+                    </div>
+                    <div class="admin-ai-console__logs">
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Response payload</div>
+                            <pre class="admin-console" data-history-field="response_payload_json">{}</pre>
+                        </div>
+                        <div class="admin-ai-console__log-block">
+                            <div class="admin-ai-console__log-title">Final prompt texte</div>
+                            <pre class="admin-console" data-history-field="final_prompt_text">-</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-modal__actions">
+                <button class="admin-button admin-button--ghost" type="button" data-modal-close>Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var tooltip = document.createElement('div');
+            tooltip.className = 'admin-tooltip is-hidden';
+            document.body.appendChild(tooltip);
+
+            function showTooltip(text, event) {
+                if (!text) {
+                    return;
+                }
+                tooltip.textContent = text;
+                tooltip.style.left = (event.clientX + 12) + 'px';
+                tooltip.style.top = (event.clientY + 12) + 'px';
+                tooltip.classList.remove('is-hidden');
+            }
+
+            function hideTooltip() {
+                tooltip.classList.add('is-hidden');
+            }
+
+            document.querySelectorAll('[data-tooltip]').forEach(function (element) {
+                element.addEventListener('mouseenter', function (event) {
+                    var text = element.getAttribute('data-tooltip') || '';
+                    if (text.trim() !== '') {
+                        showTooltip(text, event);
+                    }
+                });
+                element.addEventListener('mousemove', function (event) {
+                    var text = element.getAttribute('data-tooltip') || '';
+                    if (text.trim() !== '') {
+                        showTooltip(text, event);
+                    }
+                });
+                element.addEventListener('mouseleave', hideTooltip);
+            });
+
+            var modal = document.querySelector('[data-ai-history-modal]');
+            if (!modal) {
+                return;
+            }
+            var modalFields = modal.querySelectorAll('[data-history-field]');
+            var jsonFields = new Set([
+                'received_json',
+                'intent_json',
+                'pipeline_json',
+                'request_payload_json',
+                'response_payload_json'
+            ]);
+
+            function setField(field, value) {
+                var target = modal.querySelector('[data-history-field="' + field + '"]');
+                if (!target) {
+                    return;
+                }
+                var text = value;
+                if (value === null || value === undefined || value === '') {
+                    text = jsonFields.has(field) ? '{}' : '-';
+                } else if (jsonFields.has(field)) {
+                    text = JSON.stringify(value, null, 2);
+                } else if (Array.isArray(value)) {
+                    text = value.join(', ');
+                } else if (typeof value === 'object') {
+                    text = JSON.stringify(value, null, 2);
+                }
+                target.textContent = text;
+            }
+
+            function openModal() {
+                modal.setAttribute('aria-hidden', 'false');
+                modal.classList.add('is-open');
+            }
+
+            function closeModal() {
+                modal.setAttribute('aria-hidden', 'true');
+                modal.classList.remove('is-open');
+            }
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-modal-close]')) {
+                    closeModal();
+                }
+            });
+
+            document.querySelectorAll('[data-ai-history-view]').forEach(function (link) {
+                link.addEventListener('click', function (event) {
+                    var url = link.getAttribute('data-history-url');
+                    if (!url) {
+                        return;
+                    }
+                    event.preventDefault();
+                    modalFields.forEach(function (field) {
+                        field.textContent = field.tagName === 'PRE' ? '{}' : '-';
+                    });
+                    fetch(url, { headers: { 'Accept': 'application/json' } })
+                        .then(function (response) { return response.json(); })
+                        .then(function (payload) {
+                            var history = payload.history || {};
+                            var log = payload.log || {};
+                            setField('created_at', history.created_at);
+                            setField('success', history.success ? 'oui' : 'non');
+                            setField('provider', history.provider);
+                            setField('model_name', history.model_name);
+                            setField('prompt_slug', history.prompt_slug);
+                            setField('prompt_version', history.prompt_version);
+                            setField('intent', history.intent);
+                            setField('intent_raw', history.intent_raw);
+                            setField('latency_ms', history.latency_ms);
+                            setField('tokens', [
+                                history.prompt_tokens,
+                                history.completion_tokens,
+                                history.total_tokens
+                            ].filter(function (value) { return value !== null && value !== undefined; }).join(' / '));
+                            setField('error_code', history.error_code);
+                            setField('knowledge_keys', history.knowledge_keys);
+                            setField('knowledge_keys_validated', history.knowledge_keys_validated);
+                            setField('prompt_client', history.prompt_client);
+                            setField('final_prompt', history.final_prompt);
+                            setField('response', history.response);
+                            setField('received_json', log.received_json);
+                            setField('intent_json', log.intent_json);
+                            setField('pipeline_json', log.pipeline_json);
+                            setField('request_payload_json', log.request_payload_json);
+                            setField('response_payload_json', log.response_payload_json);
+                            setField('final_prompt_text', log.final_prompt_text);
+                            openModal();
+                        })
+                        .catch(function () {
+                            setField('response', 'Erreur lors du chargement du detail.');
+                            openModal();
+                        });
+                });
+            });
+        })();
+    </script>
 {% endblock %}

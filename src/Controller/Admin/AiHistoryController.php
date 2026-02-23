@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\IaAdminHistorique;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -23,6 +24,7 @@ final class AiHistoryController extends AbstractController
         $slug = trim((string) $request->query->get('slug', ''));
         $dateFrom = trim((string) $request->query->get('from', ''));
         $dateTo = trim((string) $request->query->get('to', ''));
+        $stage = trim((string) $request->query->get('stage', 'generation'));
 
         $qb = $entityManager->createQueryBuilder()
             ->select('h', 'l')
@@ -32,6 +34,10 @@ final class AiHistoryController extends AbstractController
 
         if ($success === '1' || $success === '0') {
             $qb->andWhere('h.success = :success')->setParameter('success', $success === '1');
+        }
+
+        if ($stage !== '') {
+            $qb->andWhere('h.stage = :stage')->setParameter('stage', $stage);
         }
 
         if ($intent !== '') {
@@ -80,6 +86,7 @@ final class AiHistoryController extends AbstractController
                 'slug' => $slug,
                 'from' => $dateFrom,
                 'to' => $dateTo,
+                'stage' => $stage,
             ],
         ]);
     }
@@ -90,6 +97,51 @@ final class AiHistoryController extends AbstractController
         return $this->render('admin/ai_history/show.html.twig', [
             'history' => $history,
             'log' => $history->getLog(),
+        ]);
+    }
+
+    #[Route('/admin/ai/history/{id}/json', name: 'admin_ai_history_json', methods: ['GET'])]
+    public function historyJson(IaAdminHistorique $history): JsonResponse
+    {
+        $log = $history->getLog();
+
+        return new JsonResponse([
+            'history' => [
+                'id' => $history->getId(),
+                'created_at' => $history->getCreatedAt()->format('Y-m-d H:i:s'),
+                'success' => $history->isSuccess(),
+                'stage' => $history->getStage(),
+                'pipeline_id' => $history->getPipelineId(),
+                'fingerprint' => $history->getFingerprint(),
+                'provider' => $history->getProvider(),
+                'model_name' => $history->getModelName(),
+                'prompt_name' => $history->getPromptName(),
+                'prompt_slug' => $history->getPromptSlug(),
+                'prompt_version' => $history->getPromptVersion(),
+                'latency_ms' => $history->getLatencyMs(),
+                'prompt_tokens' => $history->getPromptTokens(),
+                'completion_tokens' => $history->getCompletionTokens(),
+                'total_tokens' => $history->getTotalTokens(),
+                'error_code' => $history->getErrorCode(),
+                'context_key' => $history->getContextKey(),
+                'prompt_client' => $history->getPromptClient(),
+                'final_prompt' => $history->getFinalPrompt(),
+                'response' => $history->getResponse(),
+                'intent_raw' => $history->getIntentRaw(),
+                'intent' => $history->getIntent(),
+                'knowledge_keys' => $history->getKnowledgeKeys(),
+                'knowledge_keys_validated' => $history->getKnowledgeKeysValidated(),
+                'constraints' => $history->getConstraints(),
+            ],
+            'log' => [
+                'received_json' => $log->getReceivedJson(),
+                'intent_json' => $log->getIntentJson(),
+                'pipeline_json' => $log->getPipelineJson(),
+                'final_prompt_text' => $log->getFinalPromptText(),
+                'request_payload_json' => $log->getRequestPayloadJson(),
+                'response_payload_json' => $log->getResponsePayloadJson(),
+                'notes' => $log->getNotes(),
+            ],
         ]);
     }
 
@@ -106,7 +158,7 @@ final class AiHistoryController extends AbstractController
         $entityManager->remove($log);
         $entityManager->flush();
 
-        $this->addFlash('success', 'Historique IA supprime.');
+        $this->addFlash('success', 'Historique AI supprime.');
 
         return $this->redirectToRoute('admin_ai_history');
     }

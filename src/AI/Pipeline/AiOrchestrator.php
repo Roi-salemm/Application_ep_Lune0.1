@@ -21,7 +21,8 @@ final class AiOrchestrator
     public function run(string $userPrompt, string $language = 'fr'): array
     {
         $intent = $this->parser->parse($userPrompt, $language);
-        $intentNormalization = $this->intentNormalizer->normalize($intent['intent'] ?? null);
+        $intentRawValue = is_string($intent['intent'] ?? null) ? $intent['intent'] : null;
+        $intentNormalization = $this->intentNormalizer->normalize($intentRawValue);
         $intent = $this->normalizeIntent($intent, $userPrompt, $language, $intentNormalization['intent']);
 
         $catalog = $this->knowledgeRepo->listCatalog($language);
@@ -43,15 +44,19 @@ final class AiOrchestrator
 
         $allKeys = array_values(array_unique(array_merge($validKnowledgeKeys, $validLexiconKeys)));
         $cards = $this->knowledgeRepo->findByKeys($allKeys, $language);
+        $cards = $this->injectSafetyRulesFromFile($cards, $language);
 
         $finalPrompt = $this->builder->build($intent, $cards, $userPrompt);
         $finalResp = $this->llm->generate($finalPrompt);
 
+        $intentFinal = is_string($intent['intent'] ?? null) ? $intent['intent'] : $intentNormalization['intent'];
+        $intentCoerced = $intentNormalization['coerced'] || $intentFinal !== $intentNormalization['intent'];
+
         return [
             'intent_json' => $intent,
             'intent_raw' => $intentNormalization['intent_raw'],
-            'intent_final' => $intentNormalization['intent'],
-            'intent_coerced' => $intentNormalization['coerced'],
+            'intent_final' => $intentFinal,
+            'intent_coerced' => $intentCoerced,
             'knowledge_keys_validated' => $validKnowledgeKeys,
             'lexicon_keys_validated' => $validLexiconKeys,
             'knowledge_cards' => $cards,
@@ -92,21 +97,80 @@ final class AiOrchestrator
      */
     private function normalizeIntent(array $intent, string $userPrompt, string $language, string $normalizedIntent): array
     {
-        $intent['intent'] = $normalizedIntent;
-        $intent['language'] = $language;
+        $intentConfidence = $intent['intent_confidence'] ?? null;
+        if (!is_numeric($intentConfidence)) {
+            $intentConfidence = 0.5;
+        }
+        $intentConfidence = (float) $intentConfidence;
+        if ($intentConfidence < 0.0) {
+            $intentConfidence = 0.0;
+        }
+        if ($intentConfidence > 1.0) {
+            $intentConfidence = 1.0;
+        }
+
+        $intentFinal = $normalizedIntent;
+        if ($intentConfidence < 0.55 && $intentFinal !== 'other') {
+            $intentFinal = 'other';
+        }
+
+        $intent['intent'] = $intentFinal;
+        $intent['intent_confidence'] = $intentConfidence;
+
+        $intentReason = $intent['intent_reason'] ?? '';
+        if (!is_string($intentReason)) {
+            $intentReason = '';
+        }
+        $intentReason = trim($intentReason);
+        if (strlen($intentReason) > 160) {
+            $intentReason = substr($intentReason, 0, 160);
+        }
+        $intent['intent_reason'] = $intentReason;
+
+        $intentLanguage = $intent['language'] ?? $language;
+        if (is_string($intentLanguage)) {
+            $intentLanguage = strtolower(trim($intentLanguage));
+        } else {
+            $intentLanguage = $language;
+        }
+        if (!in_array($intentLanguage, ['fr', 'en'], true)) {
+            $intentLanguage = $language;
+        }
+        $intent['language'] = $intentLanguage;
 
         $tone = $intent['tone'] ?? null;
-        $intent['tone'] = is_string($tone) && $tone !== '' ? $tone : 'neutral';
+        if (is_string($tone)) {
+            $tone = strtolower(trim($tone));
+        } else {
+            $tone = '';
+        }
+        if (!in_array($tone, ['neutral', 'polite'], true)) {
+            $tone = 'polite';
+        }
+        $intent['tone'] = $tone;
 
         $constraints = $intent['constraints'] ?? [];
         if (!is_array($constraints)) {
             $constraints = [];
         }
-        if (!isset($constraints['max_chars']) || !is_numeric($constraints['max_chars'])) {
-            $constraints['max_chars'] = 900;
+        $maxChars = $constraints['max_chars'] ?? null;
+        if (!is_numeric($maxChars)) {
+            $maxChars = 400;
         } else {
-            $constraints['max_chars'] = (int) $constraints['max_chars'];
+            $maxChars = (int) $maxChars;
+            if ($maxChars <= 0) {
+                $maxChars = 400;
+            } elseif (!in_array($maxChars, [200, 400, 800], true)) {
+                if ($maxChars <= 250) {
+                    $maxChars = 200;
+                } elseif ($maxChars <= 600) {
+                    $maxChars = 400;
+                } else {
+                    $maxChars = 800;
+                }
+            }
         }
+        $constraints['max_chars'] = $maxChars;
         $intent['constraints'] = $constraints;
 
         $needs = $intent['needs'] ?? [];
@@ -125,5 +189,49 @@ final class AiOrchestrator
         $intent['input'] = $input;
 
         return $intent;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $cards
+     * @return array<int, array<string, mixed>>
+     */
+    private function injectSafetyRulesFromFile(array $cards, string $language): array
+    {
+        $root = dirname(__DIR__, 3);
+        $path = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'ai' . DIRECTORY_SEPARATOR . 'safety_rules.md';
+        if (!is_file($path)) {
+            return $cards;
+        }
+
+        $content = trim((string) file_get_contents($path));
+        if ($content === '') {
+            return $cards;
+        }
+
+        $payload = [
+            'card_key' => 'safety_rules',
+            'title' => 'Safety Rules',
+            'card_type' => 'safety',
+            'content' => $content,
+            'language' => $language,
+        ];
+
+        $updated = false;
+        foreach ($cards as $index => $card) {
+            if (!is_array($card)) {
+                continue;
+            }
+            if (($card['card_key'] ?? null) === 'safety_rules') {
+                $cards[$index] = array_merge($card, $payload);
+                $updated = true;
+                break;
+            }
+        }
+
+        if (!$updated) {
+            $cards[] = $payload;
+        }
+
+        return $cards;
     }
 }

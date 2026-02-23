@@ -27,6 +27,16 @@ class IaAdminHistorique
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE, options: ['default' => 'CURRENT_TIMESTAMP'])]
     private \DateTimeImmutable $createdAt;
 
+
+    #[ORM\Column(name: 'pipeline_id', type: Types::STRING, length: 36, nullable: true)]
+    private ?string $pipelineId = null;
+
+    #[ORM\Column(type: Types::STRING, length: 20, options: ['default' => 'generation'])]
+    private string $stage = 'generation';
+
+    #[ORM\Column(type: Types::STRING, length: 64, nullable: true)]
+    private ?string $fingerprint = null;
+
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => false])]
     private bool $success = false;
 
@@ -123,6 +133,42 @@ class IaAdminHistorique
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getPipelineId(): ?string
+    {
+        return $this->pipelineId;
+    }
+
+    public function setPipelineId(?string $pipelineId): self
+    {
+        $this->pipelineId = $pipelineId;
+
+        return $this;
+    }
+
+    public function getStage(): string
+    {
+        return $this->stage;
+    }
+
+    public function setStage(string $stage): self
+    {
+        $this->stage = $stage;
+
+        return $this;
+    }
+
+    public function getFingerprint(): ?string
+    {
+        return $this->fingerprint;
+    }
+
+    public function setFingerprint(?string $fingerprint): self
+    {
+        $this->fingerprint = $fingerprint;
+
+        return $this;
     }
 
     public function isSuccess(): bool
