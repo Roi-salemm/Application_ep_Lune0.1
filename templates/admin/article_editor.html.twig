@@ -1,0 +1,105 @@
+{# Page admin "Article editor": formulaire de saisie et blocs meta.
+   Pourquoi: respecter l UI admin et proposer une base claire pour l edition d articles.
+   Info: page statique pour l instant (pas de persistance, uniquement UI). #}
+{% extends 'admin/base.html.twig' %}
+
+{% block admin_content %}
+    <div class="admin-grid admin-grid--two">
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Contenu</h2>
+                <p class="admin-card__subtitle">Saisie des elements principaux de l article.</p>
+            </div>
+            <div class="admin-card__body">
+                <form class="admin-form" method="get" action="{{ path('admin_article_editor') }}">
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-title">Titre</label>
+                            <input class="admin-form__input" id="article-title" name="title" type="text" placeholder="Titre de l article">
+                        </div>
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-slug">Slug</label>
+                            <input class="admin-form__input" id="article-slug" name="slug" type="text" placeholder="titre-de-l-article">
+                        </div>
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="article-excerpt">Resume</label>
+                        <textarea class="admin-form__input" id="article-excerpt" name="excerpt" rows="3" placeholder="Resume court pour les listes."></textarea>
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="article-content">Contenu</label>
+                        <textarea class="admin-form__input" id="article-content" name="content" rows="10" placeholder="Texte principal de l article."></textarea>
+                    </div>
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-tags">Tags</label>
+                            <input class="admin-form__input" id="article-tags" name="tags" type="text" placeholder="lune, data, ciel">
+                        </div>
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-cover">Image de couverture</label>
+                            <input class="admin-form__input" id="article-cover" name="cover" type="text" placeholder="/uploads/cover.jpg">
+                        </div>
+                    </div>
+                    <div class="admin-month-actions">
+                        <button class="admin-button admin-button--ghost" type="button">Apercu</button>
+                        <button class="admin-button" type="button">Enregistrer brouillon</button>
+                        <button class="admin-button admin-button--primary" type="button">Publier</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="admin-card">
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Meta & publication</h2>
+                <p class="admin-card__subtitle">Statut, auteur, dates et SEO.</p>
+            </div>
+            <div class="admin-card__body">
+                <div class="admin-form">
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-status">Statut</label>
+                            <select class="admin-form__select" id="article-status" name="status">
+                                <option value="draft">Brouillon</option>
+                                <option value="review">En relecture</option>
+                                <option value="published">Publie</option>
+                            </select>
+                        </div>
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-author">Auteur</label>
+                            <input class="admin-form__input" id="article-author" name="author" type="text" placeholder="Nom auteur">
+                        </div>
+                    </div>
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-date">Publication</label>
+                            <input class="admin-form__input" id="article-date" name="published_at" type="datetime-local">
+                        </div>
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="article-readtime">Temps de lecture</label>
+                            <input class="admin-form__input" id="article-readtime" name="read_time" type="text" placeholder="5 min">
+                        </div>
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="article-seo-title">SEO titre</label>
+                        <input class="admin-form__input" id="article-seo-title" name="seo_title" type="text" placeholder="Titre SEO">
+                    </div>
+                    <div class="admin-form__field">
+                        <label class="admin-form__label" for="article-seo-desc">SEO description</label>
+                        <textarea class="admin-form__input" id="article-seo-desc" name="seo_desc" rows="3" placeholder="Meta description."></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="admin-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Apercu</h2>
+            <p class="admin-card__subtitle">Extrait visuel du rendu final.</p>
+        </div>
+        <div class="admin-card__body">
+            <p class="admin-empty">Aucun apercu genere pour le moment.</p>
+        </div>
+    </section>
+{% endblock %}

@@ -1,0 +1,216 @@
+
+Âge de la Lune (jours)
+
+Affiché : moon_age_days
+
+Horizons (direct) :
+
+m: m31_ecl_lon_deg (Q31)
+
+s: s31_ecl_lon_deg (Q31)
+
+Calcul :
+
+Δ = (m31_ecl_lon_deg - s31_ecl_lon_deg) mod 360
+
+moon_age_days = (Δ / 360) * lunation_duration_days
+
+Remarque : Horizons ne donne pas l’âge directement.
+
+Angle de phase (°)
+
+Affiché : phase_angle_deg
+
+Horizons (direct) :
+
+m: m43_phi_deg (Q43 → PHI)
+
+Sinon (fallback calcul) :
+
+m: m31_ecl_lon_deg (Q31)
+
+s: s31_ecl_lon_deg (Q31)
+
+Calcul fallback :
+
+d = (m31_ecl_lon_deg - s31_ecl_lon_deg) mod 360
+
+phase_angle_deg = min(d, 360 - d) (0–180)
+
+Fraction illuminée (%)
+
+Affiché : illum_frac
+
+Horizons (direct) :
+
+m: m10_illum_frac (Q10)
+
+Sinon (fallback calcul) :
+
+m: m43_phi_deg (Q43 → PHI)
+
+Calcul fallback :
+
+illum_frac = (1 + cos(radians(m43_phi_deg))) / 2
+
+(×100 si tu veux un pourcentage)
+
+Dates exactes des phases (NL, PQ, PL, DQ)
+
+Affiché : new_moon_utc, first_quarter_utc, full_moon_utc, last_quarter_utc
+
+Horizons (pas direct) :
+
+m: m31_ecl_lon_deg (Q31)
+
+s: s31_ecl_lon_deg (Q31)
+
+Calcul fiable : résoudre sur le temps :
+
+Δ(t) = (λm(t) - λs(t)) mod 360
+
+chercher Δ(t)=0°, 90°, 180°, 270°
+
+Méthode : interpolation temporelle (dichotomie / Newton) entre deux timestamps ts_utc.
+
+Distance Terre–Lune (km)
+
+Affiché : moon_distance_km
+
+Horizons (direct) :
+
+m: m20_range_km (Q20 → range)
+
+Longitude écliptique de la Lune (°)
+
+Affiché : moon_ecl_lon_deg
+
+Horizons (direct) :
+
+m: m31_ecl_lon_deg (Q31)
+
+Latitude écliptique de la Lune (°)
+
+Affiché : moon_ecl_lat_deg
+
+Horizons (direct) :
+
+m: m31_ecl_lat_deg (Q31)
+
+Longitude écliptique du Soleil (°)
+
+Affiché : sun_ecl_lon_deg
+
+Horizons (direct) :
+
+s: s31_ecl_lon_deg (Q31)
+
+Latitude écliptique du Soleil (°)
+
+Affiché : sun_ecl_lat_deg
+
+Horizons (direct) :
+
+s: s31_ecl_lat_deg (Q31)
+
+RA / Dec astrométriques (degrés, géocentrique)
+
+Affiché : moon_ra_ast_deg, moon_dec_ast_deg
+
+Horizons (direct) :
+
+m: m1_ra_ast_deg, m1_dec_ast_deg (Q1)
+
+RA / Dec apparentes (degrés, affichage ciel)
+
+Affiché : moon_ra_app_deg, moon_dec_app_deg
+
+Horizons (direct) :
+
+m: m2_ra_app_deg, m2_dec_app_deg (Q2)
+
+Vitesse radiale (km/s)
+
+Affiché : moon_range_rate_km_s
+
+Horizons (direct) :
+
+m: m20_range_rate_km_s (Q20 → range-rate)
+
+Vitesse orbitale angulaire (°/jour)
+
+Affiché : moon_ang_speed_deg_per_day
+
+Horizons (pas direct) :
+
+m: m31_ecl_lon_deg (Q31) sur deux instants
+
+Calcul fiable :
+
+dλ = angular_diff_deg(λ(t+Δt), λ(t)) (normalisé ±180)
+
+moon_ang_speed_deg_per_day = dλ / (Δt_days)
+
+Jours avant la prochaine Nouvelle Lune (jours)
+
+Affiché : days_to_next_new_moon
+
+Horizons (pas direct) :
+
+m: m31_ecl_lon_deg (Q31)
+
+s: s31_ecl_lon_deg (Q31)
+
+Calcul fiable :
+
+trouver t_next tel que Δ(t_next)=0° (comme point 4)
+
+days_to_next_new_moon = (t_next - ts_utc) en jours
+
+Phase “8 phases” (nom)
+
+Affiché : phase_name_8
+
+Horizons (direct) :
+
+m: m43_phi_deg (Q43 → PHI)
+
+(ou Δ via Q31 Moon+Sun)
+
+Calcul : classification par intervalles (ex. 0–45–90–…–180–…–360) sur Δ ou PHI.
+
+Parallaxe lunaire (si tu veux une valeur affichable)
+
+Affiché : moon_parallax_deg
+
+Horizons (pas dans tes colonnes actuelles) : pas de champ dédié conservé
+
+Calcul fiable (approx) : nécessite en plus :
+
+distance m20_range_km (Q20)
+
+rayon Terre + géométrie observateur (lat/lon/alt)
+
+Remarque : si tu utilises des valeurs topocentriques (alt/az) issues de Horizons, la parallaxe est déjà “appliquée” implicitement.
+
+Culmination / Lever / Coucher / Altitude / Azimut
+
+Non disponibles avec tes colonnes actuelles (tu n’as pas Q4, ni RTS).
+
+Si tu veux les obtenir via Horizons :
+
+Altitude/Azimut : Q4 (topocentrique)
+
+Lever/Coucher/Transit : sortie RTS (R_T_S_ONLY) ou série Q4 + détection
+
+Donc : il faut une table topo séparée, ou étendre la canonique avec les colonnes Q4 et événements.
+
+“Signe” / Constellation
+
+Non disponible avec tes colonnes actuelles (tu n’as pas Q29).
+
+Via Horizons :
+
+Constellation : Q29 (topocentrique ou géocentrique selon table)
+
+Sinon calcul : à partir de m31_ecl_lon_deg (mais nécessite une table des limites IAU, externe à Horizons).

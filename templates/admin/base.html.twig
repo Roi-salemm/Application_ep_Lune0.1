@@ -1,3 +1,6 @@
+{# Layout admin principal: centralise la navigation, le header et la zone de contenu.
+   Pourquoi: garder une structure unique et coherente pour toutes les pages admin.
+   Info: chaque page doit fournir page_title/page_subtitle et active_menu pour la sidebar. #}
 {% extends 'base.html.twig' %}
 
 {% block title %}{{ page_title|default('Administration') }}{% endblock %}
@@ -86,6 +89,15 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">Images lunaison</span>
+            </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'article_editor' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_article_editor') }}" style="--delay: 7.5">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M4 20h6M14.5 4.5l5 5L8 21H3v-5z" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">Article editor</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ai_console' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_ai_console') }}" style="--delay: 8">
