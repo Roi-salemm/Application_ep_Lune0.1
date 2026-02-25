@@ -1,0 +1,693 @@
+Vue d’ensemble : le flow “LLM1 → Compose → LLM2 → Guards → Persist → Response”
+
+
+src/AI
+  /Http
+    AiChatController.php
+    SymbolicWeatherController.php
+
+  /LLM
+    LlmClientInterface.php
+    OllamaClient.php
+    LlmResponse.php
+
+  /Flow
+    Llm1Router.php         (ex: runLlm1())
+    Llm2Generator.php      (ex: runLlm2())
+    AiFlow.php             (orchestrateur unique: LLM1 -> enrich -> LLM2)
+    RulesComposer.php      (tes règles LLM2, ajout/modif JSON, knowledge injection)
+
+  /Prompt
+    Llm1Prompt.php         (le prompt system de routage + format JSON)
+    Llm2Prompt.php         (le prompt system de génération)
+    PromptCatalog.php      (si tu veux plusieurs variantes)
+    PromptVersion.php      (optionnel au début)
+
+  /Guard
+    JsonSchemaValidator.php
+    SafetyGuard.php
+    StyleGuard.php
+    TraditionGuard.php
+
+  /Knowledge
+    KnowledgeRepository.php  (accès à tes “références stables”)
+    knowledge/              (fichiers .php/.json/.md si tu externalises)
+
+  /Observability
+    AiLogService.php
+    TokenBudget.php
+
+  /Persistence
+    AiRunRepository.php (si tu as une entité AiRun)
+    (ou services de persistance liés à tes tables existantes)
+
+  /DTO
+    Request/
+      AiChatRequestDTO.php
+      SymbolicWeatherRequestDTO.php
+    Llm1/
+      IntentRoutingDTO.php (OU un seul RouterOutputDTO)
+    Response/
+      AiResponseDTO.php    (et sous-DTO si tu veux)
+
+
+
+
+
+
+
+
+
+
+
+
+Vue d’ensemble : le flow “LLM1 → Compose → LLM2 → Guards → Persist → Response”
+Étapes logiques
+
+Controller reçoit la requête (prompt user + contexte éventuel)
+
+AiFlow crée un pipelineId + initialise le log (IaAdminLog)
+
+LLM1 : routage/normalisation → JSON strict
+
+Validation JSON (schema) + garde-fous (intent, style, tradition)
+
+RulesComposer enrichit : knowledge + règles serveur + budgets
+
+LLM2 : génération réponse finale (texte ou JSON réponse)
+
+Post-guards : sécurité + style + tradition + limites (taille, ton, etc.)
+
+Persistance : IaAdminLog + IaAdminHistorique (stages LLM1, LLM2)
+
+Retour HTTP : AiResponseDTO
+
+Dossiers & fichiers proposés, avec rôle exact
+
+Je reprends la structure “simplifiée” et je la décris “comme un livre”.
+
+1) src/AI/Http/
+AiChatController.php
+
+Rôle : endpoint HTTP “chat IA”.
+
+Contenu :
+
+reçoit AiChatRequestDTO (prompt + messages précédents optionnels + options)
+
+appelle AiFlow->runChat($dto, $userContext)
+
+renvoie JsonResponse avec AiResponseDTO
+
+Ne fait jamais : construction de prompt, appel LLM, sécurité, persistance.
+
+SymbolicWeatherController.php
+
+Rôle : endpoint “météo symbolique” (ta logique Lune).
+
+Contenu :
+
+reçoit SymbolicWeatherRequestDTO (snapshot lunaire, locale, etc.)
+
+appelle AiFlow->runSymbolicWeather($dto, $userContext)
+
+renvoie AiResponseDTO
+
+Les controllers restent très fins : I/O HTTP uniquement.
+
+2) src/AI/DTO/
+Request/AiChatRequestDTO.php
+
+Contenu typique :
+
+string $prompt
+
+ChatMessageDTO[] $messages (optionnel)
+
+string $locale (optionnel)
+
+array $clientMeta (optionnel : device, app_version)
+
+Rôle : structure d’entrée stable, validable.
+
+Request/SymbolicWeatherRequestDTO.php
+
+Contenu typique :
+
+LunarSnapshotDTO $lunarSnapshot
+
+string $prompt (si tu autorises une question libre)
+
+string $locale
+
+Llm1/RouterOutputDTO.php (ou IntentRoutingDTO.php)
+
+Rôle : résultat strict de LLM1 (le JSON).
+
+Contenu minimal recommandé :
+
+string $intent (dans ta liste fermée)
+
+array $knowledge_keys
+
+array $lexicon_keys
+
+array $constraints (format simple)
+
+array $policy_flags (optionnel)
+
+array $style_contract (optionnel)
+
+Tu peux mapper exactement sur ce que tu as déjà dans tes DTO RoutingDTO, PolicyFlagsDTO, etc., mais l’idée ici est : un seul DTO LLM1 lisible.
+
+Response/AiResponseDTO.php
+
+Rôle : réponse normalisée renvoyée au client.
+
+Contenu (simple et suffisant) :
+
+content: ContentDTO (texte principal)
+
+routing: RoutingDTO (intent final)
+
+safety: SafetyAndLimitsDTO (flags + action)
+
+meta: MetaDTO (tokens, provider, model, pipelineId)
+
+data_used: DataUsedDTO (knowledge_keys_validated, snapshot utilisé, etc.)
+
+Tu as déjà beaucoup de ces DTO : tu peux garder, mais l’API peut rester compacte.
+
+3) src/AI/LLM/
+LlmClientInterface.php
+
+Rôle : abstraction unique “appeler un LLM”.
+
+Signature typique :
+
+complete(string $prompt, array $options): LlmResponse
+
+Pourquoi : demain tu changes Ollama/OpenAI sans toucher le flow.
+
+OllamaClient.php
+
+Rôle : implémentation HTTP vers Ollama.
+
+Contenu :
+
+construit la requête (model, temperature, json mode si supporté, etc.)
+
+timeouts
+
+récupère tokens/latence si dispos
+
+renvoie LlmResponse
+
+LlmResponse.php
+
+Rôle : transport neutre :
+
+string $text
+
+?array $json si déjà parsé
+
+tokens_in/out/total si dispo
+
+latency_ms
+
+provider/model
+
+Ce dossier ne connaît rien du “symbolisme”, ni des intents.
+
+4) src/AI/Prompt/
+
+Ici, tu mets les textes (system prompts) + versioning léger.
+
+Llm1Prompt.php
+
+Rôle : le prompt “routeur” (ton intent router).
+
+Contenu :
+
+instructions strictes : “retourne un JSON conforme au schema X”
+
+enum intents autorisés
+
+règles de normalisation / contraintes
+
+éventuellement “ne jamais parler, ne jamais commenter”
+
+Sortie attendue : JSON (pas du texte).
+
+Llm2Prompt.php
+
+Rôle : prompt “générateur final”.
+
+Contenu :
+
+ton contrat éditorial (axes lune2, posture descriptive, etc.)
+
+interdits (pas d’injonction, pas de diagnostic, etc.)
+
+format de sortie (texte seul ou JSON réponse)
+
+Entrées : user prompt + pack d’enrichissement serveur.
+
+PromptCatalog.php
+
+Rôle : registre des prompts utilisables.
+
+Contenu :
+
+mapping slug -> PromptDefinition
+
+utile pour l’admin (“choisir un prompt”, “voir versions”)
+
+Si tu veux très simple, tu peux le supprimer au début et juste instancier Llm1Prompt/Llm2Prompt.
+
+PromptVersion.php
+
+Rôle : versioning.
+
+Contenu :
+
+slug, version, hash, createdAt
+
+Tu peux démarrer avec une version codée en dur (const), puis migrer plus tard.
+
+5) src/AI/Guard/
+
+Ces classes sont appelées avant et après LLM2.
+
+JsonSchemaValidator.php
+
+Rôle : valider la sortie LLM1 contre ton schema.
+
+Entrée : texte JSON
+
+Sortie : array validé ou exception “schema invalid”
+
+Pourquoi : éviter que LLM1 “dérive” ou renvoie du blabla.
+
+SafetyGuard.php
+
+Rôle : règles de sécurité et “actions”.
+
+Deux moments :
+
+pré LLM2 : si intent interdit / contenu sensible → refuser ou passer en “clarification”
+
+post LLM2 : scanner la réponse, set SafetyAction (allow/soft_block/hard_block)
+
+Important : au début, ce n’est pas une modération parfaite, c’est un filet + logs.
+
+StyleGuard.php
+
+Rôle : enforcement de ton contrat de style.
+
+Exemple :
+
+“pas d’injonctions”
+
+“phrases courtes”
+
+“langage impersonnel”
+
+“verbes bannis”
+
+Peut être simple au début (quelques regex + checks), puis plus strict.
+
+TraditionGuard.php
+
+Rôle : s’assurer que l’axe “Tradition / Jyotish” n’invente pas n’importe quoi.
+
+Exemple :
+
+interdit d’affirmer des faits astronomiques faux
+
+impose une posture descriptive
+
+6) src/AI/Knowledge/
+KnowledgeRepository.php
+
+Rôle : fournir la connaissance stable (ta “base de symbolisme”).
+
+Entrées : knowledge_keys de LLM1 (après validation)
+
+Sortie : un paquet de textes / fragments (ex: axes lune2, glossaire, règles, définitions)
+
+Implémentation :
+
+au début : tableaux PHP / JSON local / fichiers .md
+
+plus tard : table SQL knowledge_item, indexée, versionnée
+
+knowledge/ (optionnel)
+
+Rôle : stockage local des contenus stables.
+
+Exemple :
+
+axes_lune2.md
+
+glossary_basic.json
+
+tradition_rules.md
+
+7) src/AI/Flow/ (le cœur)
+
+Ici on suit exactement ton idée : LLM1, règles LLM2, LLM2, orchestrateur.
+
+AiFlow.php
+
+Rôle : orchestrateur unique appelé par les controllers.
+
+Responsabilités :
+
+créer un pipelineId (uuid)
+
+ouvrir un IaAdminLog (source=admin/app, createdByUserId si connu)
+
+appeler Llm1Router
+
+valider (schema + guards)
+
+appeler RulesComposer
+
+appeler Llm2Generator
+
+post-guards
+
+persister historique
+
+retourner AiResponseDTO
+
+Ne fait pas : écrire les prompts (il délègue à PromptFactory / Llm1Prompt / Llm2Prompt)
+
+Llm1Router.php
+
+Rôle : exécuter LLM1.
+
+Entrées :
+
+prompt user
+
+contexte minimal (route, locale, type endpoint)
+
+Process :
+
+construit prompt final LLM1 via Llm1Prompt
+
+appelle LlmClient
+
+parse JSON
+
+schema validate
+
+renvoie RouterOutputDTO
+
+Persistance :
+
+écrit un IaAdminHistorique stage=llm1 (ou routing) avec :
+
+prompt_slug, version, final_prompt, response, intent_raw, knowledge_keys, constraints, tokens, latency, success
+
+RulesComposer.php
+
+Rôle : ton “dossier LLM2” (règles, ajout/modif du JSON, enrichissement).
+
+Entrées :
+
+user prompt
+
+RouterOutputDTO
+
+contexte endpoint (chat vs symbolic_weather)
+
+éventuellement LunarSnapshotDTO
+
+Sortie : un objet “pack LLM2”, par ex :
+
+finalPromptText
+
+contextKey
+
+knowledgeKeysValidated
+
+inputsPresent (pour ton DTO)
+
+tokenBudget
+
+Ce qui se passe ici :
+
+validation/filtrage des knowledge_keys
+
+récupération des fragments via KnowledgeRepository
+
+application des règles serveur (axes lune2, style contract)
+
+construction du prompt final LLM2 (via Llm2Prompt + injection)
+
+calcul budget tokens (TokenBudget)
+
+prépare context_key (ex: symbolic_weather_v1)
+
+C’est exactement l’endroit où tu mets les “règles LLM2” sans polluer le reste.
+
+Llm2Generator.php
+
+Rôle : exécuter LLM2.
+
+Entrées :
+
+prompt final (texte)
+
+options (model, temperature, max_tokens)
+
+Sortie : LlmResponse + AiResponseDTO (ou juste texte)
+
+Persistance :
+
+IaAdminHistorique stage=llm2 (ou generation) :
+
+final_prompt, response, success, tokens, latency, provider, model
+
+8) src/AI/Observability/
+AiLogService.php
+
+Rôle : log applicatif (Monolog channel ai) + helpers.
+
+Exemple :
+
+log début/fin pipeline
+
+log erreur parse JSON
+
+log guard trigger (safety/style)
+
+TokenBudget.php
+
+Rôle : calculer un budget de tokens et couper proprement.
+
+Exemple :
+
+tronquer messages chat trop longs
+
+limiter knowledge injectée
+
+limiter réponse max
+
+9) src/AI/Persistence/
+
+Ici on branche tes tables existantes.
+
+IaAdminLogRepository et IaAdminHistoriqueRepository
+
+déjà existants côté repo ; dans l’architecture proposée :
+
+AiFlow crée un IaAdminLog
+
+Llm1Router et Llm2Generator ajoutent des lignes IaAdminHistorique
+
+Tu peux ajouter un service utilitaire :
+
+AiRunPersister.php (optionnel mais pratique)
+
+Rôle : encapsuler l’écriture dans tes deux tables.
+
+Exemple de méthodes :
+
+startLog(pipelineId, source, userId, requestPayloadJson): IaAdminLog
+
+appendStage(IaAdminLog $log, stage, prompt, response, meta...)
+
+finishLog(IaAdminLog $log, responsePayloadJson, notes)
+
+Ça évite de dupliquer “setPromptTokens, setLatencyMs, …” partout.
+
+Lecture complète “comme si on exécutait”
+0) Le client appelle l’API
+
+POST /api/ai/chat avec { prompt: "…", messages: [...] }
+
+1) Controller
+
+AiChatController :
+
+hydrate AiChatRequestDTO
+
+appelle AiFlow->runChat($dto, $securityContext)
+
+2) AiFlow démarre le pipeline
+
+génère pipelineId (UUID)
+
+crée IaAdminLog :
+
+source = admin (ou app)
+
+createdByUserId si admin authentifié
+
+pipelineId
+
+requestPayloadJson = dto raw + meta
+
+persist IaAdminLog
+
+3) LLM1Router
+
+construit prompt LLM1 via Llm1Prompt
+
+inclut la liste fermée des intents
+
+impose JSON strict
+
+appelle OllamaClient->complete(promptLLM1)
+
+récupère LlmResponse
+
+parse JSON
+
+JsonSchemaValidator valide
+
+renvoie RouterOutputDTO
+
+écrit une entrée IaAdminHistorique stage=routing/llm1 :
+
+prompt_client = prompt user
+
+final_prompt = promptLLM1
+
+response = JSON LLM1 (texte)
+
+intent_raw, knowledge_keys, constraints
+
+tokens/latency/provider/model
+
+success=true/false
+
+4) Guards pré-LLM2 (dans AiFlow)
+
+SafetyGuard peut :
+
+refuser (hard block) si intent illégal/dangereux
+
+demander clarification (soft block) si trop ambigu
+
+StyleGuard/TraditionGuard peuvent ajuster des contraintes (optionnel)
+
+Si blocage → on renvoie une réponse courte + on log.
+
+5) RulesComposer
+
+prend RouterOutputDTO + contexte
+
+filtre knowledge_keys → knowledge_keys_validated
+
+récupère fragments via KnowledgeRepository
+
+construit le prompt final LLM2 via Llm2Prompt :
+
+insère :
+
+contrat éditorial (axes lune2)
+
+règles de sécurité
+
+knowledge stable sélectionnée
+
+snapshot lunaire si besoin
+
+user prompt
+
+calcule budget tokens (TokenBudget)
+
+renvoie un Llm2InputPack (objet interne)
+
+6) Llm2Generator
+
+appelle OllamaClient->complete(finalPrompt)
+
+récupère réponse
+
+écrit IaAdminHistorique stage=generation/llm2 :
+
+final_prompt = LLM2 final
+
+response = texte
+
+meta tokens/latency
+
+success
+
+7) Guards post-LLM2
+
+SafetyGuard vérifie la réponse
+
+StyleGuard vérifie le ton (posture descriptive, pas d’injonction)
+
+si KO :
+
+soit réponse fallback
+
+soit “clarification”
+
+soit rejet
+
+8) Persistance fin (IaAdminLog)
+
+IaAdminLog->setIntentJson(...)
+
+IaAdminLog->setPipelineJson(...) (pack final : keys validées, contraintes)
+
+IaAdminLog->setFinalPromptText(...) (optionnel si tu veux le global)
+
+IaAdminLog->setResponsePayloadJson(...) (AiResponseDTO sérialisé)
+
+persist
+
+9) Retour HTTP
+
+controller renvoie AiResponseDTO au client
+
+Comment tes deux tables s’intègrent précisément (sans ajouter de tables)
+
+IaAdminLog = enveloppe d’une requête (pipeline complet)
+
+received_json / request_payload_json
+
+intent_json / pipeline_json
+
+final_prompt_text (optionnel)
+
+response_payload_json
+
+IaAdminHistorique = événements / étapes
+
+stage=llm1 : prompt LLM1 + JSON routeur
+
+stage=llm2 : prompt LLM2 + réponse finale
+
+stage=guard (optionnel) : si tu veux historiser un blocage
+
+Ton schéma actuel est même plus riche que nécessaire, donc tu es confortable.
