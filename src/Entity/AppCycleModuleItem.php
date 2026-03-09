@@ -7,9 +7,9 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Item de module dans un cycle (article, media, ressource ou outil).
+ * Item de module dans un cycle (article, media, ressource, outil ou texte autonome).
  * Pourquoi: lister des contenus heterogenes avec un ordre stable par module.
- * Info: l ordre est gere par order_index, et les references sont optionnelles selon le type.
+ * Info: item_type='text' exige content_json et ne reference pas de card.
  */
 #[ORM\Entity(repositoryClass: AppCycleModuleItemRepository::class)]
 #[ORM\Table(name: 'app_cycle_module_item')]
@@ -30,7 +30,7 @@ class AppCycleModuleItem
     #[ORM\JoinColumn(name: 'module_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private ?AppCycleModule $module = null;
 
-    #[ORM\Column(name: 'item_type', type: Types::STRING, length: 20, columnDefinition: "ENUM('article','audio','video','resource','tool')")]
+    #[ORM\Column(name: 'item_type', type: Types::STRING, length: 20, columnDefinition: "ENUM('article','audio','video','resource','tool','text')")]
     private string $itemType;
 
     #[ORM\Column(name: 'order_index', type: Types::INTEGER)]

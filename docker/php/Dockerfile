@@ -8,10 +8,16 @@ RUN apk add --no-cache \
     libzip-dev \
     oniguruma-dev \
     mysql-client \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
     && docker-php-ext-install \
     intl \
     pdo_mysql \
-    zip
+    zip \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install gd
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

@@ -19,6 +19,8 @@ services:
     volumes:
       - ./:/var/www/html:cached
       - ./docker/php/conf.d/99-memory.ini:/usr/local/etc/php/conf.d/99-memory.ini:ro
+      # Limites d upload PHP pour accepter les images lourdes dans l admin.
+      - ./docker/php/conf.d/99-uploads.ini:/usr/local/etc/php/conf.d/99-uploads.ini:ro
     environment:
       APP_ENV: dev
       # URL interne Docker vers Ollama (pas exposé)

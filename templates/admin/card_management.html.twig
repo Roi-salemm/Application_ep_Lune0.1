@@ -1,0 +1,428 @@
+{% extends 'admin/base.html.twig' %}
+
+{% block admin_content %}
+    <div class="admin-card-management"
+         data-card-management
+         data-update-url="{{ path('admin_card_management_update', {id: '__ID__'}) }}"
+         data-delete-url="{{ path('admin_card_management_delete', {id: '__ID__'}) }}"
+         data-editor-url="{{ path('admin_article_editor') }}">
+        <div class="admin-card-management__toolbar">
+            <div class="admin-card-management__tools">
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="sort-created">Date</label>
+                    <select class="admin-form__select" id="sort-created" data-sort-created>
+                        <option value="desc" selected>Plus recente → plus ancienne</option>
+                        <option value="asc">Plus ancienne → plus recente</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="sort-updated">Mise a jour</label>
+                    <select class="admin-form__select" id="sort-updated" data-sort-updated>
+                        <option value="">Aucun</option>
+                        <option value="desc">Plus recente → plus ancienne</option>
+                        <option value="asc">Plus ancienne → plus recente</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="sort-status">Statut</label>
+                    <select class="admin-form__select" id="sort-status" data-sort-status>
+                        <option value="">Tous</option>
+                        {% for status in status_choices %}
+                            <option value="{{ status }}">{{ status }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="sort-featured">Featured rank</label>
+                    <select class="admin-form__select" id="sort-featured" data-sort-featured>
+                        <option value="">Aucun</option>
+                        <option value="asc">Petit → grand</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="sort-type">Type</label>
+                    <select class="admin-form__select" id="sort-type" data-sort-type>
+                        <option value="">Tous</option>
+                        {% for type in type_choices %}
+                            <option value="{{ type }}">{{ type }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label class="admin-form__label" for="card-search">Recherche</label>
+                    <input class="admin-form__input" id="card-search" type="search" placeholder="Titre ou description" data-card-search>
+                </div>
+            </div>
+        </div>
+        <div class="admin-card-management__grid">
+            {% if cards is defined and cards|length > 0 %}
+                {% for card in cards %}
+                    <article class="admin-card-tile"
+                             data-card-id="{{ card.id }}"
+                             data-initial-status="{{ card.status }}"
+                             data-initial-featured-rank="{{ card.featured_rank is not null ? card.featured_rank : '' }}"
+                             data-initial-type="{{ card.type }}"
+                             data-initial-access="{{ card.access_level }}"
+                             data-title="{{ card.title|e('html_attr') }}"
+                             data-description="{{ card.description|default('')|e('html_attr') }}"
+                             data-created-at-ts="{{ card.created_at_ts }}"
+                             data-updated-at-ts="{{ card.updated_at_ts }}">
+                        <div class="admin-card-tile__media" {% if card.cover_url %}style="--card-cover: url('{{ card.cover_url }}')" {% endif %}>
+                            <div class="admin-card-tile__title">{{ card.title }}</div>
+                            <div class="admin-card-tile__description">
+                                {{ card.description is not empty ? card.description : 'Aucune description.' }}
+                            </div>
+                        </div>
+                        <div class="admin-card-tile__panel">
+                            <div class="admin-card-tile__row admin-card-tile__row--split">
+                                <span>Created at: {{ card.created_at ?: 'date inconnue' }}</span>
+                                <span>ID #{{ card.id }}</span>
+                            </div>
+                            <div class="admin-card-tile__row">
+                                <span>Date de mise a jour: {{ card.updated_at ?: 'date inconnue' }}</span>
+                            </div>
+                            <div class="admin-card-tile__row">
+                                <span>published at: {{ card.published_at ?: '...' }}</span>
+                            </div>
+                            <div class="admin-card-tile__row">
+                                <label class="admin-card-tile__label" for="status-{{ card.id }}">Statut</label>
+                                <select class="admin-form__select" id="status-{{ card.id }}" data-card-status>
+                                    {% for status in status_choices %}
+                                        <option value="{{ status }}" {{ status == card.status ? 'selected' : '' }}>{{ status }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="admin-card-tile__row">
+                                <label class="admin-card-tile__label" for="access-{{ card.id }}">Acces</label>
+                                <select class="admin-form__select" id="access-{{ card.id }}" data-card-access>
+                                    {% for access in access_choices %}
+                                        <option value="{{ access }}" {{ access == card.access_level ? 'selected' : '' }}>{{ access }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="admin-card-tile__row">
+                                <label class="admin-card-tile__label" for="featured-{{ card.id }}">Featured rank</label>
+                                <input class="admin-form__input" id="featured-{{ card.id }}" type="number" min="1" placeholder="Auto" value="{{ card.featured_rank is not null ? card.featured_rank : '' }}" data-card-featured>
+                            </div>
+                            <div class="admin-card-tile__row">
+                                <label class="admin-card-tile__label" for="type-{{ card.id }}">Type</label>
+                                <select class="admin-form__select" id="type-{{ card.id }}" data-card-type>
+                                    {% for type in type_choices %}
+                                        <option value="{{ type }}" {{ type == card.type ? 'selected' : '' }}>{{ type }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="admin-card-tile__actions">
+                                <button class="admin-button admin-card-tile__save" type="button" data-card-edit>Modifier</button>
+                                <button class="admin-button admin-button--danger" type="button" data-card-delete>Supprimer</button>
+                            </div>
+                        </div>
+                    </article>
+                {% endfor %}
+            {% else %}
+                <div class="admin-empty">Aucune card disponible.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script type="module">
+        const root = document.querySelector('[data-card-management]');
+        if (!root) {
+            throw new Error('Gestion des cards introuvable.');
+        }
+
+        const updateTemplate = root.dataset.updateUrl || '';
+        const deleteTemplate = root.dataset.deleteUrl || '';
+        const editorUrl = root.dataset.editorUrl || '';
+
+        const resolveUrl = (template, id) => {
+            return template.replace('__ID__', encodeURIComponent(String(id)));
+        };
+
+        const postJson = async (url, payload) => {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || 'Erreur serveur.');
+            }
+            return data;
+        };
+
+        const deleteJson = async (url) => {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || 'Erreur suppression.');
+            }
+            return data;
+        };
+
+        const grid = root.querySelector('.admin-card-management__grid');
+        const createdSort = root.querySelector('[data-sort-created]');
+        const updatedSort = root.querySelector('[data-sort-updated]');
+        const statusSort = root.querySelector('[data-sort-status]');
+        const featuredSort = root.querySelector('[data-sort-featured]');
+        const typeSort = root.querySelector('[data-sort-type]');
+        const searchInput = root.querySelector('[data-card-search]');
+
+        const cards = Array.from(root.querySelectorAll('[data-card-id]')).map((cardEl, index) => {
+            const createdAt = parseInt(cardEl.dataset.createdAtTs || '0', 10);
+            const updatedAt = parseInt(cardEl.dataset.updatedAtTs || '0', 10);
+            return {
+                el: cardEl,
+                index,
+                createdAt,
+                updatedAt,
+            };
+        });
+
+        const readCardState = (cardEl) => {
+            const statusSelect = cardEl.querySelector('[data-card-status]');
+            const typeSelect = cardEl.querySelector('[data-card-type]');
+            const featuredInput = cardEl.querySelector('[data-card-featured]');
+            return {
+                status: statusSelect ? statusSelect.value : cardEl.dataset.initialStatus || '',
+                type: typeSelect ? typeSelect.value : cardEl.dataset.initialType || '',
+                featuredRank: featuredInput ? featuredInput.value.trim() : cardEl.dataset.initialFeaturedRank || '',
+            };
+        };
+
+        const matchesSearch = (cardEl, query) => {
+            if (!query) {
+                return true;
+            }
+            const haystack = `${cardEl.dataset.title || ''} ${cardEl.dataset.description || ''}`.toLowerCase();
+            return haystack.includes(query);
+        };
+
+        const applySorting = () => {
+            const query = (searchInput?.value || '').trim().toLowerCase();
+            const statusPriority = statusSort?.value || '';
+            const typePriority = typeSort?.value || '';
+            const featureOrder = featuredSort?.value || '';
+            const updatedOrder = updatedSort?.value || '';
+            const createdOrder = createdSort?.value || 'desc';
+
+            const sorted = cards.slice().sort((a, b) => {
+                const stateA = readCardState(a.el);
+                const stateB = readCardState(b.el);
+
+                if (statusPriority) {
+                    const aMatch = stateA.status === statusPriority ? 0 : 1;
+                    const bMatch = stateB.status === statusPriority ? 0 : 1;
+                    if (aMatch !== bMatch) {
+                        return aMatch - bMatch;
+                    }
+                }
+
+                if (typePriority) {
+                    const aMatch = stateA.type === typePriority ? 0 : 1;
+                    const bMatch = stateB.type === typePriority ? 0 : 1;
+                    if (aMatch !== bMatch) {
+                        return aMatch - bMatch;
+                    }
+                }
+
+                if (featureOrder) {
+                    const aRank = stateA.featuredRank === '' ? Number.POSITIVE_INFINITY : parseInt(stateA.featuredRank, 10);
+                    const bRank = stateB.featuredRank === '' ? Number.POSITIVE_INFINITY : parseInt(stateB.featuredRank, 10);
+                    if (aRank !== bRank) {
+                        return featureOrder === 'asc' ? aRank - bRank : bRank - aRank;
+                    }
+                }
+
+                if (updatedOrder) {
+                    if (a.updatedAt !== b.updatedAt) {
+                        return updatedOrder === 'asc' ? a.updatedAt - b.updatedAt : b.updatedAt - a.updatedAt;
+                    }
+                }
+
+                if (createdOrder) {
+                    if (a.createdAt !== b.createdAt) {
+                        return createdOrder === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt;
+                    }
+                }
+
+                return a.index - b.index;
+            });
+
+            sorted.forEach((card) => {
+                const visible = matchesSearch(card.el, query);
+                card.el.classList.toggle('is-hidden', !visible);
+                grid.appendChild(card.el);
+            });
+        };
+
+        const bindSortingControls = () => {
+            [createdSort, updatedSort, statusSort, featuredSort, typeSort].forEach((control) => {
+                if (!control) {
+                    return;
+                }
+                control.addEventListener('change', applySorting);
+            });
+            if (searchInput) {
+                searchInput.addEventListener('input', applySorting);
+            }
+        };
+
+        bindSortingControls();
+        applySorting();
+
+        const confirmAccessChange = (fromValue, toValue) => {
+            if (!fromValue || !toValue || fromValue === toValue) {
+                return true;
+            }
+            return window.confirm(`Changer l acces de ${fromValue} vers ${toValue} ?`);
+        };
+
+        const confirmPublishChange = (fromValue, toValue) => {
+            if (toValue !== 'published' || fromValue === 'published') {
+                return true;
+            }
+            return window.confirm('Es-tu sur de vouloir publier cette card ?');
+        };
+
+        cards.forEach(({ el: cardEl }) => {
+            const cardId = cardEl.dataset.cardId;
+            const statusSelect = cardEl.querySelector('[data-card-status]');
+            const typeSelect = cardEl.querySelector('[data-card-type]');
+            const featuredInput = cardEl.querySelector('[data-card-featured]');
+            const accessSelect = cardEl.querySelector('[data-card-access]');
+            const editButton = cardEl.querySelector('[data-card-edit]');
+            const deleteButton = cardEl.querySelector('[data-card-delete]');
+
+            const initial = {
+                status: cardEl.dataset.initialStatus || '',
+                type: cardEl.dataset.initialType || '',
+                featuredRank: cardEl.dataset.initialFeaturedRank || '',
+                accessLevel: cardEl.dataset.initialAccess || '',
+            };
+
+            const getCurrent = () => ({
+                status: statusSelect ? statusSelect.value : '',
+                type: typeSelect ? typeSelect.value : '',
+                featuredRank: featuredInput ? featuredInput.value.trim() : '',
+                accessLevel: accessSelect ? accessSelect.value : '',
+            });
+
+            const applyInitialToInputs = () => {
+                if (statusSelect) {
+                    statusSelect.value = initial.status;
+                }
+                if (typeSelect) {
+                    typeSelect.value = initial.type;
+                }
+                if (featuredInput) {
+                    featuredInput.value = initial.featuredRank;
+                }
+                if (accessSelect) {
+                    accessSelect.value = initial.accessLevel;
+                }
+            };
+
+            const syncCard = async () => {
+                const payload = {
+                    status: statusSelect ? statusSelect.value : initial.status,
+                    type: typeSelect ? typeSelect.value : initial.type,
+                    featured_rank: featuredInput ? featuredInput.value.trim() : '',
+                    access_level: accessSelect ? accessSelect.value : initial.accessLevel,
+                };
+                try {
+                    const data = await postJson(resolveUrl(updateTemplate, cardId), payload);
+                    initial.status = data.card.status;
+                    initial.type = data.card.type;
+                    initial.featuredRank = data.card.featured_rank === null ? '' : String(data.card.featured_rank);
+                    initial.accessLevel = data.card.access_level;
+                    cardEl.dataset.initialStatus = initial.status;
+                    cardEl.dataset.initialType = initial.type;
+                    cardEl.dataset.initialFeaturedRank = initial.featuredRank;
+                    cardEl.dataset.initialAccess = initial.accessLevel;
+                    applyInitialToInputs();
+                    applySorting();
+                } catch (error) {
+                    applyInitialToInputs();
+                    alert(error.message);
+                }
+            };
+
+            if (statusSelect) {
+                statusSelect.addEventListener('change', async () => {
+                    const nextValue = statusSelect.value;
+                    if (!confirmPublishChange(initial.status, nextValue)) {
+                        statusSelect.value = initial.status;
+                        return;
+                    }
+                    await syncCard();
+                });
+            }
+
+            if (accessSelect) {
+                accessSelect.addEventListener('change', async () => {
+                    const nextValue = accessSelect.value;
+                    if (!confirmAccessChange(initial.accessLevel, nextValue)) {
+                        accessSelect.value = initial.accessLevel;
+                        return;
+                    }
+                    await syncCard();
+                });
+            }
+
+            if (typeSelect) {
+                typeSelect.addEventListener('change', async () => {
+                    await syncCard();
+                });
+            }
+
+            if (featuredInput) {
+                featuredInput.addEventListener('change', async () => {
+                    await syncCard();
+                });
+                featuredInput.addEventListener('blur', async () => {
+                    await syncCard();
+                });
+                featuredInput.addEventListener('keydown', async (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        await syncCard();
+                    }
+                });
+            }
+
+            if (editButton) {
+                editButton.addEventListener('click', () => {
+                    if (!editorUrl) {
+                        return;
+                    }
+                    window.location.href = `${editorUrl}?card_id=${encodeURIComponent(cardId)}`;
+                });
+            }
+
+            deleteButton.addEventListener('click', async () => {
+                const confirmDelete = window.confirm('Supprimer cette card ? Cette action est irreversible.');
+                if (!confirmDelete) {
+                    return;
+                }
+                try {
+                    deleteButton.disabled = true;
+                    deleteButton.textContent = 'Suppression...';
+                    await deleteJson(resolveUrl(deleteTemplate, cardId));
+                    cardEl.remove();
+                } catch (error) {
+                    deleteButton.disabled = false;
+                    deleteButton.textContent = 'Supprimer';
+                    alert(error.message);
+                }
+            });
+        });
+    </script>
+{% endblock %}

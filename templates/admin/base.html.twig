@@ -6,7 +6,7 @@
 {% block title %}{{ page_title|default('Administration') }}{% endblock %}
 
 {% block stylesheets %}
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260128-gto">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260227-card-management">
 {% endblock %}
 
 {% block body %}
@@ -98,6 +98,16 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">Article editor</span>
+            </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'card_management' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_card_management') }}" style="--delay: 7.7">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <rect x="4" y="6" width="16" height="12" rx="2" />
+                        <path d="M7 10h6M7 14h10" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">Gestion des cards</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ai_console' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_ai_console') }}" style="--delay: 8">

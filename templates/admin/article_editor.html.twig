@@ -1,105 +1,1160 @@
-{# Page admin "Article editor": formulaire de saisie et blocs meta.
-   Pourquoi: respecter l UI admin et proposer une base claire pour l edition d articles.
-   Info: page statique pour l instant (pas de persistance, uniquement UI). #}
+{# Page admin "Article editor": creation AJAX + editeur Tiptap + preview en temps reel.
+   Pourquoi: unifier la creation de cards, modules et contenus sans quitter l interface.
+   Info: le rendu live simule les largeurs mobiles (360/430/768) avec outils typographiques. #}
 {% extends 'admin/base.html.twig' %}
 
 {% block admin_content %}
-    <div class="admin-grid admin-grid--two">
-        <section class="admin-card">
+    <div class="admin-article-editor"
+         data-article-editor
+         data-card-url="{{ path('admin_article_editor_card') }}"
+         data-card-update-url="{{ path('admin_article_editor_card_update', {id: '__ID__'}) }}"
+         data-card-meta-url="{{ path('admin_article_editor_card_meta') }}"
+         data-module-url="{{ path('admin_article_editor_module') }}"
+         data-content-url="{{ path('admin_article_editor_content') }}"
+         data-media-url="{{ path('admin_article_editor_media') }}"
+         data-cards-url="{{ path('admin_article_editor_cards') }}">
+        <section class="admin-card admin-article-editor__card">
             <div class="admin-card__header">
-                <h2 class="admin-card__title">Contenu</h2>
-                <p class="admin-card__subtitle">Saisie des elements principaux de l article.</p>
+                <h2 class="admin-card__title" data-card-title>New card</h2>
+                <p class="admin-card__subtitle" data-card-subtitle>Creation rapide d une card article ou cycle.</p>
             </div>
             <div class="admin-card__body">
-                <form class="admin-form" method="get" action="{{ path('admin_article_editor') }}">
+                <form class="admin-form" data-card-form>
                     <div class="admin-form__row">
                         <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-title">Titre</label>
-                            <input class="admin-form__input" id="article-title" name="title" type="text" placeholder="Titre de l article">
+                            <label class="admin-form__label" for="card-title">Titre</label>
+                            <input class="admin-form__input" id="card-title" name="title" type="text" placeholder="Titre de la card" required>
                         </div>
                         <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-slug">Slug</label>
-                            <input class="admin-form__input" id="article-slug" name="slug" type="text" placeholder="titre-de-l-article">
+                            <label class="admin-form__label" for="card-slug">Slug</label>
+                            <input class="admin-form__input" id="card-slug" name="slug" type="text" placeholder="titre-de-la-card">
                         </div>
-                    </div>
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="article-excerpt">Resume</label>
-                        <textarea class="admin-form__input" id="article-excerpt" name="excerpt" rows="3" placeholder="Resume court pour les listes."></textarea>
-                    </div>
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="article-content">Contenu</label>
-                        <textarea class="admin-form__input" id="article-content" name="content" rows="10" placeholder="Texte principal de l article."></textarea>
                     </div>
                     <div class="admin-form__row">
                         <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-tags">Tags</label>
-                            <input class="admin-form__input" id="article-tags" name="tags" type="text" placeholder="lune, data, ciel">
-                        </div>
-                        <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-cover">Image de couverture</label>
-                            <input class="admin-form__input" id="article-cover" name="cover" type="text" placeholder="/uploads/cover.jpg">
-                        </div>
-                    </div>
-                    <div class="admin-month-actions">
-                        <button class="admin-button admin-button--ghost" type="button">Apercu</button>
-                        <button class="admin-button" type="button">Enregistrer brouillon</button>
-                        <button class="admin-button admin-button--primary" type="button">Publier</button>
-                    </div>
-                </form>
-            </div>
-        </section>
-
-        <section class="admin-card">
-            <div class="admin-card__header">
-                <h2 class="admin-card__title">Meta & publication</h2>
-                <p class="admin-card__subtitle">Statut, auteur, dates et SEO.</p>
-            </div>
-            <div class="admin-card__body">
-                <div class="admin-form">
-                    <div class="admin-form__row">
-                        <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-status">Statut</label>
-                            <select class="admin-form__select" id="article-status" name="status">
-                                <option value="draft">Brouillon</option>
-                                <option value="review">En relecture</option>
-                                <option value="published">Publie</option>
+                            <label class="admin-form__label" for="card-type">Type</label>
+                            <select class="admin-form__select" id="card-type" name="type">
+                                <option value="article" selected>Article</option>
+                                <option value="audio">Audio</option>
+                                <option value="meditation">Meditation</option>
+                                <option value="information">Information</option>
+                                <option value="cycle">Cycle</option>
                             </select>
                         </div>
                         <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-author">Auteur</label>
-                            <input class="admin-form__input" id="article-author" name="author" type="text" placeholder="Nom auteur">
+                            <label class="admin-form__label" for="card-baseline">Baseline</label>
+                            <input class="admin-form__input" id="card-baseline" name="baseline" type="text" placeholder="Baseline optionnelle">
                         </div>
                     </div>
                     <div class="admin-form__row">
                         <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-date">Publication</label>
-                            <input class="admin-form__input" id="article-date" name="published_at" type="datetime-local">
+                            <label class="admin-form__label" for="card-description">Description</label>
+                            <textarea class="admin-form__input" id="card-description" name="description" rows="3" placeholder="Description optionnelle"></textarea>
+                        </div>
+                    </div>
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="card-access">Acces</label>
+                            <select class="admin-form__select" id="card-access" name="access_level">
+                                <option value="free" selected>Free</option>
+                                <option value="premium">Premium</option>
+                            </select>
                         </div>
                         <div class="admin-form__field">
-                            <label class="admin-form__label" for="article-readtime">Temps de lecture</label>
-                            <input class="admin-form__input" id="article-readtime" name="read_time" type="text" placeholder="5 min">
+                            <label class="admin-form__label" for="card-status">Statut</label>
+                            <select class="admin-form__select" id="card-status" name="status">
+                                <option value="draft" selected>draft</option>
+                                <option value="published">published</option>
+                                <option value="hidden">hidden</option>
+                                <option value="blocked">blocked</option>
+                                <option value="scheduled">scheduled</option>
+                            </select>
+                        </div>
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="card-featured-rank">Mise en avant (ordre)</label>
+                            <input class="admin-form__input" id="card-featured-rank" name="featured_rank" type="number" min="1" placeholder="1 = top">
                         </div>
                     </div>
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="article-seo-title">SEO titre</label>
-                        <input class="admin-form__input" id="article-seo-title" name="seo_title" type="text" placeholder="Titre SEO">
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="card-cover">Image de couverture</label>
+                            <input class="admin-form__input" id="card-cover" type="file" accept="image/*" data-cover-input>
+                        </div>
                     </div>
-                    <div class="admin-form__field">
-                        <label class="admin-form__label" for="article-seo-desc">SEO description</label>
-                        <textarea class="admin-form__input" id="article-seo-desc" name="seo_desc" rows="3" placeholder="Meta description."></textarea>
+                    <div class="admin-article-editor__actions">
+                        <button class="admin-button admin-button--primary" type="button" data-card-submit>Creer la card</button>
+                        <button class="admin-button admin-button--ghost" type="button" data-card-featured-submit>Mettre a jour mise en avant</button>
                     </div>
+                    <div class="admin-article-editor__status" data-card-status>En attente de creation.</div>
+                </form>
+                <div class="admin-article-editor__cover-preview" data-cover-preview>
+                    <span class="admin-article-editor__cover-label">Aucune image</span>
                 </div>
             </div>
         </section>
+
+        <section class="admin-card admin-article-editor__module is-hidden" data-module-block>
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Module de cycle</h2>
+                <p class="admin-card__subtitle">Ajoute des modules ordonnes pour un cycle.</p>
+            </div>
+            <div class="admin-card__body">
+                <form class="admin-form" data-module-form>
+                    <div class="admin-form__row">
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="module-title">Titre du module</label>
+                            <input class="admin-form__input" id="module-title" name="title" type="text" placeholder="Module 1">
+                        </div>
+                        <div class="admin-form__field">
+                            <label class="admin-form__label" for="module-order">Order index</label>
+                            <input class="admin-form__input" id="module-order" name="order_index" type="number" min="1" placeholder="Auto">
+                        </div>
+                    </div>
+                    <div class="admin-article-editor__actions">
+                        <button class="admin-button admin-button--primary" type="button" data-module-add>Ajouter un module</button>
+                    </div>
+                </form>
+                <div class="admin-article-editor__module-list" data-module-list>
+                    <div class="admin-empty">Aucun module pour le moment.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-card admin-article-editor__picker" data-card-picker>
+            <div class="admin-card__header">
+                <h2 class="admin-card__title">Selection de card</h2>
+                <p class="admin-card__subtitle">Choisis une card existante pour l editer.</p>
+            </div>
+            <div class="admin-card__body">
+                <div class="admin-article-editor__card-grid" data-cards-list>
+                    {% if cards is defined and cards|length > 0 %}
+                        {% for card in cards %}
+                            <button class="admin-article-editor__card-tile"
+                                    type="button"
+                                    data-card-id="{{ card.id }}"
+                                    {% if card.cover_url %}style="--card-cover: url('{{ card.cover_url }}')" {% endif %}>
+                                <div class="admin-article-editor__card-media"></div>
+                                <div class="admin-article-editor__card-body">
+                                    <div class="admin-article-editor__card-title">{{ card.title }}</div>
+                                    <div class="admin-article-editor__card-meta">
+                                        <span>{{ card.type }}</span>
+                                        <span>{{ card.status }}</span>
+                                    </div>
+                                </div>
+                            </button>
+                        {% endfor %}
+                    {% else %}
+                        <div class="admin-empty">Aucune card disponible.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <div class="admin-editor">
+            <div class="admin-editor__columns">
+                <section class="admin-card admin-editor__panel">
+                    <div class="admin-card__header">
+                        <h2 class="admin-card__title">Creation</h2>
+                        <p class="admin-card__subtitle">Editeur Tiptap pour generer le JSON.</p>
+                    </div>
+                    <div class="admin-card__body">
+                        <div class="admin-editor__toolbar">
+                            <div class="admin-form__field admin-editor__module-select is-hidden" data-module-select-wrap>
+                                <label class="admin-form__label" for="module-active">Module actif</label>
+                                <select class="admin-form__select" id="module-active" data-module-select></select>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label" for="media-input">Images</label>
+                                <input class="admin-form__input" id="media-input" type="file" accept="image/*" data-media-input>
+                            </div>
+                        </div>
+                        <div class="admin-editor__toolbar admin-editor__toolbar--format">
+                            <div class="admin-form__field">
+                                <label class="admin-form__label" for="editor-theme">Theme</label>
+                                <select class="admin-form__select" id="editor-theme" data-text-theme>
+                                    <option value="">Theme rapide</option>
+                                    <option value="title">Titre</option>
+                                    <option value="text">Texte</option>
+                                    <option value="baseline">Baseline</option>
+                                    <option value="quote">Citation</option>
+                                </select>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label" for="editor-font">Police</label>
+                                <select class="admin-form__select" id="editor-font" data-font-family>
+                                    <option value="">Auto</option>
+                                    <option value="Playfair Display">Playfair Display</option>
+                                    <option value="Source Sans 3">Source Sans 3</option>
+                                    <option value="Manrope">Manrope</option>
+                                    <option value="Libre Baskerville">Libre Baskerville</option>
+                                </select>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label" for="editor-size">Taille</label>
+                                <select class="admin-form__select" id="editor-size" data-font-size>
+                                    <option value="">Auto</option>
+                                    <option value="12">12</option>
+                                    <option value="14">14</option>
+                                    <option value="16">16</option>
+                                    <option value="18">18</option>
+                                    <option value="20">20</option>
+                                    <option value="24">24</option>
+                                    <option value="28">28</option>
+                                    <option value="32">32</option>
+                                    <option value="36">36</option>
+                                </select>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label" for="editor-line-height">Interlignage</label>
+                                <select class="admin-form__select" id="editor-line-height" data-line-height>
+                                    <option value="">Auto</option>
+                                    <option value="1.2">1.2</option>
+                                    <option value="1.4">1.4</option>
+                                    <option value="1.6">1.6</option>
+                                    <option value="1.8">1.8</option>
+                                    <option value="2.0">2.0</option>
+                                </select>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label">Alignement</label>
+                                <div class="admin-editor__button-row">
+                                    <button class="admin-button admin-button--ghost" type="button" data-align="left">Gauche</button>
+                                    <button class="admin-button admin-button--ghost" type="button" data-align="center">Centre</button>
+                                    <button class="admin-button admin-button--ghost" type="button" data-align="right">Droite</button>
+                                </div>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label">Styles</label>
+                                <div class="admin-editor__button-row">
+                                    <button class="admin-button admin-button--ghost" type="button" data-format="bold">Gras</button>
+                                    <button class="admin-button admin-button--ghost" type="button" data-format="italic">Italique</button>
+                                    <button class="admin-button admin-button--ghost" type="button" data-format="underline">Souligne</button>
+                                    <button class="admin-button admin-button--ghost" type="button" data-format="strike">Barre</button>
+                                </div>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label">Liste</label>
+                                <div class="admin-editor__button-row">
+                                    <button class="admin-button admin-button--ghost" type="button" data-format="bullet">Liste a puces</button>
+                                </div>
+                            </div>
+                            <div class="admin-form__field">
+                                <label class="admin-form__label">Citation</label>
+                                <div class="admin-editor__button-row">
+                                    <button class="admin-button admin-button--ghost" type="button" data-format="blockquote">Bloc citation</button>
+                                </div>
+                            </div>
+                            <div class="admin-form__field admin-editor__color-field">
+                                <label class="admin-form__label">Couleurs</label>
+                                <div class="admin-color-palette" data-color-palette></div>
+                            </div>
+                        </div>
+                        <div class="admin-editor__canvas" data-editor></div>
+                    </div>
+                </section>
+
+                <section class="admin-card admin-editor__panel">
+                    <div class="admin-card__header">
+                        <h2 class="admin-card__title">Affichage</h2>
+                        <p class="admin-card__subtitle">Rendu live avec largeur ajustable.</p>
+                    </div>
+                    <div class="admin-card__body">
+                        <div class="admin-editor__preview-controls">
+                            <button class="admin-button admin-button--ghost is-active" type="button" data-preview-size="360">Petit</button>
+                            <button class="admin-button admin-button--ghost" type="button" data-preview-size="430">Moyen</button>
+                            <button class="admin-button admin-button--ghost" type="button" data-preview-size="768">Grand</button>
+                        </div>
+                        <div class="admin-editor__preview-shell">
+                            <div class="admin-editor__preview" data-preview style="--preview-width: 360px;"></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="admin-editor__actions">
+                <button class="admin-button admin-button--primary" type="button" data-save-content>Enregistrer</button>
+                <span class="admin-editor__status" data-save-status>Rien a enregistrer.</span>
+            </div>
+        </div>
     </div>
 
-    <section class="admin-card">
-        <div class="admin-card__header">
-            <h2 class="admin-card__title">Apercu</h2>
-            <p class="admin-card__subtitle">Extrait visuel du rendu final.</p>
-        </div>
-        <div class="admin-card__body">
-            <p class="admin-empty">Aucun apercu genere pour le moment.</p>
-        </div>
-    </section>
+    <script type="module">
+        const root = document.querySelector('[data-article-editor]');
+        if (!root) {
+            throw new Error('Article editor introuvable.');
+        }
+
+        const urls = {
+            card: root.dataset.cardUrl,
+            cardUpdate: root.dataset.cardUpdateUrl,
+            cardMeta: root.dataset.cardMetaUrl,
+            module: root.dataset.moduleUrl,
+            content: root.dataset.contentUrl,
+            media: root.dataset.mediaUrl,
+            cards: root.dataset.cardsUrl,
+        };
+        const cardsBaseUrl = (urls.cards || '').replace(/\/$/, '');
+
+        const state = {
+            cardId: null,
+            cardType: 'article',
+            modules: [],
+            moduleId: null,
+            slugTouched: false,
+            coverMediaId: null,
+        };
+
+        const cardForm = root.querySelector('[data-card-form]');
+        const cardStatus = root.querySelector('[data-card-status]');
+        const cardHeader = root.querySelector('[data-card-title]');
+        const cardSubtitle = root.querySelector('[data-card-subtitle]');
+        const cardTitle = root.querySelector('#card-title');
+        const cardSlug = root.querySelector('#card-slug');
+        const cardType = root.querySelector('#card-type');
+        const cardAccess = root.querySelector('#card-access');
+        const cardStatusSelect = root.querySelector('#card-status');
+        const cardBaseline = root.querySelector('#card-baseline');
+        const cardFeaturedRank = root.querySelector('#card-featured-rank');
+        const cardDescription = root.querySelector('#card-description');
+        const cardSubmit = root.querySelector('[data-card-submit]');
+        const cardFeaturedSubmit = root.querySelector('[data-card-featured-submit]');
+        const coverInput = root.querySelector('[data-cover-input]');
+        const coverPreview = root.querySelector('[data-cover-preview]');
+
+        const moduleBlock = root.querySelector('[data-module-block]');
+        const moduleList = root.querySelector('[data-module-list]');
+        const moduleAdd = root.querySelector('[data-module-add]');
+        const moduleTitle = root.querySelector('#module-title');
+        const moduleOrder = root.querySelector('#module-order');
+        const moduleSelectWrap = root.querySelector('[data-module-select-wrap]');
+        const moduleSelect = root.querySelector('[data-module-select]');
+
+        const saveButton = root.querySelector('[data-save-content]');
+        const saveStatus = root.querySelector('[data-save-status]');
+        const preview = root.querySelector('[data-preview]');
+        const mediaInput = root.querySelector('[data-media-input]');
+        const cardsList = root.querySelector('[data-cards-list]');
+        const themeSelect = root.querySelector('[data-text-theme]');
+        const fontFamilySelect = root.querySelector('[data-font-family]');
+        const fontSizeSelect = root.querySelector('[data-font-size]');
+        const lineHeightSelect = root.querySelector('[data-line-height]');
+        const colorPalette = root.querySelector('[data-color-palette]');
+        const alignButtons = root.querySelectorAll('[data-align]');
+        const formatButtons = root.querySelectorAll('[data-format]');
+
+        let editor = null;
+        let pendingContent = null;
+
+        const setStatus = (el, message, tone = '') => {
+            el.textContent = message;
+            el.dataset.tone = tone;
+        };
+
+        const setCoverPreview = (url) => {
+            if (!coverPreview) {
+                return;
+            }
+            if (!url) {
+                coverPreview.style.setProperty('--cover-url', 'none');
+                coverPreview.classList.remove('has-cover');
+                coverPreview.querySelector('.admin-article-editor__cover-label').textContent = 'Aucune image';
+                return;
+            }
+            coverPreview.style.setProperty('--cover-url', `url('${url}')`);
+            coverPreview.classList.add('has-cover');
+            coverPreview.querySelector('.admin-article-editor__cover-label').textContent = 'Image chargee';
+        };
+
+        const setEditorContent = (contentJson) => {
+            pendingContent = contentJson;
+            if (!editor) {
+                return;
+            }
+            editor.commands.setContent(contentJson || '', false);
+            preview.innerHTML = editor.getHTML();
+        };
+
+        const slugify = (value) => {
+            return value
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        };
+
+        const buildAutoSlug = (value) => {
+            const base = slugify(value);
+            if (base === '') {
+                return '';
+            }
+            if (state.cardId) {
+                return `${state.cardId}-${base}`;
+            }
+            return base;
+        };
+
+        // Commentaire: configuration des themes/palette pour appliquer un style coherent dans le JSON.
+        const textThemes = {
+            title: {
+                fontFamily: 'Playfair Display',
+                fontSize: '28',
+                lineHeight: '1.2',
+                color: '#F5F3EE',
+                align: 'left',
+            },
+            text: {
+                fontFamily: 'Source Sans 3',
+                fontSize: '16',
+                lineHeight: '1.6',
+                color: '#E6E1D6',
+                align: 'left',
+            },
+            baseline: {
+                fontFamily: 'Manrope',
+                fontSize: '14',
+                lineHeight: '1.4',
+                color: '#CFC8BA',
+                align: 'left',
+            },
+            quote: {
+                fontFamily: 'Libre Baskerville',
+                fontSize: '18',
+                lineHeight: '1.6',
+                color: '#BFA06A',
+                align: 'left',
+            },
+        };
+
+        const colorPaletteValues = [
+            '#F5F3EE',
+            '#E6E1D6',
+            '#CFC8BA',
+            '#AFA89A',
+            '#8E877A',
+            '#6F6A5E',
+            '#4E4A42',
+            '#2F2C28',
+            '#1F1D1A',
+            '#11100F',
+            '#E3B341',
+            '#D97D54',
+            '#C85A5A',
+            '#B44C7D',
+            '#4B6FE3',
+            '#3C8BD9',
+            '#2BA9A0',
+            '#2F9D68',
+            '#76B041',
+            '#C2D166',
+            '#F2C14E',
+            '#BFA06A',
+        ];
+
+        const renderPalette = () => {
+            if (!colorPalette) {
+                return;
+            }
+            colorPalette.innerHTML = colorPaletteValues
+                .map((color) => `
+                    <button class="admin-color-swatch" type="button" data-color="${color}" style="background:${color}" aria-label="Couleur ${color}"></button>
+                `)
+                .join('');
+        };
+
+        const postJson = async (url, payload) => {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || 'Erreur serveur.');
+            }
+            return data;
+        };
+
+        const applyTheme = (themeKey) => {
+            if (!editor || !themeKey || !textThemes[themeKey]) {
+                return;
+            }
+            const theme = textThemes[themeKey];
+            editor
+                .chain()
+                .focus()
+                .setFontFamily(theme.fontFamily)
+                .setFontSize(theme.fontSize)
+                .setLineHeight(theme.lineHeight)
+                .setColor(theme.color)
+                .setTextAlign(theme.align)
+                .run();
+            if (fontFamilySelect) {
+                fontFamilySelect.value = theme.fontFamily;
+            }
+            if (fontSizeSelect) {
+                fontSizeSelect.value = theme.fontSize;
+            }
+            if (lineHeightSelect) {
+                lineHeightSelect.value = theme.lineHeight;
+            }
+        };
+
+        const resetCardFormState = () => {
+            cardForm.querySelectorAll('input, select, textarea, button').forEach((el) => {
+                el.removeAttribute('disabled');
+            });
+            cardHeader.textContent = 'New card';
+            cardSubtitle.textContent = 'Creation rapide d une card article ou cycle.';
+            if (cardSubmit) {
+                cardSubmit.textContent = 'Creer la card';
+            }
+            if (cardFeaturedSubmit) {
+                cardFeaturedSubmit.setAttribute('disabled', 'disabled');
+            }
+        };
+
+        const lockCardForm = () => {
+            cardForm.querySelectorAll('input, select, textarea, button').forEach((el) => {
+                el.removeAttribute('disabled');
+            });
+            cardHeader.textContent = 'Modifier la card';
+            cardSubtitle.textContent = 'Card selectionnee pour edition.';
+            if (cardSubmit) {
+                cardSubmit.textContent = 'Modifier la card';
+            }
+            if (cardFeaturedRank) {
+                cardFeaturedRank.removeAttribute('disabled');
+            }
+            if (cardFeaturedSubmit) {
+                cardFeaturedSubmit.removeAttribute('disabled');
+            }
+        };
+
+        const refreshModuleList = () => {
+            if (state.modules.length === 0) {
+                moduleList.innerHTML = '<div class="admin-empty">Aucun module pour le moment.</div>';
+                moduleSelect.innerHTML = '';
+                return;
+            }
+            moduleList.innerHTML = state.modules
+                .map((module) => `
+                    <button type="button" class="admin-article-editor__module-item ${module.id === state.moduleId ? 'is-active' : ''}"
+                        data-module-id="${module.id}">
+                        <span>Module ${module.order_index}</span>
+                        <strong>${module.title}</strong>
+                    </button>
+                `)
+                .join('');
+            moduleSelect.innerHTML = state.modules
+                .map((module) => `<option value="${module.id}" ${module.id === state.moduleId ? 'selected' : ''}>${module.order_index} - ${module.title}</option>`)
+                .join('');
+        };
+
+        const setActiveModule = (moduleId) => {
+            state.moduleId = moduleId;
+            refreshModuleList();
+            const module = state.modules.find((item) => item.id === moduleId);
+            setEditorContent(module ? module.content_json : '');
+        };
+
+        const ensureCycleUI = () => {
+            if (state.cardType === 'cycle') {
+                moduleBlock.classList.remove('is-hidden');
+                moduleSelectWrap.classList.remove('is-hidden');
+            } else {
+                moduleBlock.classList.add('is-hidden');
+                moduleSelectWrap.classList.add('is-hidden');
+            }
+        };
+
+        cardTitle.addEventListener('input', () => {
+            if (!state.slugTouched) {
+                cardSlug.value = buildAutoSlug(cardTitle.value);
+            }
+        });
+
+        cardSlug.addEventListener('input', () => {
+            state.slugTouched = true;
+        });
+
+        cardType.addEventListener('change', () => {
+            state.cardType = cardType.value;
+            ensureCycleUI();
+        });
+
+        if (themeSelect) {
+            themeSelect.addEventListener('change', () => {
+                applyTheme(themeSelect.value);
+            });
+        }
+
+        if (fontFamilySelect) {
+            fontFamilySelect.addEventListener('change', () => {
+                if (!editor) {
+                    return;
+                }
+                if (fontFamilySelect.value === '') {
+                    editor.chain().focus().unsetFontFamily().run();
+                    return;
+                }
+                editor.chain().focus().setFontFamily(fontFamilySelect.value).run();
+            });
+        }
+
+        if (fontSizeSelect) {
+            fontSizeSelect.addEventListener('change', () => {
+                if (!editor) {
+                    return;
+                }
+                if (fontSizeSelect.value === '') {
+                    editor.chain().focus().unsetFontSize().run();
+                    return;
+                }
+                editor.chain().focus().setFontSize(fontSizeSelect.value).run();
+            });
+        }
+
+        if (lineHeightSelect) {
+            lineHeightSelect.addEventListener('change', () => {
+                if (!editor) {
+                    return;
+                }
+                if (lineHeightSelect.value === '') {
+                    editor.chain().focus().unsetLineHeight().run();
+                    return;
+                }
+                editor.chain().focus().setLineHeight(lineHeightSelect.value).run();
+            });
+        }
+
+        alignButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                if (!editor) {
+                    return;
+                }
+                const align = button.dataset.align;
+                if (!align) {
+                    return;
+                }
+                editor.chain().focus().setTextAlign(align).run();
+            });
+        });
+
+        formatButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                if (!editor) {
+                    return;
+                }
+                const format = button.dataset.format;
+                switch (format) {
+                    case 'bold':
+                        editor.chain().focus().toggleBold().run();
+                        break;
+                    case 'italic':
+                        editor.chain().focus().toggleItalic().run();
+                        break;
+                    case 'underline':
+                        editor.chain().focus().toggleUnderline().run();
+                        break;
+                    case 'strike':
+                        editor.chain().focus().toggleStrike().run();
+                        break;
+                    case 'bullet':
+                        editor.chain().focus().toggleBulletList().run();
+                        break;
+                    case 'blockquote':
+                        editor.chain().focus().toggleBlockquote().run();
+                        break;
+                    default:
+                        break;
+                }
+            });
+        });
+
+        if (colorPalette) {
+            colorPalette.addEventListener('click', (event) => {
+                if (!editor) {
+                    return;
+                }
+                const swatch = event.target.closest('[data-color]');
+                if (!swatch) {
+                    return;
+                }
+                const color = swatch.dataset.color;
+                if (!color) {
+                    return;
+                }
+                editor.chain().focus().setColor(color).run();
+                colorPalette.querySelectorAll('.admin-color-swatch').forEach((button) => {
+                    button.classList.toggle('is-active', button === swatch);
+                });
+            });
+        }
+
+        cardSubmit.addEventListener('click', async () => {
+            try {
+                const payload = {
+                    title: cardTitle.value,
+                    slug: cardSlug.value,
+                    type: cardType.value,
+                    baseline: cardBaseline.value,
+                    description: cardDescription ? cardDescription.value : '',
+                    access_level: cardAccess.value,
+                    status: cardStatusSelect ? cardStatusSelect.value : undefined,
+                    featured_rank: cardFeaturedRank ? cardFeaturedRank.value : null,
+                    cover_media_id: state.coverMediaId,
+                };
+                if (state.cardId && urls.cardUpdate) {
+                    setStatus(cardStatus, 'Mise a jour en cours...', 'info');
+                    const updateUrl = urls.cardUpdate.replace('__ID__', encodeURIComponent(String(state.cardId)));
+                    const data = await postJson(updateUrl, payload);
+                    state.cardType = data.type;
+                    if (data.slug) {
+                        cardSlug.value = data.slug;
+                    }
+                    state.coverMediaId = data.cover_media_id || state.coverMediaId;
+                    lockCardForm();
+                    setStatus(cardStatus, `Card mise a jour (#${data.card_id}).`, 'success');
+                    ensureCycleUI();
+                    await loadCards();
+                    return;
+                }
+
+                setStatus(cardStatus, 'Creation en cours...', 'info');
+                const data = await postJson(urls.card, payload);
+                state.cardId = data.card_id;
+                state.cardType = data.type;
+                if (data.slug) {
+                    cardSlug.value = data.slug;
+                    state.slugTouched = false;
+                }
+                state.coverMediaId = data.cover_media_id || state.coverMediaId;
+                lockCardForm();
+                setStatus(cardStatus, `Card creee (#${data.card_id}).`, 'success');
+                ensureCycleUI();
+                if (state.cardType === 'cycle' && state.modules.length === 0) {
+                    const moduleData = await postJson(urls.module, {
+                        cycle_card_id: state.cardId,
+                        title: 'Module 1',
+                        order_index: 1,
+                    });
+                    state.modules.push({
+                        id: moduleData.module_id,
+                        title: moduleData.title,
+                        order_index: moduleData.order_index,
+                    });
+                    setActiveModule(moduleData.module_id);
+                }
+            } catch (error) {
+                setStatus(cardStatus, error.message, 'error');
+            }
+        });
+
+        if (cardFeaturedSubmit) {
+            cardFeaturedSubmit.addEventListener('click', async () => {
+                if (!state.cardId) {
+                    return setStatus(cardStatus, 'Cree d abord la card.', 'warning');
+                }
+                try {
+                    setStatus(cardStatus, 'Mise en avant en cours...', 'info');
+                    const payload = {
+                        card_id: state.cardId,
+                        featured_rank: cardFeaturedRank ? cardFeaturedRank.value : null,
+                    };
+                    const data = await postJson(urls.cardMeta, payload);
+                    if (cardFeaturedRank) {
+                        cardFeaturedRank.value = data.featured_rank || '';
+                    }
+                    setStatus(cardStatus, 'Mise en avant mise a jour.', 'success');
+                    await loadCards();
+                } catch (error) {
+                    setStatus(cardStatus, error.message, 'error');
+                }
+            });
+        }
+
+        const loadCards = async () => {
+            if (!cardsBaseUrl) {
+                return;
+            }
+            try {
+                const response = await fetch(cardsBaseUrl, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erreur chargement cards.');
+                }
+                const cards = data.cards || [];
+                if (cards.length > 0) {
+                    cardsList.innerHTML = cards
+                    .map((card) => {
+                        const cover = card.cover_url ? `style="--card-cover: url('${card.cover_url}')"` : '';
+                        return `
+                            <button class="admin-article-editor__card-tile ${card.id === state.cardId ? 'is-active' : ''}"
+                                    type="button"
+                                    data-card-id="${card.id}"
+                                    ${cover}>
+                                <div class="admin-article-editor__card-media"></div>
+                                <div class="admin-article-editor__card-body">
+                                    <div class="admin-article-editor__card-title">${card.title}</div>
+                                    <div class="admin-article-editor__card-meta">
+                                        <span>${card.type}</span>
+                                        <span>${card.status}</span>
+                                    </div>
+                                </div>
+                            </button>
+                        `;
+                    })
+                    .join('');
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        };
+
+        const loadCardDetail = async (cardId) => {
+            try {
+                const normalizedId = String(cardId || '').trim();
+                if (!cardsBaseUrl || normalizedId === '') {
+                    throw new Error('URL card invalide.');
+                }
+                const detailUrl = `${cardsBaseUrl}/${encodeURIComponent(normalizedId)}`;
+                const response = await fetch(detailUrl, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || `Erreur chargement card (${response.status}).`);
+                }
+                const card = data.card;
+                state.cardId = card.id;
+                state.cardType = card.type;
+                state.coverMediaId = card.cover_media_id || null;
+                cardTitle.value = card.title || '';
+                cardSlug.value = card.slug || '';
+                cardBaseline.value = card.baseline || '';
+                if (cardDescription) {
+                    cardDescription.value = card.description || '';
+                }
+                cardAccess.value = card.access_level || 'free';
+                if (cardStatusSelect) {
+                    cardStatusSelect.value = card.status || 'draft';
+                }
+                if (cardFeaturedRank) {
+                    cardFeaturedRank.value = card.featured_rank || '';
+                }
+                cardType.value = card.type || 'article';
+                state.slugTouched = false;
+                setCoverPreview(card.cover_url || '');
+                lockCardForm();
+                ensureCycleUI();
+
+                if (['article', 'audio', 'meditation', 'information'].includes(card.type)) {
+                    state.modules = [];
+                    state.moduleId = null;
+                    refreshModuleList();
+                    const json = data.article?.content_json || '';
+                    setEditorContent(json);
+                } else {
+                    state.modules = (data.modules || []).map((module) => ({
+                        id: module.id,
+                        title: module.title,
+                        order_index: module.order_index,
+                        content_json: module.content_json || null,
+                    }));
+                    refreshModuleList();
+                    if (state.modules.length > 0) {
+                        setActiveModule(state.modules[0].id);
+                    } else {
+                        state.moduleId = null;
+                        setEditorContent('');
+                    }
+                }
+                await loadCards();
+            } catch (error) {
+                setStatus(cardStatus, error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        cardsList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-card-id]');
+            if (!button) {
+                return;
+            }
+            loadCardDetail(button.dataset.cardId);
+        });
+
+        moduleAdd.addEventListener('click', async () => {
+            if (!state.cardId) {
+                return setStatus(cardStatus, 'Cree d abord la card.', 'warning');
+            }
+            try {
+                const payload = {
+                    cycle_card_id: state.cardId,
+                    title: moduleTitle.value || `Module ${state.modules.length + 1}`,
+                    order_index: moduleOrder.value,
+                };
+                const data = await postJson(urls.module, payload);
+                state.modules.push({
+                    id: data.module_id,
+                    title: data.title,
+                    order_index: data.order_index,
+                });
+                setActiveModule(data.module_id);
+                moduleTitle.value = '';
+                moduleOrder.value = '';
+                await loadCards();
+            } catch (error) {
+                setStatus(cardStatus, error.message, 'error');
+            }
+        });
+
+        moduleList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-module-id]');
+            if (!button) {
+                return;
+            }
+            setActiveModule(parseInt(button.dataset.moduleId, 10));
+        });
+
+        moduleSelect.addEventListener('change', () => {
+            setActiveModule(parseInt(moduleSelect.value, 10));
+        });
+
+        saveButton.addEventListener('click', async () => {
+            if (!state.cardId) {
+                return setStatus(saveStatus, 'Aucune card creee.', 'warning');
+            }
+            if (state.cardType === 'cycle' && !state.moduleId) {
+                return setStatus(saveStatus, 'Selectionne un module.', 'warning');
+            }
+            if (!editor) {
+                return setStatus(saveStatus, 'Editeur non charge (Tiptap).', 'warning');
+            }
+            try {
+                setStatus(saveStatus, 'Enregistrement...', 'info');
+                const payload = {
+                    card_id: state.cardId,
+                    content_json: editor.getJSON(),
+                };
+                if (state.cardType === 'cycle') {
+                    payload.module_id = state.moduleId;
+                }
+                const data = await postJson(urls.content, payload);
+                if (data.item_id) {
+                    setStatus(saveStatus, `Contenu enregistre (item #${data.item_id}).`, 'success');
+                } else {
+                    setStatus(saveStatus, 'Contenu enregistre.', 'success');
+                }
+                await loadCards();
+            } catch (error) {
+                setStatus(saveStatus, error.message, 'error');
+            }
+        });
+
+        coverInput.addEventListener('change', async () => {
+            if (!coverInput.files || coverInput.files.length === 0) {
+                return;
+            }
+            const file = coverInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                setStatus(cardStatus, 'Upload image...', 'info');
+                const response = await fetch(urls.media, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erreur upload.');
+                }
+                state.coverMediaId = data.media_id;
+                setCoverPreview(data.app_url || '');
+                setStatus(cardStatus, 'Image de couverture chargee.', 'success');
+            } catch (error) {
+                setStatus(cardStatus, error.message, 'error');
+            } finally {
+                coverInput.value = '';
+            }
+        });
+
+        mediaInput.addEventListener('change', async () => {
+            if (!mediaInput.files || mediaInput.files.length === 0) {
+                return;
+            }
+            if (!editor) {
+                return setStatus(saveStatus, 'Editeur non charge (Tiptap).', 'warning');
+            }
+            const file = mediaInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                setStatus(saveStatus, 'Upload image...', 'info');
+                const response = await fetch(urls.media, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erreur upload.');
+                }
+                if (data.app_url) {
+                    editor.chain().focus().setImage({ src: data.app_url }).run();
+                }
+                setStatus(saveStatus, 'Image ajoutee.', 'success');
+            } catch (error) {
+                setStatus(saveStatus, error.message, 'error');
+            } finally {
+                mediaInput.value = '';
+            }
+        });
+
+        root.querySelectorAll('[data-preview-size]').forEach((button) => {
+            button.addEventListener('click', () => {
+                root.querySelectorAll('[data-preview-size]').forEach((btn) => btn.classList.remove('is-active'));
+                button.classList.add('is-active');
+                const size = button.dataset.previewSize || '360';
+                preview.style.setProperty('--preview-width', `${size}px`);
+            });
+        });
+
+        const initEditor = async () => {
+            try {
+                const [{ Editor, Extension }, { default: StarterKit }, { default: Image }, { default: Underline }, { default: TextStyle }, { default: Color }, { default: FontFamily }, { default: TextAlign }] = await Promise.all([
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/core@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/extension-underline@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/extension-text-style@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/extension-color@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/extension-font-family@2.2.4/+esm'),
+                    import('https://cdn.jsdelivr.net/npm/@tiptap/extension-text-align@2.2.4/+esm'),
+                ]);
+
+                const FontSize = Extension.create({
+                    name: 'fontSize',
+                    addOptions() {
+                        return {
+                            types: ['textStyle'],
+                        };
+                    },
+                    addGlobalAttributes() {
+                        return [
+                            {
+                                types: this.options.types,
+                                attributes: {
+                                    fontSize: {
+                                        default: null,
+                                        parseHTML: (element) => element.style.fontSize?.replace('px', ''),
+                                        renderHTML: (attributes) => {
+                                            if (!attributes.fontSize) {
+                                                return {};
+                                            }
+                                            return { style: `font-size: ${attributes.fontSize}px` };
+                                        },
+                                    },
+                                },
+                            },
+                        ];
+                    },
+                    addCommands() {
+                        return {
+                            setFontSize:
+                                (size) =>
+                                ({ chain }) => {
+                                    return chain().setMark('textStyle', { fontSize: size }).run();
+                                },
+                            unsetFontSize:
+                                () =>
+                                ({ chain }) => {
+                                    return chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run();
+                                },
+                        };
+                    },
+                });
+
+                const LineHeight = Extension.create({
+                    name: 'lineHeight',
+                    addOptions() {
+                        return {
+                            types: ['textStyle'],
+                        };
+                    },
+                    addGlobalAttributes() {
+                        return [
+                            {
+                                types: this.options.types,
+                                attributes: {
+                                    lineHeight: {
+                                        default: null,
+                                        parseHTML: (element) => element.style.lineHeight || null,
+                                        renderHTML: (attributes) => {
+                                            if (!attributes.lineHeight) {
+                                                return {};
+                                            }
+                                            return { style: `line-height: ${attributes.lineHeight}` };
+                                        },
+                                    },
+                                },
+                            },
+                        ];
+                    },
+                    addCommands() {
+                        return {
+                            setLineHeight:
+                                (value) =>
+                                ({ chain }) => {
+                                    return chain().setMark('textStyle', { lineHeight: value }).run();
+                                },
+                            unsetLineHeight:
+                                () =>
+                                ({ chain }) => {
+                                    return chain().setMark('textStyle', { lineHeight: null }).removeEmptyTextStyle().run();
+                                },
+                        };
+                    },
+                });
+                editor = new Editor({
+                    element: root.querySelector('[data-editor]'),
+                    extensions: [
+                        StarterKit,
+                        Underline,
+                        TextStyle,
+                        Color,
+                        FontFamily,
+                        FontSize,
+                        LineHeight,
+                        TextAlign.configure({ types: ['paragraph', 'heading'] }),
+                        Image,
+                    ],
+                    content: pendingContent || '',
+                    onUpdate: ({ editor }) => {
+                        preview.innerHTML = editor.getHTML();
+                    },
+                });
+                if (pendingContent) {
+                    setEditorContent(pendingContent);
+                }
+            } catch (error) {
+                setStatus(saveStatus, 'Tiptap indisponible (CDN bloque).', 'warning');
+                console.error(error);
+            }
+        };
+
+        resetCardFormState();
+        renderPalette();
+        loadCards();
+        initEditor();
+
+        const initialCardId = new URLSearchParams(window.location.search).get('card_id');
+        if (initialCardId) {
+            loadCardDetail(initialCardId);
+        }
+    </script>
 {% endblock %}

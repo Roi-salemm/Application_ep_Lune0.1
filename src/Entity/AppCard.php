@@ -19,6 +19,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(columns: ['status', 'published_at'], name: 'idx_app_card_status_published')]
 #[ORM\Index(columns: ['type'], name: 'idx_app_card_type')]
 #[ORM\Index(columns: ['access_level'], name: 'idx_app_card_access_level')]
+#[ORM\Index(columns: ['featured_rank'], name: 'idx_app_card_featured_rank')]
 #[ORM\HasLifecycleCallbacks]
 class AppCard
 {
@@ -27,7 +28,7 @@ class AppCard
     #[ORM\Column(type: Types::BIGINT, options: ['unsigned' => true])]
     private ?string $id = null;
 
-    #[ORM\Column(type: Types::STRING, length: 20, columnDefinition: "ENUM('article','cycle')")]
+    #[ORM\Column(type: Types::STRING, length: 20, columnDefinition: "ENUM('article','cycle','audio','meditation','information')")]
     private string $type;
 
     #[ORM\Column(type: Types::STRING, length: 190)]
@@ -39,6 +40,9 @@ class AppCard
     #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
     private ?string $baseline = null;
 
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $description = null;
+
     #[ORM\ManyToOne(targetEntity: AppMedia::class)]
     #[ORM\JoinColumn(name: 'cover_media_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     private ?AppMedia $coverMedia = null;
@@ -46,7 +50,10 @@ class AppCard
     #[ORM\Column(name: 'access_level', type: Types::STRING, length: 20, columnDefinition: "ENUM('free','premium')", options: ['default' => 'free'])]
     private string $accessLevel = 'free';
 
-    #[ORM\Column(type: Types::STRING, length: 20, columnDefinition: "ENUM('draft','published')", options: ['default' => 'draft'])]
+    #[ORM\Column(name: 'featured_rank', type: Types::INTEGER, nullable: true, options: ['unsigned' => true])]
+    private ?int $featuredRank = null;
+
+    #[ORM\Column(type: Types::STRING, length: 20, columnDefinition: "ENUM('draft','published','hidden','blocked','scheduled')", options: ['default' => 'draft'])]
     private string $status = 'draft';
 
     #[ORM\Column(name: 'published_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
@@ -145,6 +152,18 @@ class AppCard
         return $this;
     }
 
+    public function getDescription(): ?string
+    {
+        return $this->description;
+    }
+
+    public function setDescription(?string $description): self
+    {
+        $this->description = $description;
+
+        return $this;
+    }
+
     public function getCoverMedia(): ?AppMedia
     {
         return $this->coverMedia;
@@ -165,6 +184,18 @@ class AppCard
     public function setAccessLevel(string $accessLevel): self
     {
         $this->accessLevel = $accessLevel;
+
+        return $this;
+    }
+
+    public function getFeaturedRank(): ?int
+    {
+        return $this->featuredRank;
+    }
+
+    public function setFeaturedRank(?int $featuredRank): self
+    {
+        $this->featuredRank = $featuredRank;
 
         return $this;
     }
