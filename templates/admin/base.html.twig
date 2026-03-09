@@ -6,7 +6,7 @@
 {% block title %}{{ page_title|default('Administration') }}{% endblock %}
 
 {% block stylesheets %}
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260309-symbolic-text">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260309-orb-window">
 {% endblock %}
 
 {% block body %}
@@ -49,6 +49,16 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">OP ms_mapping</span>
+            </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'orb_window' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_orb_window') }}" style="--delay: 3.2">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M12 3v18M3 12h18" />
+                        <circle cx="12" cy="12" r="7" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">OP Orb window</span>
             </a>
             {# <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'ephemeris' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_moon_ephemeris_hours') }}" style="--delay: 4">

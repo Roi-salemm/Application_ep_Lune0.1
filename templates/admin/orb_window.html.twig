@@ -1,0 +1,150 @@
+{# Page admin Orb Window.
+   Pourquoi: piloter le parse de fenetres temporelles calculees (orb_window) a partir de ms_mapping.
+   Info: bleu = source ms_mapping presente; dore = deja parse dans orb_window. #}
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = page_title|default('Orb Window') %}
+{% set page_subtitle = page_subtitle|default('Parse des fenetres calculees UTC') %}
+{% set active_menu = active_menu|default('orb_window') %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <section class="admin-card admin-card--table admin-import-calendar orb-window-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Orb Window parser</h2>
+            <p class="admin-card__subtitle">
+                Parse des fenetres autour des phases lunaires exactes (UTC).
+                {% if method_available %}
+                    Methode active: <strong>{{ calculation_method }}</strong>.
+                {% else %}
+                    Aucune methode active pour cette famille.
+                {% endif %}
+            </p>
+        </div>
+
+        <form class="admin-form admin-form--inline orb-window-family-form" method="get" action="{{ path('admin_orb_window') }}">
+            <label class="admin-form__field">
+                <span class="admin-form__label">Window Family</span>
+                <select class="admin-form__select" name="family" data-orb-family-select>
+                    {% for family in family_options %}
+                        <option value="{{ family }}" {{ family == window_family ? 'selected' : '' }}>{{ family }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button class="admin-button" type="submit">Appliquer</button>
+        </form>
+
+        <div class="admin-import-calendar__legend">
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--missing">Sans source</span>
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--ready">Source MS Mapping</span>
+            <span class="admin-import-calendar__legend-item admin-import-calendar__legend-item--parsed">Parse orb_window</span>
+            <span class="admin-import-calendar__legend-item orb-window-method-chip">
+                Methode: {{ method_available ? calculation_method : 'non disponible' }}
+            </span>
+        </div>
+
+        <div class="admin-table-wrap admin-import-calendar__table-wrap">
+            <table class="admin-table admin-import-calendar__table">
+                {% set month_labels = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'] %}
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell">Parse</th>
+                        <th class="admin-table__cell">Annee</th>
+                        {% for label in month_labels %}
+                            <th class="admin-table__cell admin-import-calendar__month-header">{{ label }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in calendar_years %}
+                        {% set year_status = year_coverage[year]|default('missing') %}
+                        <tr class="admin-table__row">
+                            <td class="admin-table__cell">
+                                <button
+                                    class="admin-button admin-import-calendar__year-button admin-import-calendar__year-button--{{ year_status }}"
+                                    type="button"
+                                    data-orb-year-button
+                                    data-orb-year="{{ year }}"
+                                    {{ method_available ? '' : 'disabled' }}
+                                >Parse</button>
+                            </td>
+                            <td class="admin-table__cell admin-import-calendar__year-label">{{ year }}</td>
+                            {% for month in 1..12 %}
+                                {% set month_key = year ~ '-' ~ '%02d'|format(month) %}
+                                {% set month_status = month_coverage[month_key]|default('missing') %}
+                                <td class="admin-table__cell admin-import-calendar__cell" title="{{ month_key }}">
+                                    <button
+                                        class="admin-import-calendar__month-button admin-import-calendar__month-button--{{ month_status }}"
+                                        type="button"
+                                        data-orb-month-button
+                                        data-orb-month="{{ month_key }}-01"
+                                        data-orb-month-label="{{ month_labels[month - 1] }} {{ year }}"
+                                        {{ method_available ? '' : 'disabled' }}
+                                    >{{ month_labels[month - 1] }}</button>
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <form class="admin-import-calendar__form" method="post" action="{{ path('admin_orb_window_parse_month') }}" data-orb-month-form>
+            <input type="hidden" name="_token" value="{{ csrf_token('parse_orb_window_month') }}">
+            <input type="hidden" name="window_family" value="{{ window_family }}" data-orb-family-input>
+            <input type="hidden" name="start" value="" data-orb-month-input>
+        </form>
+        <form class="admin-import-calendar__form" method="post" action="{{ path('admin_orb_window_parse_year') }}" data-orb-year-form>
+            <input type="hidden" name="_token" value="{{ csrf_token('parse_orb_window_year') }}">
+            <input type="hidden" name="window_family" value="{{ window_family }}" data-orb-family-input>
+            <input type="hidden" name="year" value="" data-orb-year-input>
+        </form>
+    </section>
+
+    <script>
+        (function () {
+            var monthForm = document.querySelector('[data-orb-month-form]');
+            var monthInput = document.querySelector('[data-orb-month-input]');
+            var monthButtons = document.querySelectorAll('[data-orb-month-button]');
+            var yearForm = document.querySelector('[data-orb-year-form]');
+            var yearInput = document.querySelector('[data-orb-year-input]');
+            var yearButtons = document.querySelectorAll('[data-orb-year-button]');
+            if (!monthForm || !monthInput || !yearForm || !yearInput) {
+                return;
+            }
+
+            monthButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (button.disabled) {
+                        return;
+                    }
+                    var value = button.getAttribute('data-orb-month');
+                    if (!value) {
+                        return;
+                    }
+                    monthInput.value = value;
+                    monthForm.submit();
+                });
+            });
+
+            yearButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (button.disabled) {
+                        return;
+                    }
+                    var value = button.getAttribute('data-orb-year');
+                    if (!value) {
+                        return;
+                    }
+                    yearInput.value = value;
+                    yearForm.submit();
+                });
+            });
+        })();
+    </script>
+{% endblock %}

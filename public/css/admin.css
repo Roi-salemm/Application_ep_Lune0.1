@@ -781,6 +781,12 @@ body {
     display: none;
 }
 
+/* Styles de l'onglet Orb Window.
+   Pourquoi: distinguer visuellement les donnees sources, les donnees parsees et l'etat "methode disponible". */
+.orb-window-family-form {
+    margin-bottom: 4px;
+}
+
 .admin-form {
     display: grid;
     gap: 14px;

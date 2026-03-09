@@ -66,6 +66,86 @@ final class MsMappingRepository extends ServiceEntityRepository
     }
 
     /**
+     * Retourne les mois qui possedent des evenements astronomiques exploitables.
+     * Pourquoi: le parse orb_window ne depend que des phases avec phase_hour renseigne.
+     *
+     * @return string[]
+     */
+    public function findPhaseEventMonthCoverage(int $startYear, int $endYear): array
+    {
+        $rows = $this->connection()->fetchFirstColumn(
+            '
+                SELECT DATE_FORMAT(phase_hour, "%Y-%m") AS month_key
+                FROM ms_mapping
+                WHERE phase BETWEEN 0 AND 7
+                  AND phase_hour IS NOT NULL
+                  AND phase_hour >= :start
+                  AND phase_hour < :end
+                GROUP BY month_key
+                ORDER BY month_key
+            ',
+            [
+                'start' => sprintf('%04d-01-01 00:00:00', $startYear),
+                'end' => sprintf('%04d-01-01 00:00:00', $endYear + 1),
+            ]
+        );
+
+        return array_values(array_filter(array_map(static fn ($v): string => (string) $v, $rows)));
+    }
+
+    /**
+     * @return array<int, array{phase:int, phase_hour:\DateTimeImmutable}>
+     */
+    public function findPhaseEventsByPhaseHourRange(
+        \DateTimeImmutable $startUtc,
+        \DateTimeImmutable $endUtc
+    ): array {
+        $rows = $this->connection()->fetchAllAssociative(
+            '
+                SELECT phase, phase_hour
+                FROM ms_mapping
+                WHERE phase BETWEEN 0 AND 7
+                  AND phase_hour IS NOT NULL
+                  AND phase_hour >= :start
+                  AND phase_hour < :end
+                ORDER BY phase_hour ASC
+            ',
+            [
+                'start' => $startUtc->format('Y-m-d H:i:s'),
+                'end' => $endUtc->format('Y-m-d H:i:s'),
+            ]
+        );
+
+        $utc = new \DateTimeZone('UTC');
+        $events = [];
+        $seenBySecond = [];
+        foreach ($rows as $row) {
+            $phase = isset($row['phase']) ? (int) $row['phase'] : -1;
+            $raw = isset($row['phase_hour']) ? trim((string) $row['phase_hour']) : '';
+            if ($phase < 0 || $phase > 7 || $raw === '') {
+                continue;
+            }
+            try {
+                $phaseHour = (new \DateTimeImmutable($raw, $utc))->setTimezone($utc);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $key = $phaseHour->format('Y-m-d H:i:s');
+            if (isset($seenBySecond[$key])) {
+                continue;
+            }
+            $seenBySecond[$key] = true;
+            $events[] = [
+                'phase' => $phase,
+                'phase_hour' => $phaseHour,
+            ];
+        }
+
+        return $events;
+    }
+
+    /**
      * @return MsMapping[]
      */
     public function findByTimestampRange(\DateTimeInterface $start, \DateTimeInterface $end): array

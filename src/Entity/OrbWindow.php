@@ -202,4 +202,3 @@ class OrbWindow
         return $dateTime->setTimezone(new \DateTimeZone('UTC'));
     }
 }
-
