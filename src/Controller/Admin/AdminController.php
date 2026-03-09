@@ -18,3 +18,6 @@ final class AdminController extends AbstractController
         return $this->redirectToRoute('admin_horizon_data');
     }
 }
+
+
+// (Test : voir le message ) 
