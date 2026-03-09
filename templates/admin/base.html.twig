@@ -6,7 +6,7 @@
 {% block title %}{{ page_title|default('Administration') }}{% endblock %}
 
 {% block stylesheets %}
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260227-card-management">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260309-symbolic-text">
 {% endblock %}
 
 {% block body %}
@@ -98,6 +98,18 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">Article editor</span>
+            </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'symbolic_text' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_symbolic_text') }}" style="--delay: 7.6">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M4 6h16M4 12h16M4 18h16" />
+                        <circle cx="8" cy="6" r="1.2" />
+                        <circle cx="12" cy="12" r="1.2" />
+                        <circle cx="16" cy="18" r="1.2" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">Symbolic Text</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'card_management' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_card_management') }}" style="--delay: 7.7">

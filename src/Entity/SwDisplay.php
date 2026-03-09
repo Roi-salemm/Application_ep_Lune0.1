@@ -29,17 +29,11 @@ class SwDisplay
     #[ORM\Column(type: Types::STRING, length: 150)]
     private string $code;
 
-    #[ORM\Column(type: Types::STRING, length: 50)]
+    #[ORM\Column(type: Types::STRING, length: 50, columnDefinition: "ENUM('symbolic','western_astro','jyotish','yijing')")]
     private string $family;
 
-    #[ORM\Column(name: 'reading_mode', type: Types::STRING, length: 50)]
+    #[ORM\Column(name: 'reading_mode', type: Types::STRING, length: 50, columnDefinition: "ENUM('weather','influence','astronomical_event','lunation_name','void_of_course')")]
     private string $readingMode;
-
-    #[ORM\Column(name: 'phase_key', type: Types::STRING, length: 50, nullable: true)]
-    private ?string $phaseKey = null;
-
-    #[ORM\Column(name: 'influence_key', type: Types::STRING, length: 50, nullable: true)]
-    private ?string $influenceKey = null;
 
     #[ORM\Column(type: Types::STRING, length: 10)]
     private string $lang;
@@ -131,30 +125,6 @@ class SwDisplay
     public function setReadingMode(string $readingMode): self
     {
         $this->readingMode = $readingMode;
-
-        return $this;
-    }
-
-    public function getPhaseKey(): ?string
-    {
-        return $this->phaseKey;
-    }
-
-    public function setPhaseKey(?string $phaseKey): self
-    {
-        $this->phaseKey = $phaseKey;
-
-        return $this;
-    }
-
-    public function getInfluenceKey(): ?string
-    {
-        return $this->influenceKey;
-    }
-
-    public function setInfluenceKey(?string $influenceKey): self
-    {
-        $this->influenceKey = $influenceKey;
 
         return $this;
     }

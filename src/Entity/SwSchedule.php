@@ -33,7 +33,7 @@ class SwSchedule
     #[ORM\JoinColumn(name: 'content_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private ?SwContent $content = null;
 
-    #[ORM\Column(name: 'schedule_type', type: Types::STRING, length: 30)]
+    #[ORM\Column(name: 'schedule_type', type: Types::STRING, length: 30, columnDefinition: "ENUM('phase_window','influence_window')")]
     private string $scheduleType;
 
     #[ORM\Column(name: 'starts_at_utc', type: Types::DATETIME_IMMUTABLE)]

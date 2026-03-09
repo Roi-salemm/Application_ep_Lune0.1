@@ -1,0 +1,1282 @@
+﻿{# Page admin Symbolic Text.
+   Pourquoi: visualiser une timeline dynamique et piloter le CRUD des textes relies a sw_display/sw_content/sw_schedule.
+   Info: toute la timeline est affichee en UTC et alignee temporellement. #}
+{% extends 'admin/base.html.twig' %}
+
+{% set page_title = page_title|default('Symbolic Text') %}
+{% set page_subtitle = page_subtitle|default('Edition timeline UTC') %}
+{% set active_menu = active_menu|default('symbolic_text') %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <section class="admin-card symbolic-text-card">
+        <div class="admin-card__header">
+            <h2 class="admin-card__title">Symbolic Text timeline</h2>
+            <p class="admin-card__subtitle" data-window-label>
+                Fenetre UTC: {{ window_start_utc|date('Y-m-d H:i') }} -> {{ window_end_utc|date('Y-m-d H:i') }}
+            </p>
+        </div>
+
+        <div class="symbolic-text-toolbar">
+            <div class="symbolic-text-toolbar__group">
+                {% for span_key in span_options %}
+                    <a class="symbolic-span-btn {{ span_key == span ? 'is-active' : '' }}"
+                       href="{{ path('admin_symbolic_text', {'span': span_key, 'end_utc': window_end_input}) }}">{{ span_key }}</a>
+                {% endfor %}
+                <button type="button" class="symbolic-span-btn symbolic-span-btn--today" data-jump-today>Aujourd'hui</button>
+            </div>
+            <div class="symbolic-text-toolbar__meta">UTC</div>
+        </div>
+
+        <div class="symbolic-layout">
+            <aside class="symbolic-layout__labels" aria-label="Lignes timeline">
+                <div class="symbolic-label">Temps</div>
+                <div class="symbolic-label">Astronomie</div>
+                <div class="symbolic-label symbolic-label--thin">Lune annee</div>
+                <div class="symbolic-label symbolic-label--compact">Zone d'influance</div>
+                <div class="symbolic-label symbolic-label--compact">Evenement :</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">stellaire</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">synodique</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">apellation</div>
+                <div class="symbolic-label symbolic-label--compact symbolic-label--text-symbolic">Texte symbolique</div>
+            </aside>
+
+            <div class="symbolic-layout__timeline"
+                 data-timeline-wheel
+                 data-api-url="{{ path('admin_symbolic_text_data') }}"
+                 data-span="{{ span }}"
+                 data-span-seconds="{{ span_seconds }}"
+                 data-window-end-ts="{{ window_end_ts }}">
+                <div class="symbolic-grid" data-grid-lines>
+                    {% for marker in day_markers %}
+                        <span class="symbolic-grid__line" style="left: {{ marker.left }}%;"></span>
+                    {% endfor %}
+                </div>
+
+                <div class="symbolic-track symbolic-track--real" data-track-real>
+                    {% for segment in real_segments %}
+                        <div class="symbolic-real-cell" style="left: {{ segment.left }}%; width: {{ segment.width }}%;">
+                            {{ segment.label }}
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="symbolic-track symbolic-track--astronomy" data-track-astronomy>
+                    {% if astronomy_points is empty %}
+                        <div class="symbolic-track__empty">Aucun evenement de phase dans cette fenetre.</div>
+                    {% else %}
+                        {% for point in astronomy_points %}
+                            <div class="symbolic-astro-point phase-{{ point.phase }}" style="left: {{ point.left }}%;">
+                                <span class="symbolic-astro-point__dot"></span>
+                                <span class="symbolic-astro-point__label">{{ point.label }}</span>
+                                <span class="symbolic-astro-point__time">{{ point.time_label }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div class="symbolic-track symbolic-track--lunation" data-track-lunation>
+                    {% set lunation_segments_safe = lunation_segments|default([]) %}
+                    {% if lunation_segments_safe is empty %}
+                        <div class="symbolic-track__empty">Lunaisons indisponibles dans cette fenetre.</div>
+                    {% else %}
+                        {% for segment in lunation_segments_safe %}
+                            <div class="symbolic-lunation-segment"
+                                 style="left: {{ segment.left }}%; width: {{ segment.width }}%; --lunation-color: {{ segment.color }};"
+                                 title="{{ segment.label }} - {{ segment.year }} ({{ segment.full_start_ts|date('Y-m-d H:i', 'UTC') }} -> {{ segment.full_end_ts|date('Y-m-d H:i', 'UTC') }} UTC)">
+                                <span>{{ segment.label }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div class="symbolic-track symbolic-track--symbolic" data-track-symbolic>
+                    {% if symbolic_segments is empty %}
+                        <div class="symbolic-track__empty">Influence symbolique indisponible (donnees astronomiques insuffisantes).</div>
+                    {% else %}
+                        {% for segment in symbolic_segments %}
+                            <div class="symbolic-phase-band"
+                                 style="left: {{ segment.left }}%; width: {{ segment.width }}%; --phase-color: {{ segment.color }};"
+                                 data-symbolic-key="{{ segment.full_start_ts ~ '-' ~ segment.full_end_ts ~ '-' ~ segment.label }}"
+                                 data-phase-label="{{ segment.label|e('html_attr') }}"
+                                 data-phase-start="{{ segment.full_start_ts }}"
+                                 data-phase-end="{{ segment.full_end_ts }}">
+                                <span>{{ segment.label }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div class="symbolic-track symbolic-track--event-group" aria-hidden="true"></div>
+
+                {% for row in row_definitions %}
+                    {% if row.code != 'symbolic_text' %}
+                    {% set entries = entries_by_row[row.code]|default([]) %}
+                    {% set gaps = gaps_by_row[row.code]|default([]) %}
+                    <div class="symbolic-track symbolic-track--content" data-row-code="{{ row.code }}" data-track-row="{{ row.code }}">
+                        {% for gap in gaps %}
+                            <button type="button"
+                                    class="symbolic-gap-add"
+                                    style="left: {{ gap.center }}%;"
+                                    title="Ajouter un texte"
+                                    data-open-create
+                                    data-display-code="{{ row.code }}"
+                                    data-schedule-type="{{ row.schedule_type }}"
+                                    data-start="{{ gap.start_at_input }}"
+                                    data-end="{{ gap.end_at_input }}">+</button>
+                        {% endfor %}
+
+                        {% if entries is empty %}
+                            <div class="symbolic-track__empty symbolic-track__empty--warning">! Donnee manquante sur cette ligne</div>
+                        {% endif %}
+
+                        {% for entry in entries %}
+                            <article class="symbolic-entry {{ entry.is_ready ? '' : 'is-warning' }}"
+                                     style="left: {{ entry.left }}%; width: {{ entry.width }}%; --entry-color: {{ entry.color }};">
+                                <div class="symbolic-entry__text">
+                                    <strong>{{ entry.label }}</strong>
+                                    {% if entry.subtitle %}
+                                        <small>{{ entry.subtitle }}</small>
+                                    {% endif %}
+                                </div>
+                                <button type="button"
+                                        class="symbolic-entry__edit"
+                                        data-open-edit
+                                        data-id="{{ entry.id }}"
+                                        data-display-code="{{ row.code }}"
+                                        data-label="{{ entry.label|e('html_attr') }}"
+                                        data-subtitle="{{ entry.subtitle|default('')|e('html_attr') }}"
+                                        data-color="{{ entry.color|e('html_attr') }}"
+                                        data-icon="{{ entry.icon|default('')|e('html_attr') }}"
+                                        data-start="{{ entry.start_at_input }}"
+                                        data-end="{{ entry.end_at_input }}"
+                                        data-priority="{{ entry.priority }}"
+                                        data-schedule-type="{{ entry.schedule_type|e('html_attr') }}"
+                                        data-status="{{ entry.status|e('html_attr') }}"
+                                        data-schema-version="{{ entry.schema_version|e('html_attr') }}"
+                                        data-comment="{{ entry.comment|default('')|e('html_attr') }}"
+                                        data-editorial-notes="{{ entry.editorial_notes|default('')|e('html_attr') }}"
+                                        data-payload-json="{{ entry.payload_json|default('')|e('html_attr') }}"
+                                        data-is-published="{{ entry.is_published ? '1' : '0' }}"
+                                        data-is-validated="{{ entry.is_validated ? '1' : '0' }}"
+                                        data-is-current="{{ entry.is_current ? '1' : '0' }}"
+                                        data-update-token="{{ csrf_token('update_symbolic_text_' ~ entry.id) }}"
+                                        data-delete-token="{{ csrf_token('delete_symbolic_text_' ~ entry.id) }}">Modifier</button>
+                            </article>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+
+                <div class="symbolic-track symbolic-track--text-symbolic" data-track-text-symbolic data-display-code="symbolic_text"></div>
+            </div>
+        </div>
+    </section>
+
+    <div class="admin-modal" data-symbolic-create-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog admin-modal__dialog--wide" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Ajouter un texte timeline</div>
+            <form class="admin-modal__body admin-form" method="post" action="{{ path('admin_symbolic_text_create') }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('create_symbolic_text') }}">
+                <input type="hidden" name="span" value="{{ span }}">
+                <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Ligne</span>
+                        <select class="admin-form__select" name="display_code" data-create-display-code required>
+                            {% for row in row_definitions %}
+                                <option value="{{ row.code }}">{{ row.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Texte</span>
+                        <input class="admin-form__input" type="text" name="label" data-create-label required>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Sous-texte</span>
+                        <input class="admin-form__input" type="text" name="subtitle">
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Debut UTC</span>
+                        <input class="admin-form__input" type="text" name="starts_at_utc" data-create-start placeholder="YYYY-MM-DD HH:MM" required>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Fin UTC</span>
+                        <input class="admin-form__input" type="text" name="ends_at_utc" data-create-end placeholder="YYYY-MM-DD HH:MM" required>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Couleur (#RRGGBB)</span>
+                        <input class="admin-form__input" type="text" name="color" value="#315A7B">
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Icone (texte)</span>
+                        <input class="admin-form__input" type="text" name="icon">
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Priorite</span>
+                        <input class="admin-form__input" type="number" name="priority" value="100">
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Type planning</span>
+                        <select class="admin-form__select" name="schedule_type">
+                            <option value="influence_window">influence_window</option>
+                            <option value="phase_window">phase_window</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Statut</span>
+                        <select class="admin-form__select" name="status">
+                            <option value="validated">validated</option>
+                            <option value="review">review</option>
+                            <option value="draft">draft</option>
+                            <option value="archived">archived</option>
+                        </select>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Schema version</span>
+                        <input class="admin-form__input" type="text" name="schema_version" value="1.0">
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Commentaire</span>
+                        <input class="admin-form__input" type="text" name="comment">
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Notes editoriales</span>
+                        <textarea class="admin-form__input" name="editorial_notes" rows="3"></textarea>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Payload JSON (optionnel)</span>
+                        <textarea class="admin-form__input" name="payload_json" rows="3" placeholder='{"source":"admin"}'></textarea>
+                    </label>
+                </div>
+
+                <div class="admin-form__row symbolic-checks">
+                    <label><input type="checkbox" name="is_published" value="1" checked> publie</label>
+                    <label><input type="checkbox" name="is_validated" value="1" checked> valide humain</label>
+                    <label><input type="checkbox" name="is_current" value="1" checked> courant</label>
+                </div>
+
+                <div class="admin-modal__actions">
+                    <button class="admin-button admin-button--primary" type="submit">Creer</button>
+                    <button class="admin-button" type="button" data-modal-close>Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="admin-modal" data-symbolic-edit-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog admin-modal__dialog--wide" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Modifier un texte timeline</div>
+            <form class="admin-modal__body admin-form"
+                  method="post"
+                  data-edit-form
+                  data-update-action-template="{{ path('admin_symbolic_text_update', {'id': 'SCHEDULE_ID'}) }}">
+                <input type="hidden" name="_token" value="" data-edit-update-token>
+                <input type="hidden" name="span" value="{{ span }}">
+                <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Ligne</span>
+                        <select class="admin-form__select" name="display_code" data-edit-display-code required>
+                            {% for row in row_definitions %}
+                                <option value="{{ row.code }}">{{ row.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Texte</span>
+                        <input class="admin-form__input" type="text" name="label" data-edit-label required>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Sous-texte</span>
+                        <input class="admin-form__input" type="text" name="subtitle" data-edit-subtitle>
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Debut UTC</span>
+                        <input class="admin-form__input" type="text" name="starts_at_utc" data-edit-start required>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Fin UTC</span>
+                        <input class="admin-form__input" type="text" name="ends_at_utc" data-edit-end required>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Couleur</span>
+                        <input class="admin-form__input" type="text" name="color" data-edit-color>
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Icone</span>
+                        <input class="admin-form__input" type="text" name="icon" data-edit-icon>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Priorite</span>
+                        <input class="admin-form__input" type="number" name="priority" data-edit-priority>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Type planning</span>
+                        <select class="admin-form__select" name="schedule_type" data-edit-schedule-type>
+                            <option value="influence_window">influence_window</option>
+                            <option value="phase_window">phase_window</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Statut</span>
+                        <select class="admin-form__select" name="status" data-edit-status>
+                            <option value="validated">validated</option>
+                            <option value="review">review</option>
+                            <option value="draft">draft</option>
+                            <option value="archived">archived</option>
+                        </select>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Schema version</span>
+                        <input class="admin-form__input" type="text" name="schema_version" data-edit-schema-version>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Commentaire</span>
+                        <input class="admin-form__input" type="text" name="comment" data-edit-comment>
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Notes editoriales</span>
+                        <textarea class="admin-form__input" name="editorial_notes" rows="3" data-edit-editorial-notes></textarea>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Payload JSON</span>
+                        <textarea class="admin-form__input" name="payload_json" rows="3" data-edit-payload-json></textarea>
+                    </label>
+                </div>
+
+                <div class="admin-form__row symbolic-checks">
+                    <label><input type="checkbox" name="is_published" value="1" data-edit-is-published> publie</label>
+                    <label><input type="checkbox" name="is_validated" value="1" data-edit-is-validated> valide humain</label>
+                    <label><input type="checkbox" name="is_current" value="1" data-edit-is-current> courant</label>
+                </div>
+
+                <div class="admin-modal__actions">
+                    <button class="admin-button admin-button--primary" type="submit">Enregistrer</button>
+                    <button class="admin-button" type="button" data-modal-close>Annuler</button>
+                </div>
+            </form>
+
+            <form class="admin-modal__actions symbolic-delete-form"
+                  method="post"
+                  data-delete-form
+                  data-delete-action-template="{{ path('admin_symbolic_text_delete', {'id': 'SCHEDULE_ID'}) }}">
+                <input type="hidden" name="_token" value="" data-edit-delete-token>
+                <input type="hidden" name="span" value="{{ span }}">
+                <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+                <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="application/json" id="symbolic-initial-payload">{{ initial_payload|json_encode|raw }}</script>
+
+    <script>
+        (function () {
+            var createModal = document.querySelector('[data-symbolic-create-modal]');
+            var editModal = document.querySelector('[data-symbolic-edit-modal]');
+            if (!createModal || !editModal) {
+                return;
+            }
+
+            function openModal(modal) {
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+            }
+
+            function closeModal(modal) {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+
+            function closeAllModals() {
+                closeModal(createModal);
+                closeModal(editModal);
+            }
+
+            document.addEventListener('click', function (event) {
+                var closeButton = event.target.closest('[data-modal-close]');
+                if (closeButton) {
+                    event.preventDefault();
+                    closeAllModals();
+                    return;
+                }
+
+                var createTrigger = event.target.closest('[data-open-create]');
+                if (createTrigger) {
+                    event.preventDefault();
+                    var createDisplay = createModal.querySelector('[data-create-display-code]');
+                    var createStart = createModal.querySelector('[data-create-start]');
+                    var createEnd = createModal.querySelector('[data-create-end]');
+                    var createLabel = createModal.querySelector('[data-create-label]');
+                    var createScheduleType = createModal.querySelector('select[name="schedule_type"]');
+                    if (createDisplay) {
+                        createDisplay.value = createTrigger.getAttribute('data-display-code') || createDisplay.value;
+                    }
+                    if (createScheduleType) {
+                        createScheduleType.value = createTrigger.getAttribute('data-schedule-type') || createScheduleType.value;
+                    }
+                    if (createStart) {
+                        createStart.value = createTrigger.getAttribute('data-start') || '';
+                    }
+                    if (createEnd) {
+                        createEnd.value = createTrigger.getAttribute('data-end') || '';
+                    }
+                    if (createLabel) {
+                        createLabel.value = '';
+                    }
+                    openModal(createModal);
+                    return;
+                }
+
+                var editTrigger = event.target.closest('[data-open-edit]');
+                if (editTrigger) {
+                    event.preventDefault();
+                    var id = editTrigger.getAttribute('data-id') || '';
+                    var updateForm = editModal.querySelector('[data-edit-form]');
+                    var deleteForm = editModal.querySelector('[data-delete-form]');
+                    if (!updateForm || !deleteForm || !id) {
+                        return;
+                    }
+
+                    var updateTemplate = updateForm.getAttribute('data-update-action-template') || '';
+                    var deleteTemplate = deleteForm.getAttribute('data-delete-action-template') || '';
+                    updateForm.setAttribute('action', updateTemplate.replace('SCHEDULE_ID', encodeURIComponent(id)));
+                    deleteForm.setAttribute('action', deleteTemplate.replace('SCHEDULE_ID', encodeURIComponent(id)));
+
+                    var mapping = [
+                        ['[data-edit-display-code]', 'data-display-code'],
+                        ['[data-edit-label]', 'data-label'],
+                        ['[data-edit-subtitle]', 'data-subtitle'],
+                        ['[data-edit-color]', 'data-color'],
+                        ['[data-edit-icon]', 'data-icon'],
+                        ['[data-edit-start]', 'data-start'],
+                        ['[data-edit-end]', 'data-end'],
+                        ['[data-edit-priority]', 'data-priority'],
+                        ['[data-edit-schedule-type]', 'data-schedule-type'],
+                        ['[data-edit-status]', 'data-status'],
+                        ['[data-edit-schema-version]', 'data-schema-version'],
+                        ['[data-edit-comment]', 'data-comment'],
+                        ['[data-edit-editorial-notes]', 'data-editorial-notes'],
+                        ['[data-edit-payload-json]', 'data-payload-json']
+                    ];
+
+                    mapping.forEach(function (pair) {
+                        var field = editModal.querySelector(pair[0]);
+                        if (!field) {
+                            return;
+                        }
+                        field.value = editTrigger.getAttribute(pair[1]) || '';
+                    });
+
+                    var updateToken = editModal.querySelector('[data-edit-update-token]');
+                    var deleteToken = editModal.querySelector('[data-edit-delete-token]');
+                    if (updateToken) {
+                        updateToken.value = editTrigger.getAttribute('data-update-token') || '';
+                    }
+                    if (deleteToken) {
+                        deleteToken.value = editTrigger.getAttribute('data-delete-token') || '';
+                    }
+
+                    var isPublished = editModal.querySelector('[data-edit-is-published]');
+                    var isValidated = editModal.querySelector('[data-edit-is-validated]');
+                    var isCurrent = editModal.querySelector('[data-edit-is-current]');
+                    if (isPublished) {
+                        isPublished.checked = (editTrigger.getAttribute('data-is-published') || '0') === '1';
+                    }
+                    if (isValidated) {
+                        isValidated.checked = (editTrigger.getAttribute('data-is-validated') || '0') === '1';
+                    }
+                    if (isCurrent) {
+                        isCurrent.checked = (editTrigger.getAttribute('data-is-current') || '0') === '1';
+                    }
+
+                    openModal(editModal);
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeAllModals();
+                }
+            });
+        })();
+    </script>
+    <script>
+        (function () {
+            var timeline = document.querySelector('[data-timeline-wheel]');
+            if (!timeline) {
+                return;
+            }
+
+            var apiUrl = timeline.getAttribute('data-api-url') || '';
+            var span = timeline.getAttribute('data-span') || '2j';
+            var spanSeconds = parseInt(timeline.getAttribute('data-span-seconds') || '172800', 10);
+            var endTs = parseInt(timeline.getAttribute('data-window-end-ts') || '0', 10);
+            if (!apiUrl || !spanSeconds || !endTs) {
+                return;
+            }
+
+            var chunkSeconds = 14 * 86400;
+            var maxCacheSeconds = 45 * 86400;
+            var preloadThreshold = 2 * 86400;
+            var moveSeconds = Math.max(600, Math.floor(spanSeconds / 6));
+            var state = {
+                span: span,
+                spanSeconds: spanSeconds,
+                visibleEndTs: endTs,
+                visibleStartTs: endTs - spanSeconds,
+                chunks: [],
+                inFlight: {},
+                selectedSymbolicKey: null
+            };
+
+            function formatUtc(ts) {
+                var d = new Date(ts * 1000);
+                var y = d.getUTCFullYear();
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                var h = String(d.getUTCHours()).padStart(2, '0');
+                var min = String(d.getUTCMinutes()).padStart(2, '0');
+                return y + '-' + m + '-' + day + ' ' + h + ':' + min;
+            }
+
+            function formatUtcPrecise(ts) {
+                var d = new Date(ts * 1000);
+                var y = d.getUTCFullYear();
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                var h = String(d.getUTCHours()).padStart(2, '0');
+                var min = String(d.getUTCMinutes()).padStart(2, '0');
+                var sec = String(d.getUTCSeconds()).padStart(2, '0');
+                return y + '-' + m + '-' + day + ' ' + h + ':' + min + ':' + sec + ' UTC';
+            }
+
+            function formatUtcWithSeconds(ts) {
+                var d = new Date(ts * 1000);
+                var y = d.getUTCFullYear();
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                var h = String(d.getUTCHours()).padStart(2, '0');
+                var min = String(d.getUTCMinutes()).padStart(2, '0');
+                var sec = String(d.getUTCSeconds()).padStart(2, '0');
+                return y + '-' + m + '-' + day + ' ' + h + ':' + min + ':' + sec;
+            }
+
+            function parseInitialPayload() {
+                var node = document.getElementById('symbolic-initial-payload');
+                if (!node) {
+                    return null;
+                }
+                try {
+                    return JSON.parse(node.textContent || '{}');
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function chunkKey(startTs, endTs) {
+                return String(startTs) + ':' + String(endTs);
+            }
+
+            function addChunk(startTs, endTs, payload) {
+                var key = chunkKey(startTs, endTs);
+                for (var i = 0; i < state.chunks.length; i++) {
+                    if (state.chunks[i].key === key) {
+                        state.chunks[i].payload = payload;
+                        return;
+                    }
+                }
+                state.chunks.push({ key: key, startTs: startTs, endTs: endTs, payload: payload });
+            }
+
+            function hasChunk(startTs, endTs) {
+                var key = chunkKey(startTs, endTs);
+                return state.chunks.some(function (chunk) { return chunk.key === key; });
+            }
+
+            function alignChunkStart(ts) {
+                return Math.floor(ts / chunkSeconds) * chunkSeconds;
+            }
+
+            function requestChunk(startTs, endTs, force) {
+                var key = chunkKey(startTs, endTs);
+                if (state.inFlight[key] || (!force && hasChunk(startTs, endTs))) {
+                    return Promise.resolve();
+                }
+                state.inFlight[key] = true;
+
+                var url = apiUrl + '?start_utc=' + encodeURIComponent(formatUtc(startTs)) + '&end_utc=' + encodeURIComponent(formatUtc(endTs));
+                return fetch(url, { credentials: 'same-origin' })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('fetch timeline failed');
+                        }
+                        return response.json();
+                    })
+                    .then(function (payload) {
+                        addChunk(startTs, endTs, payload);
+                    })
+                    .catch(function () {
+                        // no-op: la vue reste utilisable avec les chunks deja disponibles
+                    })
+                    .finally(function () {
+                        delete state.inFlight[key];
+                    });
+            }
+
+            function ensureChunksForRange(startTs, endTs, force) {
+                var cursor = alignChunkStart(startTs);
+                var requests = [];
+                while (cursor < endTs) {
+                    var chunkStart = cursor;
+                    var chunkEnd = cursor + chunkSeconds;
+                    requests.push(requestChunk(chunkStart, chunkEnd, !!force));
+                    cursor = chunkEnd;
+                }
+                return Promise.all(requests);
+            }
+
+            function pruneCache() {
+                var centerTs = Math.floor((state.visibleStartTs + state.visibleEndTs) / 2);
+                var withDistance = state.chunks.map(function (chunk) {
+                    var chunkCenter = Math.floor((chunk.startTs + chunk.endTs) / 2);
+                    return { chunk: chunk, distance: Math.abs(chunkCenter - centerTs) };
+                });
+                withDistance.sort(function (a, b) { return a.distance - b.distance; });
+
+                var kept = [];
+                var covered = 0;
+                for (var i = 0; i < withDistance.length; i++) {
+                    var candidate = withDistance[i].chunk;
+                    if (covered + (candidate.endTs - candidate.startTs) > maxCacheSeconds && kept.length > 0) {
+                        continue;
+                    }
+                    kept.push(candidate);
+                    covered += (candidate.endTs - candidate.startTs);
+                }
+                state.chunks = kept;
+            }
+
+            function overlaps(startA, endA, startB, endB) {
+                return startA < endB && endA > startB;
+            }
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function positionPercent(ts) {
+                var ratio = (ts - state.visibleStartTs) / Math.max(1, state.spanSeconds);
+                return Math.max(0, Math.min(100, ratio * 100));
+            }
+
+            function widthPercent(startTs, endTs) {
+                var width = ((endTs - startTs) / Math.max(1, state.spanSeconds)) * 100;
+                return Math.max(0.65, width);
+            }
+
+            function buildDayLabel(ts) {
+                var d = new Date(ts * 1000);
+                var days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                var months = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+                return days[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + months[d.getUTCMonth()];
+            }
+
+            function buildGridAndReal() {
+                var grid = timeline.querySelector('[data-grid-lines]');
+                var real = timeline.querySelector('[data-track-real]');
+                if (!grid || !real) {
+                    return;
+                }
+
+                var markers = [state.visibleStartTs];
+                var cursorDate = new Date(state.visibleStartTs * 1000);
+                cursorDate.setUTCHours(0, 0, 0, 0);
+                if (Math.floor(cursorDate.getTime() / 1000) <= state.visibleStartTs) {
+                    cursorDate.setUTCDate(cursorDate.getUTCDate() + 1);
+                }
+                while (Math.floor(cursorDate.getTime() / 1000) < state.visibleEndTs) {
+                    markers.push(Math.floor(cursorDate.getTime() / 1000));
+                    cursorDate.setUTCDate(cursorDate.getUTCDate() + 1);
+                }
+                markers.push(state.visibleEndTs);
+
+                var gridHtml = markers.map(function (ts) {
+                    return '<span class="symbolic-grid__line" style="left:' + positionPercent(ts) + '%;"></span>';
+                }).join('');
+                grid.innerHTML = gridHtml;
+
+                var realParts = [];
+                for (var i = 0; i < markers.length - 1; i++) {
+                    var segStart = markers[i];
+                    var segEnd = markers[i + 1];
+                    realParts.push(
+                        '<div class="symbolic-real-cell" style="left:' + positionPercent(segStart) + '%;width:' + widthPercent(segStart, segEnd) + '%;">' +
+                        escapeHtml(buildDayLabel(segStart)) +
+                        '</div>'
+                    );
+                }
+                real.innerHTML = realParts.join('');
+            }
+
+            function collectWindowData() {
+                var astronomyMap = {};
+                var symbolicMap = {};
+                var lunationMap = {};
+                var textSymbolicZoneMap = {};
+                var entriesByRow = {};
+
+                state.chunks.forEach(function (chunk) {
+                    var payload = chunk.payload || {};
+
+                    (payload.astronomy_points || []).forEach(function (point) {
+                        if (!point || typeof point.ts !== 'number') {
+                            return;
+                        }
+                        if (!overlaps(point.ts, point.ts + 1, state.visibleStartTs, state.visibleEndTs)) {
+                            return;
+                        }
+                        astronomyMap[String(point.phase) + ':' + String(point.ts)] = point;
+                    });
+
+                    (payload.symbolic_segments || []).forEach(function (segment) {
+                        if (!segment || typeof segment.full_start_ts !== 'number' || typeof segment.full_end_ts !== 'number') {
+                            return;
+                        }
+                        if (!overlaps(segment.full_start_ts, segment.full_end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                            return;
+                        }
+                        symbolicMap[String(segment.full_start_ts) + ':' + String(segment.full_end_ts) + ':' + String(segment.label)] = segment;
+                    });
+
+                    (payload.lunation_segments || []).forEach(function (segment) {
+                        if (!segment || typeof segment.full_start_ts !== 'number' || typeof segment.full_end_ts !== 'number') {
+                            return;
+                        }
+                        if (!overlaps(segment.full_start_ts, segment.full_end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                            return;
+                        }
+                        lunationMap[String(segment.full_start_ts) + ':' + String(segment.full_end_ts)] = segment;
+                    });
+
+                    (payload.text_symbolic_zones || []).forEach(function (zone) {
+                        if (!zone || typeof zone.full_start_ts !== 'number' || typeof zone.full_end_ts !== 'number') {
+                            return;
+                        }
+                        if (!overlaps(zone.full_start_ts, zone.full_end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                            return;
+                        }
+                        textSymbolicZoneMap[String(zone.zone_key || '') + ':' + String(zone.full_start_ts) + ':' + String(zone.full_end_ts)] = zone;
+                    });
+
+                    var payloadEntries = payload.entries_by_row || {};
+                    Object.keys(payloadEntries).forEach(function (rowCode) {
+                        if (!entriesByRow[rowCode]) {
+                            entriesByRow[rowCode] = {};
+                        }
+                        payloadEntries[rowCode].forEach(function (entry) {
+                            if (!entry || typeof entry.start_ts !== 'number' || typeof entry.end_ts !== 'number') {
+                                return;
+                            }
+                            if (!overlaps(entry.start_ts, entry.end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                                return;
+                            }
+                            var key = String(entry.id || '') + ':' + rowCode;
+                            if (!entriesByRow[rowCode][key]) {
+                                entriesByRow[rowCode][key] = entry;
+                                return;
+                            }
+                            var existing = entriesByRow[rowCode][key];
+                            existing.start_ts = Math.min(existing.start_ts, entry.start_ts);
+                            existing.end_ts = Math.max(existing.end_ts, entry.end_ts);
+                        });
+                    });
+                });
+
+                var astronomy = Object.keys(astronomyMap).map(function (k) { return astronomyMap[k]; });
+                astronomy.sort(function (a, b) { return a.ts - b.ts; });
+
+                var symbolic = Object.keys(symbolicMap).map(function (k) { return symbolicMap[k]; });
+                symbolic.sort(function (a, b) { return a.full_start_ts - b.full_start_ts; });
+
+                var lunation = Object.keys(lunationMap).map(function (k) { return lunationMap[k]; });
+                lunation.sort(function (a, b) { return a.full_start_ts - b.full_start_ts; });
+
+                var textSymbolicZones = Object.keys(textSymbolicZoneMap).map(function (k) { return textSymbolicZoneMap[k]; });
+                textSymbolicZones.sort(function (a, b) {
+                    return (a.full_start_ts - b.full_start_ts) || (a.full_end_ts - b.full_end_ts);
+                });
+
+                var normalizedEntriesByRow = {};
+                Object.keys(entriesByRow).forEach(function (rowCode) {
+                    var list = Object.keys(entriesByRow[rowCode]).map(function (k) { return entriesByRow[rowCode][k]; });
+                    list.sort(function (a, b) { return a.start_ts - b.start_ts; });
+                    normalizedEntriesByRow[rowCode] = list;
+                });
+
+                return {
+                    astronomy: astronomy,
+                    symbolic: symbolic,
+                    lunation: lunation,
+                    textSymbolicZones: textSymbolicZones,
+                    entriesByRow: normalizedEntriesByRow
+                };
+            }
+
+            function renderAstronomy(points) {
+                var track = timeline.querySelector('[data-track-astronomy]');
+                if (!track) {
+                    return;
+                }
+                if (!points.length) {
+                    track.innerHTML = '<div class="symbolic-track__empty">Aucun evenement de phase dans cette fenetre.</div>';
+                    return;
+                }
+                var html = points.map(function (point) {
+                    return '' +
+                        '<div class="symbolic-astro-point phase-' + escapeHtml(point.phase) + '" style="left:' + positionPercent(point.ts) + '%;">' +
+                        '<span class="symbolic-astro-point__dot"></span>' +
+                        '<span class="symbolic-astro-point__label">' + escapeHtml(point.label || '') + '</span>' +
+                        '<span class="symbolic-astro-point__time">' + escapeHtml(point.time_label || '') + '</span>' +
+                        '</div>';
+                }).join('');
+                track.innerHTML = html;
+            }
+
+            function renderLunation(segments) {
+                var track = timeline.querySelector('[data-track-lunation]');
+                if (!track) {
+                    return;
+                }
+                if (!segments.length) {
+                    track.innerHTML = '<div class="symbolic-track__empty">Lunaisons indisponibles dans cette fenetre.</div>';
+                    return;
+                }
+
+                var html = segments.map(function (segment) {
+                    var fullStartTs = typeof segment.full_start_ts === 'number' ? segment.full_start_ts : segment.start_ts;
+                    var fullEndTs = typeof segment.full_end_ts === 'number' ? segment.full_end_ts : segment.end_ts;
+                    var startTs = Math.max(fullStartTs, state.visibleStartTs);
+                    var endTs = Math.min(fullEndTs, state.visibleEndTs);
+                    if (endTs <= startTs) {
+                        return '';
+                    }
+                    var title = (segment.label || 'Lune') + ' - ' + (segment.year || '') +
+                        ' (' + formatUtcPrecise(fullStartTs) + ' -> ' + formatUtcPrecise(fullEndTs) + ')';
+                    return '' +
+                        '<div class="symbolic-lunation-segment" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--lunation-color:' + escapeHtml(segment.color || '#2b78c2') + ';" title="' + escapeHtml(title) + '">' +
+                        '<span>' + escapeHtml(segment.label || '') + '</span>' +
+                        '</div>';
+                }).join('');
+                track.innerHTML = html || '<div class="symbolic-track__empty">Lunaisons indisponibles dans cette fenetre.</div>';
+            }
+
+            function renderSymbolic(segments) {
+                var track = timeline.querySelector('[data-track-symbolic]');
+                if (!track) {
+                    return;
+                }
+                if (!segments.length) {
+                    track.innerHTML = '<div class="symbolic-track__empty">Influence symbolique indisponible (donnees astronomiques insuffisantes).</div>';
+                    return;
+                }
+                var html = segments.map(function (segment) {
+                    var fullStartTs = typeof segment.full_start_ts === 'number' ? segment.full_start_ts : segment.start_ts;
+                    var fullEndTs = typeof segment.full_end_ts === 'number' ? segment.full_end_ts : segment.end_ts;
+                    var startTs = Math.max(fullStartTs, state.visibleStartTs);
+                    var endTs = Math.min(fullEndTs, state.visibleEndTs);
+                    if (endTs <= startTs) {
+                        return '';
+                    }
+                    var key = String(fullStartTs) + '-' + String(fullEndTs) + '-' + String(segment.label || '');
+                    var selectedClass = state.selectedSymbolicKey === key ? ' is-selected' : '';
+                    return '' +
+                        '<div class="symbolic-phase-band' + selectedClass + '" ' +
+                        'data-symbolic-key="' + escapeHtml(key) + '" ' +
+                        'data-phase-label="' + escapeHtml(segment.label || '') + '" ' +
+                        'data-phase-start="' + String(fullStartTs) + '" ' +
+                        'data-phase-end="' + String(fullEndTs) + '" ' +
+                        'style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--phase-color:' + escapeHtml(segment.color || '#325a80') + ';">' +
+                        '<span>' + escapeHtml(segment.label || '') + '</span>' +
+                        '</div>';
+                }).join('');
+                track.innerHTML = html || '<div class="symbolic-track__empty">Influence symbolique indisponible (donnees astronomiques insuffisantes).</div>';
+            }
+
+            function formatUtcInput(ts) {
+                return formatUtc(ts);
+            }
+
+            function overlapDuration(startA, endA, startB, endB) {
+                return Math.max(0, Math.min(endA, endB) - Math.max(startA, startB));
+            }
+
+            function assignEntriesToTextZones(zones, entries) {
+                var grouped = zones.map(function () { return []; });
+                entries.forEach(function (entry) {
+                    var entryStart = typeof entry.start_ts === 'number' ? entry.start_ts : 0;
+                    var entryEnd = typeof entry.end_ts === 'number' ? entry.end_ts : 0;
+                    if (entryEnd <= entryStart) {
+                        return;
+                    }
+                    var bestIndex = -1;
+                    var bestOverlap = 0;
+                    zones.forEach(function (zone, index) {
+                        var zoneStart = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
+                        var zoneEnd = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
+                        var overlap = overlapDuration(entryStart, entryEnd, zoneStart, zoneEnd);
+                        if (overlap > bestOverlap) {
+                            bestOverlap = overlap;
+                            bestIndex = index;
+                        }
+                    });
+                    if (bestIndex >= 0) {
+                        grouped[bestIndex].push(entry);
+                    }
+                });
+
+                grouped.forEach(function (list) {
+                    list.sort(function (a, b) {
+                        return (a.start_ts - b.start_ts) || (a.end_ts - b.end_ts);
+                    });
+                });
+
+                return grouped;
+            }
+
+            function buildEditButtonHtml(entry, rowCode) {
+                return '' +
+                    '<button type="button" class="symbolic-entry__edit" data-open-edit' +
+                    ' data-id="' + escapeHtml(entry.id || '') + '"' +
+                    ' data-display-code="' + escapeHtml(rowCode || '') + '"' +
+                    ' data-label="' + escapeHtml(entry.label || '') + '"' +
+                    ' data-subtitle="' + escapeHtml(entry.subtitle || '') + '"' +
+                    ' data-color="' + escapeHtml(entry.color || '') + '"' +
+                    ' data-icon="' + escapeHtml(entry.icon || '') + '"' +
+                    ' data-start="' + escapeHtml(entry.start_at_input || formatUtcInput(entry.start_ts)) + '"' +
+                    ' data-end="' + escapeHtml(entry.end_at_input || formatUtcInput(entry.end_ts)) + '"' +
+                    ' data-priority="' + escapeHtml(entry.priority || 0) + '"' +
+                    ' data-schedule-type="' + escapeHtml(entry.schedule_type || 'influence_window') + '"' +
+                    ' data-status="' + escapeHtml(entry.status || 'validated') + '"' +
+                    ' data-schema-version="' + escapeHtml(entry.schema_version || '1.0') + '"' +
+                    ' data-comment="' + escapeHtml(entry.comment || '') + '"' +
+                    ' data-editorial-notes="' + escapeHtml(entry.editorial_notes || '') + '"' +
+                    ' data-payload-json="' + escapeHtml(entry.payload_json || '') + '"' +
+                    ' data-is-published="' + (entry.is_published ? '1' : '0') + '"' +
+                    ' data-is-validated="' + (entry.is_validated ? '1' : '0') + '"' +
+                    ' data-is-current="' + (entry.is_current ? '1' : '0') + '"' +
+                    ' data-update-token="' + escapeHtml(entry.update_token || '') + '"' +
+                    ' data-delete-token="' + escapeHtml(entry.delete_token || '') + '"' +
+                    '>Modifier</button>';
+            }
+
+            function renderTextSymbolic(zones, entries) {
+                var track = timeline.querySelector('[data-track-text-symbolic]');
+                var layout = timeline.closest('.symbolic-layout');
+                if (!track) {
+                    return;
+                }
+
+                if (!zones.length) {
+                    track.style.setProperty('--symbolic-text-extra-rows', '0');
+                    if (layout) {
+                        layout.style.setProperty('--symbolic-text-extra-rows', '0');
+                    }
+                    track.innerHTML = '<div class="symbolic-track__empty">Zones symboliques indisponibles (nouvelle/pleine lune manquante).</div>';
+                    return;
+                }
+
+                var grouped = assignEntriesToTextZones(zones, entries || []);
+                var maxRows = grouped.reduce(function (max, list) {
+                    return Math.max(max, list.length);
+                }, 0);
+                track.style.setProperty('--symbolic-text-extra-rows', String(maxRows));
+                if (layout) {
+                    layout.style.setProperty('--symbolic-text-extra-rows', String(maxRows));
+                }
+
+                var html = '<div class="symbolic-text-zones-row">';
+                zones.forEach(function (zone, zoneIndex) {
+                    var fullStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
+                    var fullEndTs = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
+                    var startTs = Math.max(fullStartTs, state.visibleStartTs);
+                    var endTs = Math.min(fullEndTs, state.visibleEndTs);
+                    if (endTs <= startTs) {
+                        return;
+                    }
+
+                    var tone = zone.tone || 'shade-1';
+                    var title = (zone.label || '') + ' (' + formatUtcPrecise(fullStartTs) + ' -> ' + formatUtcPrecise(fullEndTs) + ')';
+                    html += '' +
+                        '<div class="symbolic-text-zone symbolic-text-zone--' + escapeHtml(tone) + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;" title="' + escapeHtml(title) + '">' +
+                        '<span class="symbolic-text-zone__label">' + escapeHtml(zone.label || '') + '</span>';
+
+                    if (!grouped[zoneIndex].length) {
+                        html += '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte" data-open-create data-display-code="symbolic_text" data-schedule-type="phase_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>';
+                    }
+
+                    html += '</div>';
+                });
+                html += '</div>';
+
+                for (var rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+                    html += '<div class="symbolic-text-entries-row">';
+                    zones.forEach(function (zone, zoneIndex) {
+                        var entry = grouped[zoneIndex][rowIndex];
+                        if (!entry) {
+                            return;
+                        }
+                        var zoneStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
+                        var zoneEndTs = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
+                        var startTs = Math.max(state.visibleStartTs, zoneStartTs, entry.start_ts);
+                        var endTs = Math.min(state.visibleEndTs, zoneEndTs, entry.end_ts);
+                        if (endTs <= startTs) {
+                            return;
+                        }
+                        var readyClass = entry.is_ready ? '' : ' is-warning';
+                        html += '' +
+                            '<article class="symbolic-text-entry' + readyClass + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#7A7F87') + ';">' +
+                            '<div class="symbolic-text-entry__text">' +
+                            '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
+                            (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
+                            '</div>' +
+                            buildEditButtonHtml(entry, 'symbolic_text') +
+                            '</article>';
+                    });
+                    html += '</div>';
+                }
+
+                track.innerHTML = html;
+            }
+
+            function renderRows(entriesByRow) {
+                var rows = timeline.querySelectorAll('[data-track-row]');
+                rows.forEach(function (rowNode) {
+                    var rowCode = rowNode.getAttribute('data-track-row') || '';
+                    var entries = entriesByRow[rowCode] || [];
+                    var html = '';
+
+                    if (!entries.length) {
+                        html += '<div class="symbolic-track__empty symbolic-track__empty--warning">! Donnee manquante sur cette ligne</div>';
+                    }
+
+                    var clipped = entries.map(function (entry) {
+                        var startTs = Math.max(entry.start_ts, state.visibleStartTs);
+                        var endTs = Math.min(entry.end_ts, state.visibleEndTs);
+                        return {
+                            source: entry,
+                            startTs: startTs,
+                            endTs: endTs
+                        };
+                    }).filter(function (entry) {
+                        return entry.endTs > entry.startTs;
+                    });
+
+                    clipped.sort(function (a, b) { return a.startTs - b.startTs; });
+
+                    var minGapSeconds = Math.max(900, Math.floor(state.spanSeconds / 160));
+                    var cursor = state.visibleStartTs;
+                    clipped.forEach(function (entry) {
+                        if (entry.startTs - cursor >= minGapSeconds) {
+                            var centerTs = cursor + Math.floor((entry.startTs - cursor) / 2);
+                            html += '<button type="button" class="symbolic-gap-add" style="left:' + positionPercent(centerTs) + '%;" title="Ajouter un texte" data-open-create data-display-code="' + escapeHtml(rowCode) + '" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcInput(cursor)) + '" data-end="' + escapeHtml(formatUtcInput(entry.startTs)) + '">+</button>';
+                        }
+                        cursor = Math.max(cursor, entry.endTs);
+                    });
+                    if (state.visibleEndTs - cursor >= minGapSeconds) {
+                        var centerTail = cursor + Math.floor((state.visibleEndTs - cursor) / 2);
+                        html += '<button type="button" class="symbolic-gap-add" style="left:' + positionPercent(centerTail) + '%;" title="Ajouter un texte" data-open-create data-display-code="' + escapeHtml(rowCode) + '" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcInput(cursor)) + '" data-end="' + escapeHtml(formatUtcInput(state.visibleEndTs)) + '">+</button>';
+                    }
+
+                    clipped.forEach(function (entryPack) {
+                        var entry = entryPack.source;
+                        var startTs = entryPack.startTs;
+                        var endTs = entryPack.endTs;
+                        var readyClass = entry.is_ready ? '' : ' is-warning';
+                        html += '' +
+                            '<article class="symbolic-entry' + readyClass + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#315A7B') + ';">' +
+                            '<div class="symbolic-entry__text">' +
+                            '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
+                            (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
+                            '</div>' +
+                            buildEditButtonHtml(entry, rowCode) +
+                            '</article>';
+                    });
+
+                    rowNode.innerHTML = html;
+                });
+            }
+
+            function updateWindowLabels() {
+                var label = document.querySelector('[data-window-label]');
+                if (label) {
+                    label.textContent = 'Fenetre UTC: ' + formatUtc(state.visibleStartTs) + ' -> ' + formatUtc(state.visibleEndTs);
+                }
+                document.querySelectorAll('[data-window-end-hidden]').forEach(function (input) {
+                    input.value = formatUtc(state.visibleEndTs);
+                });
+                var url = "{{ path('admin_symbolic_text') }}" + '?span=' + encodeURIComponent(state.span) + '&end_utc=' + encodeURIComponent(formatUtc(state.visibleEndTs));
+                window.history.replaceState({}, '', url);
+            }
+
+            function renderFromCache() {
+                buildGridAndReal();
+                var data = collectWindowData();
+                renderAstronomy(data.astronomy);
+                renderLunation(data.lunation);
+                renderSymbolic(data.symbolic);
+                renderRows(data.entriesByRow);
+                renderTextSymbolic(data.textSymbolicZones, data.entriesByRow.symbolic_text || []);
+                updateWindowLabels();
+            }
+
+            function maybePrefetch() {
+                ensureChunksForRange(state.visibleStartTs - preloadThreshold, state.visibleEndTs + preloadThreshold, false)
+                    .then(function () {
+                        pruneCache();
+                        renderFromCache();
+                    });
+            }
+
+            var initialPayload = parseInitialPayload();
+            if (initialPayload && typeof initialPayload.window_start_ts === 'number' && typeof initialPayload.window_end_ts === 'number') {
+                addChunk(initialPayload.window_start_ts, initialPayload.window_end_ts, initialPayload);
+            }
+
+            ensureChunksForRange(state.visibleStartTs, state.visibleEndTs, true).then(function () {
+                renderFromCache();
+                maybePrefetch();
+            });
+
+            var todayButton = document.querySelector('[data-jump-today]');
+            var phaseTooltip = document.createElement('div');
+            phaseTooltip.className = 'symbolic-phase-tooltip is-hidden';
+            document.body.appendChild(phaseTooltip);
+            var wheelLocked = false;
+
+            function shiftWindow(shiftSeconds) {
+                state.visibleStartTs += shiftSeconds;
+                state.visibleEndTs += shiftSeconds;
+                renderFromCache();
+                maybePrefetch();
+            }
+
+            if (todayButton) {
+                todayButton.addEventListener('click', function () {
+                    var nowTs = Math.floor(Date.now() / 1000);
+                    state.visibleEndTs = nowTs;
+                    state.visibleStartTs = nowTs - state.spanSeconds;
+                    renderFromCache();
+                    maybePrefetch();
+                });
+            }
+
+            function hidePhaseTooltip() {
+                phaseTooltip.classList.add('is-hidden');
+            }
+
+            function showPhaseTooltip(band, clientX, clientY) {
+                var label = band.getAttribute('data-phase-label') || '';
+                var phaseStart = parseInt(band.getAttribute('data-phase-start') || '0', 10);
+                var phaseEnd = parseInt(band.getAttribute('data-phase-end') || '0', 10);
+                if (!phaseStart || !phaseEnd) {
+                    hidePhaseTooltip();
+                    return;
+                }
+                phaseTooltip.innerHTML = '' +
+                    '<strong>' + escapeHtml(label) + '</strong>' +
+                    '<span>Debut: ' + escapeHtml(formatUtcPrecise(phaseStart)) + '</span>' +
+                    '<span>Fin: ' + escapeHtml(formatUtcPrecise(phaseEnd)) + '</span>';
+                phaseTooltip.style.left = (clientX + 14) + 'px';
+                phaseTooltip.style.top = (clientY + 14) + 'px';
+                phaseTooltip.classList.remove('is-hidden');
+            }
+
+            timeline.addEventListener('mousemove', function (event) {
+                var band = event.target.closest('.symbolic-phase-band');
+                if (!band) {
+                    hidePhaseTooltip();
+                    return;
+                }
+                showPhaseTooltip(band, event.clientX, event.clientY);
+            });
+
+            timeline.addEventListener('mouseleave', function () {
+                hidePhaseTooltip();
+            });
+
+            document.addEventListener('click', function (event) {
+                var band = event.target.closest('.symbolic-phase-band');
+                if (band) {
+                    state.selectedSymbolicKey = band.getAttribute('data-symbolic-key') || null;
+                    renderFromCache();
+                    return;
+                }
+                if (state.selectedSymbolicKey !== null) {
+                    state.selectedSymbolicKey = null;
+                    renderFromCache();
+                }
+            });
+
+            timeline.addEventListener('wheel', function (event) {
+                var delta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+                if (!delta) {
+                    return;
+                }
+                event.preventDefault();
+                if (wheelLocked) {
+                    return;
+                }
+                wheelLocked = true;
+                var direction = delta > 0 ? 1 : -1;
+                var multiplier = Math.min(4, Math.max(1, Math.floor(Math.abs(delta) / 120) + 1));
+                var shift = moveSeconds * multiplier * direction;
+                shiftWindow(shift);
+                setTimeout(function () {
+                    wheelLocked = false;
+                }, 45);
+            }, { passive: false });
+        })();
+    </script>
+{% endblock %}
+

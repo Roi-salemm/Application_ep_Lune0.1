@@ -11,6 +11,7 @@ use App\Entity\MsMapping;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\Persistence\ManagerRegistry;
 
 final class MsMappingRepository extends ServiceEntityRepository
@@ -109,6 +110,90 @@ final class MsMappingRepository extends ServiceEntityRepository
                 'stop' => $stop->format('Y-m-d H:i:s'),
             ]
         );
+    }
+
+    /**
+     * @return array<int, array{phase:int, phase_hour:\DateTimeImmutable}>
+     */
+    public function findPhaseEventsForTimeline(
+        \DateTimeImmutable $startUtc,
+        \DateTimeImmutable $endUtc,
+        int $paddingHours = 96
+    ): array {
+        $from = $startUtc->modify(sprintf('-%d hours', max(0, $paddingHours)));
+        $to = $endUtc->modify(sprintf('+%d hours', max(0, $paddingHours)));
+        $utc = new \DateTimeZone('UTC');
+
+        $rows = $this->connection()->fetchAllAssociative(
+            '
+                SELECT phase, phase_hour, ts_utc
+                FROM ms_mapping
+                WHERE phase IS NOT NULL
+                  AND phase BETWEEN 0 AND 7
+                  AND phase_hour IS NOT NULL
+                  AND DATE(phase_hour) = DATE(ts_utc)
+                  AND phase_hour >= :from
+                  AND phase_hour <= :to
+                ORDER BY phase_hour ASC, ts_utc ASC
+            ',
+            [
+                'from' => $from->format('Y-m-d H:i:s'),
+                'to' => $to->format('Y-m-d H:i:s'),
+            ]
+        );
+
+        // Plusieurs lignes horaires peuvent partager le meme phase_hour.
+        // On conserve pour chaque instant l entree la plus proche de phase_hour.
+        $grouped = [];
+        foreach ($rows as $row) {
+            $phase = isset($row['phase']) ? (int) $row['phase'] : -1;
+            $phaseHourRaw = isset($row['phase_hour']) ? trim((string) $row['phase_hour']) : '';
+            if ($phase < 0 || $phase > 7 || $phaseHourRaw === '') {
+                continue;
+            }
+
+            try {
+                $phaseHour = new \DateTimeImmutable($phaseHourRaw, $utc);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $groupKey = $phaseHour->format('Y-m-d H:i:s');
+            $tsUtcRaw = isset($row['ts_utc']) ? trim((string) $row['ts_utc']) : '';
+            $distance = PHP_INT_MAX;
+            if ($tsUtcRaw !== '') {
+                try {
+                    $tsUtc = new \DateTimeImmutable($tsUtcRaw, $utc);
+                    $distance = abs($tsUtc->getTimestamp() - $phaseHour->getTimestamp());
+                } catch (\Throwable) {
+                    $distance = PHP_INT_MAX;
+                }
+            }
+
+            if (!isset($grouped[$groupKey]) || $distance < $grouped[$groupKey]['distance']) {
+                $grouped[$groupKey] = [
+                    'phase' => $phase,
+                    'phase_hour' => $phaseHour,
+                    'distance' => $distance,
+                ];
+            }
+        }
+
+        $events = array_values(array_map(
+            static fn (array $row): array => [
+                'phase' => (int) $row['phase'],
+                'phase_hour' => $row['phase_hour'],
+            ],
+            $grouped
+        ));
+
+        usort(
+            $events,
+            static fn (array $a, array $b): int =>
+                $a['phase_hour']->getTimestamp() <=> $b['phase_hour']->getTimestamp()
+        );
+
+        return $events;
     }
 
     /**

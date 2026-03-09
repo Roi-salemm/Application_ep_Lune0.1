@@ -34,7 +34,7 @@ class SwContent
     #[ORM\Column(name: 'version_no', type: Types::INTEGER, options: ['unsigned' => true])]
     private int $versionNo;
 
-    #[ORM\Column(type: Types::STRING, length: 30)]
+    #[ORM\Column(type: Types::STRING, length: 30, columnDefinition: "ENUM('draft','review','validated','archived')")]
     private string $status;
 
     #[ORM\Column(name: 'is_current', type: Types::BOOLEAN, options: ['default' => false])]
