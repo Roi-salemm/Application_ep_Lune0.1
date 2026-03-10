@@ -41,7 +41,7 @@
                 <div class="symbolic-label symbolic-label--compact">Zone d'influance</div>
                 <div class="symbolic-label symbolic-label--compact">Evenement :</div>
                 <div class="symbolic-label symbolic-label--sub symbolic-label--compact">stellaire</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">synodique</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic">synodique</div>
                 <div class="symbolic-label symbolic-label--sub symbolic-label--compact">apellation</div>
                 <div class="symbolic-label symbolic-label--compact symbolic-label--text-symbolic">Texte symbolique</div>
             </aside>
@@ -115,65 +115,71 @@
                 <div class="symbolic-track symbolic-track--event-group" aria-hidden="true"></div>
 
                 {% for row in row_definitions %}
-                    {% if row.code != 'symbolic_text' %}
-                    {% set entries = entries_by_row[row.code]|default([]) %}
-                    {% set gaps = gaps_by_row[row.code]|default([]) %}
-                    <div class="symbolic-track symbolic-track--content" data-row-code="{{ row.code }}" data-track-row="{{ row.code }}">
-                        {% for gap in gaps %}
-                            <button type="button"
-                                    class="symbolic-gap-add"
-                                    style="left: {{ gap.center }}%;"
-                                    title="Ajouter un texte"
-                                    data-open-create
-                                    data-display-code="{{ row.code }}"
-                                    data-schedule-type="{{ row.schedule_type }}"
-                                    data-start="{{ gap.start_at_input }}"
-                                    data-end="{{ gap.end_at_input }}">+</button>
-                        {% endfor %}
-
-                        {% if entries is empty %}
-                            <div class="symbolic-track__empty symbolic-track__empty--warning">! Donnee manquante sur cette ligne</div>
-                        {% endif %}
-
-                        {% for entry in entries %}
-                            <article class="symbolic-entry {{ entry.is_ready ? '' : 'is-warning' }}"
-                                     style="left: {{ entry.left }}%; width: {{ entry.width }}%; --entry-color: {{ entry.color }};">
-                                <div class="symbolic-entry__text">
-                                    <strong>{{ entry.label }}</strong>
-                                    {% if entry.subtitle %}
-                                        <small>{{ entry.subtitle }}</small>
-                                    {% endif %}
-                                </div>
+                    {% if row.code == 'influence_synodic' %}
+                        <div class="symbolic-track symbolic-track--synodic"
+                             data-track-synodic
+                             data-display-code="{{ row.code }}"></div>
+                    {% elseif row.code == 'symbolic_text' %}
+                        <div class="symbolic-track symbolic-track--text-symbolic-empty"
+                             data-track-text-symbolic-empty
+                             aria-hidden="true"></div>
+                    {% else %}
+                        {% set entries = entries_by_row[row.code]|default([]) %}
+                        {% set gaps = gaps_by_row[row.code]|default([]) %}
+                        <div class="symbolic-track symbolic-track--content" data-row-code="{{ row.code }}" data-track-row="{{ row.code }}">
+                            {% for gap in gaps %}
                                 <button type="button"
-                                        class="symbolic-entry__edit"
-                                        data-open-edit
-                                        data-id="{{ entry.id }}"
+                                        class="symbolic-gap-add"
+                                        style="left: {{ gap.center }}%;"
+                                        title="Ajouter un texte"
+                                        data-open-create
                                         data-display-code="{{ row.code }}"
-                                        data-label="{{ entry.label|e('html_attr') }}"
-                                        data-subtitle="{{ entry.subtitle|default('')|e('html_attr') }}"
-                                        data-color="{{ entry.color|e('html_attr') }}"
-                                        data-icon="{{ entry.icon|default('')|e('html_attr') }}"
-                                        data-start="{{ entry.start_at_input }}"
-                                        data-end="{{ entry.end_at_input }}"
-                                        data-priority="{{ entry.priority }}"
-                                        data-schedule-type="{{ entry.schedule_type|e('html_attr') }}"
-                                        data-status="{{ entry.status|e('html_attr') }}"
-                                        data-schema-version="{{ entry.schema_version|e('html_attr') }}"
-                                        data-comment="{{ entry.comment|default('')|e('html_attr') }}"
-                                        data-editorial-notes="{{ entry.editorial_notes|default('')|e('html_attr') }}"
-                                        data-payload-json="{{ entry.payload_json|default('')|e('html_attr') }}"
-                                        data-is-published="{{ entry.is_published ? '1' : '0' }}"
-                                        data-is-validated="{{ entry.is_validated ? '1' : '0' }}"
-                                        data-is-current="{{ entry.is_current ? '1' : '0' }}"
-                                        data-update-token="{{ csrf_token('update_symbolic_text_' ~ entry.id) }}"
-                                        data-delete-token="{{ csrf_token('delete_symbolic_text_' ~ entry.id) }}">Modifier</button>
-                            </article>
-                        {% endfor %}
-                    </div>
+                                        data-schedule-type="{{ row.schedule_type }}"
+                                        data-start="{{ gap.start_at_input }}"
+                                        data-end="{{ gap.end_at_input }}">+</button>
+                            {% endfor %}
+
+                            {% if entries is empty %}
+                                <div class="symbolic-track__empty symbolic-track__empty--warning">! Donnee manquante sur cette ligne</div>
+                            {% endif %}
+
+                            {% for entry in entries %}
+                                <article class="symbolic-entry {{ entry.is_ready ? '' : 'is-warning' }}"
+                                         style="left: {{ entry.left }}%; width: {{ entry.width }}%; --entry-color: {{ entry.color }};">
+                                    <div class="symbolic-entry__text">
+                                        <strong>{{ entry.label }}</strong>
+                                        {% if entry.subtitle %}
+                                            <small>{{ entry.subtitle }}</small>
+                                        {% endif %}
+                                    </div>
+                                    <button type="button"
+                                            class="symbolic-entry__edit"
+                                            data-open-edit
+                                            data-id="{{ entry.id }}"
+                                            data-display-code="{{ row.code }}"
+                                            data-label="{{ entry.label|e('html_attr') }}"
+                                            data-subtitle="{{ entry.subtitle|default('')|e('html_attr') }}"
+                                            data-color="{{ entry.color|e('html_attr') }}"
+                                            data-icon="{{ entry.icon|default('')|e('html_attr') }}"
+                                            data-start="{{ entry.start_at_input }}"
+                                            data-end="{{ entry.end_at_input }}"
+                                            data-priority="{{ entry.priority }}"
+                                            data-schedule-type="{{ entry.schedule_type|e('html_attr') }}"
+                                            data-status="{{ entry.status|e('html_attr') }}"
+                                            data-schema-version="{{ entry.schema_version|e('html_attr') }}"
+                                            data-comment="{{ entry.comment|default('')|e('html_attr') }}"
+                                            data-editorial-notes="{{ entry.editorial_notes|default('')|e('html_attr') }}"
+                                            data-payload-json="{{ entry.payload_json|default('')|e('html_attr') }}"
+                                            data-is-published="{{ entry.is_published ? '1' : '0' }}"
+                                            data-is-validated="{{ entry.is_validated ? '1' : '0' }}"
+                                            data-is-current="{{ entry.is_current ? '1' : '0' }}"
+                                            data-update-token="{{ csrf_token('update_symbolic_text_' ~ entry.id) }}"
+                                            data-delete-token="{{ csrf_token('delete_symbolic_text_' ~ entry.id) }}">Modifier</button>
+                                </article>
+                            {% endfor %}
+                        </div>
                     {% endif %}
                 {% endfor %}
-
-                <div class="symbolic-track symbolic-track--text-symbolic" data-track-text-symbolic data-display-code="symbolic_text"></div>
             </div>
         </div>
     </section>
@@ -192,7 +198,9 @@
                         <span class="admin-form__label">Ligne</span>
                         <select class="admin-form__select" name="display_code" data-create-display-code required>
                             {% for row in row_definitions %}
-                                <option value="{{ row.code }}">{{ row.label }}</option>
+                                {% if row.code != 'symbolic_text' %}
+                                    <option value="{{ row.code }}">{{ row.label }}</option>
+                                {% endif %}
                             {% endfor %}
                         </select>
                     </label>
@@ -301,7 +309,9 @@
                         <span class="admin-form__label">Ligne</span>
                         <select class="admin-form__select" name="display_code" data-edit-display-code required>
                             {% for row in row_definitions %}
-                                <option value="{{ row.code }}">{{ row.label }}</option>
+                                {% if row.code != 'symbolic_text' %}
+                                    <option value="{{ row.code }}">{{ row.label }}</option>
+                                {% endif %}
                             {% endfor %}
                         </select>
                     </label>
@@ -551,9 +561,9 @@
                 return;
             }
 
-            var chunkSeconds = 14 * 86400;
-            var maxCacheSeconds = 45 * 86400;
-            var preloadThreshold = 2 * 86400;
+            var chunkSeconds = 7 * 86400;
+            var maxCacheSeconds = 75 * 86400;
+            var preloadThreshold = 7 * 86400;
             var moveSeconds = Math.max(600, Math.floor(spanSeconds / 6));
             var state = {
                 span: span,
@@ -947,43 +957,6 @@
                 return formatUtc(ts);
             }
 
-            function overlapDuration(startA, endA, startB, endB) {
-                return Math.max(0, Math.min(endA, endB) - Math.max(startA, startB));
-            }
-
-            function assignEntriesToTextZones(zones, entries) {
-                var grouped = zones.map(function () { return []; });
-                entries.forEach(function (entry) {
-                    var entryStart = typeof entry.start_ts === 'number' ? entry.start_ts : 0;
-                    var entryEnd = typeof entry.end_ts === 'number' ? entry.end_ts : 0;
-                    if (entryEnd <= entryStart) {
-                        return;
-                    }
-                    var bestIndex = -1;
-                    var bestOverlap = 0;
-                    zones.forEach(function (zone, index) {
-                        var zoneStart = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
-                        var zoneEnd = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
-                        var overlap = overlapDuration(entryStart, entryEnd, zoneStart, zoneEnd);
-                        if (overlap > bestOverlap) {
-                            bestOverlap = overlap;
-                            bestIndex = index;
-                        }
-                    });
-                    if (bestIndex >= 0) {
-                        grouped[bestIndex].push(entry);
-                    }
-                });
-
-                grouped.forEach(function (list) {
-                    list.sort(function (a, b) {
-                        return (a.start_ts - b.start_ts) || (a.end_ts - b.end_ts);
-                    });
-                });
-
-                return grouped;
-            }
-
             function buildEditButtonHtml(entry, rowCode) {
                 return '' +
                     '<button type="button" class="symbolic-entry__edit" data-open-edit' +
@@ -1010,33 +983,96 @@
                     '>Modifier</button>';
             }
 
-            function renderTextSymbolic(zones, entries) {
-                var track = timeline.querySelector('[data-track-text-symbolic]');
-                var layout = timeline.closest('.symbolic-layout');
+            function detectSynodicZoneProblems(sortedZones) {
+                var missing = [];
+                var overlapsFound = [];
+                if (!sortedZones.length) {
+                    missing.push({
+                        start_ts: state.visibleStartTs,
+                        end_ts: state.visibleEndTs
+                    });
+                    return { missing: missing, overlaps: overlapsFound };
+                }
+
+                var cursor = state.visibleStartTs;
+                sortedZones.forEach(function (zone) {
+                    var zoneStart = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
+                    var zoneEnd = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
+                    var visibleStart = Math.max(zoneStart, state.visibleStartTs);
+                    var visibleEnd = Math.min(zoneEnd, state.visibleEndTs);
+                    if (visibleEnd <= visibleStart) {
+                        return;
+                    }
+
+                    if (visibleStart > cursor) {
+                        missing.push({
+                            start_ts: cursor,
+                            end_ts: visibleStart
+                        });
+                    }
+                    if (visibleStart < cursor) {
+                        var overlapEnd = Math.min(cursor, visibleEnd);
+                        if (overlapEnd > visibleStart) {
+                            overlapsFound.push({
+                                start_ts: visibleStart,
+                                end_ts: overlapEnd
+                            });
+                        }
+                    }
+                    cursor = Math.max(cursor, visibleEnd);
+                });
+
+                if (cursor < state.visibleEndTs) {
+                    missing.push({
+                        start_ts: cursor,
+                        end_ts: state.visibleEndTs
+                    });
+                }
+
+                return {
+                    missing: missing,
+                    overlaps: overlapsFound
+                };
+            }
+
+            function renderSynodic(zones) {
+                var track = timeline.querySelector('[data-track-synodic]');
                 if (!track) {
                     return;
                 }
 
-                if (!zones.length) {
-                    track.style.setProperty('--symbolic-text-extra-rows', '0');
-                    if (layout) {
-                        layout.style.setProperty('--symbolic-text-extra-rows', '0');
+                var normalizedZones = (zones || []).map(function (zone) {
+                    if (!zone || typeof zone.full_start_ts !== 'number' || typeof zone.full_end_ts !== 'number') {
+                        return null;
                     }
-                    track.innerHTML = '<div class="symbolic-track__empty">Zones symboliques indisponibles (nouvelle/pleine lune manquante).</div>';
+                    if (!overlaps(zone.full_start_ts, zone.full_end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                        return null;
+                    }
+                    return zone;
+                }).filter(Boolean);
+                normalizedZones.sort(function (a, b) {
+                    return (a.full_start_ts - b.full_start_ts) || (a.full_end_ts - b.full_end_ts);
+                });
+
+                track.classList.remove('is-problem');
+
+                if (!normalizedZones.length) {
+                    track.classList.add('is-problem');
+                    track.innerHTML = '' +
+                        '<div class="symbolic-synodic-zones-row">' +
+                        '<div class="symbolic-text-problem symbolic-text-problem--missing" style="left:0%;width:100%;">PROBLEME: aucune zone orb_window (multi_section_phase)</div>' +
+                        '</div>';
                     return;
                 }
 
-                var grouped = assignEntriesToTextZones(zones, entries || []);
-                var maxRows = grouped.reduce(function (max, list) {
-                    return Math.max(max, list.length);
-                }, 0);
-                track.style.setProperty('--symbolic-text-extra-rows', String(maxRows));
-                if (layout) {
-                    layout.style.setProperty('--symbolic-text-extra-rows', String(maxRows));
+                var problems = detectSynodicZoneProblems(normalizedZones);
+                var hasProblem = problems.missing.length > 0 || problems.overlaps.length > 0;
+                if (hasProblem) {
+                    track.classList.add('is-problem');
                 }
 
-                var html = '<div class="symbolic-text-zones-row">';
-                zones.forEach(function (zone, zoneIndex) {
+                var html = '<div class="symbolic-synodic-zones-row">';
+                normalizedZones.forEach(function (zone) {
                     var fullStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
                     var fullEndTs = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
                     var startTs = Math.max(fullStartTs, state.visibleStartTs);
@@ -1048,43 +1084,32 @@
                     var tone = zone.tone || 'shade-1';
                     var title = (zone.label || '') + ' (' + formatUtcPrecise(fullStartTs) + ' -> ' + formatUtcPrecise(fullEndTs) + ')';
                     html += '' +
-                        '<div class="symbolic-text-zone symbolic-text-zone--' + escapeHtml(tone) + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;" title="' + escapeHtml(title) + '">' +
-                        '<span class="symbolic-text-zone__label">' + escapeHtml(zone.label || '') + '</span>';
-
-                    if (!grouped[zoneIndex].length) {
-                        html += '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte" data-open-create data-display-code="symbolic_text" data-schedule-type="phase_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>';
-                    }
+                        '<div class="symbolic-synodic-zone symbolic-text-zone symbolic-text-zone--' + escapeHtml(tone) + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;" title="' + escapeHtml(title) + '">' +
+                        '<span class="symbolic-text-zone__label">' + escapeHtml(zone.label || '') + '</span>' +
+                        '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte" data-open-create data-display-code="influence_synodic" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>';
 
                     html += '</div>';
                 });
-                html += '</div>';
 
-                for (var rowIndex = 0; rowIndex < maxRows; rowIndex++) {
-                    html += '<div class="symbolic-text-entries-row">';
-                    zones.forEach(function (zone, zoneIndex) {
-                        var entry = grouped[zoneIndex][rowIndex];
-                        if (!entry) {
-                            return;
-                        }
-                        var zoneStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
-                        var zoneEndTs = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
-                        var startTs = Math.max(state.visibleStartTs, zoneStartTs, entry.start_ts);
-                        var endTs = Math.min(state.visibleEndTs, zoneEndTs, entry.end_ts);
-                        if (endTs <= startTs) {
-                            return;
-                        }
-                        var readyClass = entry.is_ready ? '' : ' is-warning';
-                        html += '' +
-                            '<article class="symbolic-text-entry' + readyClass + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#7A7F87') + ';">' +
-                            '<div class="symbolic-text-entry__text">' +
-                            '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
-                            (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
-                            '</div>' +
-                            buildEditButtonHtml(entry, 'symbolic_text') +
-                            '</article>';
-                    });
-                    html += '</div>';
-                }
+                problems.missing.forEach(function (segment) {
+                    if (!segment || segment.end_ts <= segment.start_ts) {
+                        return;
+                    }
+                    html += '' +
+                        '<div class="symbolic-text-problem symbolic-text-problem--missing" style="left:' + positionPercent(segment.start_ts) + '%;width:' + widthPercent(segment.start_ts, segment.end_ts) + '%;" title="PROBLEME: zone manquante">' +
+                        '<span>PROBLEME</span>' +
+                        '</div>';
+                });
+                problems.overlaps.forEach(function (segment) {
+                    if (!segment || segment.end_ts <= segment.start_ts) {
+                        return;
+                    }
+                    html += '' +
+                        '<div class="symbolic-text-problem symbolic-text-problem--overlap" style="left:' + positionPercent(segment.start_ts) + '%;width:' + widthPercent(segment.start_ts, segment.end_ts) + '%;" title="PROBLEME: chevauchement de zones">' +
+                        '<span>CHEVAUCHEMENT</span>' +
+                        '</div>';
+                });
+                html += '</div>';
 
                 track.innerHTML = html;
             }
@@ -1166,7 +1191,7 @@
                 renderLunation(data.lunation);
                 renderSymbolic(data.symbolic);
                 renderRows(data.entriesByRow);
-                renderTextSymbolic(data.textSymbolicZones, data.entriesByRow.symbolic_text || []);
+                renderSynodic(data.textSymbolicZones);
                 updateWindowLabels();
             }
 
@@ -1183,7 +1208,8 @@
                 addChunk(initialPayload.window_start_ts, initialPayload.window_end_ts, initialPayload);
             }
 
-            ensureChunksForRange(state.visibleStartTs, state.visibleEndTs, true).then(function () {
+            renderFromCache();
+            ensureChunksForRange(state.visibleStartTs, state.visibleEndTs, false).then(function () {
                 renderFromCache();
                 maybePrefetch();
             });
@@ -1279,4 +1305,3 @@
         })();
     </script>
 {% endblock %}
-

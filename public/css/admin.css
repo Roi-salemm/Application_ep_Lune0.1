@@ -1804,8 +1804,9 @@ thead .admin-table__cell {
 .symbolic-layout {
     --symbolic-row-height: 48px;
     --symbolic-row-height-thin: 32px;
-    --symbolic-text-zone-row-height: 48px;
-    --symbolic-text-entry-row-height: 40px;
+    --symbolic-synodic-zone-row-height: 48px;
+    --symbolic-synodic-entry-row-height: 40px;
+    --symbolic-synodic-extra-rows: 1;
     display: grid;
     grid-template-columns: 160px 1fr;
     gap: 0;
@@ -1850,10 +1851,12 @@ thead .admin-table__cell {
     font-size: 11px;
 }
 
+.symbolic-label--synodic {
+    height: var(--symbolic-synodic-zone-row-height);
+}
+
 .symbolic-label--text-symbolic {
-    height: calc(var(--symbolic-row-height) + (var(--symbolic-text-extra-rows, 0) * var(--symbolic-text-entry-row-height)));
-    align-items: flex-start;
-    padding-top: 12px;
+    height: var(--symbolic-row-height);
 }
 
 .symbolic-layout__timeline {
@@ -1974,24 +1977,40 @@ thead .admin-table__cell {
     background: rgba(255, 255, 255, 0.012);
 }
 
-.symbolic-track--text-symbolic {
-    height: calc(var(--symbolic-text-zone-row-height) + (var(--symbolic-text-extra-rows, 0) * var(--symbolic-text-entry-row-height)));
-    min-height: var(--symbolic-text-zone-row-height);
+.symbolic-track--synodic {
+    height: var(--symbolic-synodic-zone-row-height);
+    min-height: var(--symbolic-synodic-zone-row-height);
     background: rgba(255, 255, 255, 0.02);
 }
 
+.symbolic-track--synodic.is-problem {
+    background: rgba(130, 14, 14, 0.22);
+}
+
+/* Synodique: on garde la logique create dans le code mais le bouton + est masque visuellement. */
+.symbolic-track--synodic .symbolic-gap-add--zone {
+    display: none;
+}
+
+.symbolic-track--text-symbolic-empty {
+    height: var(--symbolic-row-height);
+    background: rgba(255, 255, 255, 0.015);
+}
+
 .symbolic-text-zones-row,
-.symbolic-text-entries-row {
+.symbolic-text-entries-row,
+.symbolic-synodic-zones-row {
     position: relative;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.symbolic-text-zones-row {
-    height: var(--symbolic-text-zone-row-height);
+.symbolic-text-zones-row,
+.symbolic-synodic-zones-row {
+    height: var(--symbolic-synodic-zone-row-height);
 }
 
 .symbolic-text-entries-row {
-    height: var(--symbolic-text-entry-row-height);
+    height: var(--symbolic-synodic-entry-row-height);
 }
 
 .symbolic-text-zone {
@@ -2025,6 +2044,40 @@ thead .admin-table__cell {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.symbolic-text-problem {
+    position: absolute;
+    top: 8px;
+    height: 32px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 100, 100, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff4f4;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0 8px;
+    overflow: hidden;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.symbolic-text-problem--missing {
+    background: rgba(230, 20, 20, 0.95);
+}
+
+.symbolic-text-problem--overlap {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(220, 0, 0, 0.92) 0px,
+        rgba(220, 0, 0, 0.92) 6px,
+        rgba(255, 245, 245, 0.72) 6px,
+        rgba(255, 245, 245, 0.72) 12px
+    );
+    color: #4b0000;
 }
 
 .symbolic-gap-add--zone {

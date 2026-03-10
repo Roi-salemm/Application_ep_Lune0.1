@@ -6,9 +6,11 @@ use App\Entity\SwContent;
 use App\Entity\SwDisplay;
 use App\Entity\SwSchedule;
 use App\Repository\MsMappingRepository;
+use App\Repository\OrbWindowRepository;
 use App\Repository\SwContentRepository;
 use App\Repository\SwDisplayRepository;
 use App\Repository\SwScheduleRepository;
+use App\Service\Moon\OrbWindowParseService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -21,7 +23,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 /**
  * Controle l onglet admin Symbolic Text et son CRUD timeline.
  * Pourquoi: relier une timeline visuelle a la base sw_display/sw_content/sw_schedule avec un placement temporel exact.
- * Info: toutes les dates sont manipulees en UTC; la ligne symbolique est calculee depuis les phases astronomiques ms_mapping.
+ * Info: toutes les dates sont manipulees en UTC; la ligne "Texte symbolique" est alignee sur orb_window (multi_section_phase).
  */
 final class SymbolicTextController extends AbstractController
 {
@@ -92,7 +94,8 @@ final class SymbolicTextController extends AbstractController
         EntityManagerInterface $entityManager,
         SwDisplayRepository $displayRepository,
         SwScheduleRepository $scheduleRepository,
-        MsMappingRepository $msMappingRepository
+        MsMappingRepository $msMappingRepository,
+        OrbWindowRepository $orbWindowRepository
     ): Response {
         $utc = new \DateTimeZone('UTC');
         $spanOptions = $this->spanOptions();
@@ -117,7 +120,8 @@ final class SymbolicTextController extends AbstractController
             $rowDefinitions,
             $displayCodes,
             $scheduleRepository,
-            $msMappingRepository
+            $msMappingRepository,
+            $orbWindowRepository
         );
 
         return $this->render('admin/symbolic_text.html.twig', [
@@ -152,7 +156,8 @@ final class SymbolicTextController extends AbstractController
     public function data(
         Request $request,
         SwScheduleRepository $scheduleRepository,
-        MsMappingRepository $msMappingRepository
+        MsMappingRepository $msMappingRepository,
+        OrbWindowRepository $orbWindowRepository
     ): JsonResponse {
         $startUtc = $this->parseUtcInput((string) $request->query->get('start_utc', ''));
         $endUtc = $this->parseUtcInput((string) $request->query->get('end_utc', ''));
@@ -175,7 +180,8 @@ final class SymbolicTextController extends AbstractController
             $rowDefinitions,
             $displayCodes,
             $scheduleRepository,
-            $msMappingRepository
+            $msMappingRepository,
+            $orbWindowRepository
         );
 
         return $this->json($payload);
@@ -411,7 +417,8 @@ final class SymbolicTextController extends AbstractController
         array $rowDefinitions,
         array $displayCodes,
         SwScheduleRepository $scheduleRepository,
-        MsMappingRepository $msMappingRepository
+        MsMappingRepository $msMappingRepository,
+        OrbWindowRepository $orbWindowRepository
     ): array {
         $schedules = $scheduleRepository->findTimelineEntriesForAdmin($startUtc, $endUtc, $displayCodes);
 
@@ -425,7 +432,12 @@ final class SymbolicTextController extends AbstractController
         $astronomyPoints = $this->buildAstronomyPoints($phaseEvents, $startUtc, $endUtc, $durationSeconds);
         $symbolicSegments = $this->buildSymbolicSegments($phaseEvents, $startUtc, $endUtc, $durationSeconds);
         $lunationSegments = $this->buildLunationYearSegments($phaseEvents, $startUtc, $endUtc, $durationSeconds);
-        $textSymbolicZones = $this->buildTextSymbolicZones($phaseEvents, $startUtc, $endUtc, $durationSeconds);
+        $textSymbolicZones = $this->buildTextSymbolicZonesFromOrbWindow(
+            $orbWindowRepository,
+            $startUtc,
+            $endUtc,
+            $durationSeconds
+        );
 
         $dayMarkers = $this->buildDayMarkers($startUtc, $endUtc, $durationSeconds);
         $realSegments = $this->buildRealSegments($dayMarkers, $startUtc, $endUtc, $durationSeconds);
@@ -932,164 +944,85 @@ final class SymbolicTextController extends AbstractController
     }
 
     /**
-     * @param array<int, array{phase:int, phase_hour:\DateTimeImmutable}> $phaseEvents
      * @return array<int, array<string, mixed>>
      */
-    private function buildTextSymbolicZones(
-        array $phaseEvents,
+    private function buildTextSymbolicZonesFromOrbWindow(
+        OrbWindowRepository $orbWindowRepository,
         \DateTimeImmutable $startUtc,
         \DateTimeImmutable $endUtc,
         int $durationSeconds
     ): array {
-        $anchors = array_values(
-            array_filter(
-                $phaseEvents,
-                static fn (array $event): bool => in_array((int) ($event['phase'] ?? -1), [0, 4], true)
-            )
+        $sourceZones = $orbWindowRepository->findTimelineZonesByFamilyAndMethod(
+            OrbWindowParseService::FAMILY_MULTI_SECTION_PHASE,
+            OrbWindowParseService::METHOD_MULTI_SECTION_PHASE,
+            $startUtc,
+            $endUtc
         );
 
-        if ($anchors === []) {
+        if ($sourceZones === []) {
             return [];
         }
 
-        $startTs = $startUtc->getTimestamp();
-        $endTs = $endUtc->getTimestamp();
+        $windowStartTs = $startUtc->getTimestamp();
+        $windowEndTs = $endUtc->getTimestamp();
         $zones = [];
-        $windows = [];
-        $halfCore = 216000; // 2.5 jours
-        $oneDay = 86400;
 
-        foreach ($anchors as $event) {
-            $phase = (int) $event['phase'];
-            $eventTs = $event['phase_hour']->getTimestamp();
-            $frameStartTs = $eventTs - $halfCore - $oneDay;
-            $leadEndTs = $eventTs - $halfCore;
-            $coreEndTs = $eventTs + $halfCore;
-            $frameEndTs = $eventTs + $halfCore + $oneDay;
-
-            $windows[] = [
-                'phase' => $phase,
-                'event_ts' => $eventTs,
-                'frame_start_ts' => $frameStartTs,
-                'frame_end_ts' => $frameEndTs,
-            ];
-
-            $this->appendTextSymbolicZone(
-                $zones,
-                $frameStartTs,
-                $leadEndTs,
-                'premiere journee',
-                'shade-1',
-                'edge_start',
-                $startTs,
-                $endTs,
-                $durationSeconds
-            );
-            $this->appendTextSymbolicZone(
-                $zones,
-                $leadEndTs,
-                $eventTs,
-                'coeur symbolique',
-                'shade-2',
-                'core_part_1',
-                $startTs,
-                $endTs,
-                $durationSeconds
-            );
-            $this->appendTextSymbolicZone(
-                $zones,
-                $eventTs,
-                $coreEndTs,
-                'coeur symbolique',
-                'shade-2',
-                'core_part_2',
-                $startTs,
-                $endTs,
-                $durationSeconds
-            );
-            $this->appendTextSymbolicZone(
-                $zones,
-                $coreEndTs,
-                $frameEndTs,
-                'derniere journee',
-                'shade-1',
-                'edge_end',
-                $startTs,
-                $endTs,
-                $durationSeconds
-            );
-        }
-
-        for ($i = 0, $max = count($windows) - 1; $i < $max; $i++) {
-            $from = $windows[$i];
-            $to = $windows[$i + 1];
-            $trendStartTs = (int) $from['frame_end_ts'];
-            $trendEndTs = (int) $to['frame_start_ts'];
-            if ($trendEndTs <= $trendStartTs) {
+        foreach ($sourceZones as $zone) {
+            $fullStartTs = $zone['starts_at_utc']->getTimestamp();
+            $fullEndTs = $zone['ends_at_utc']->getTimestamp();
+            if ($fullEndTs <= $fullStartTs) {
+                continue;
+            }
+            if ($fullEndTs <= $windowStartTs || $fullStartTs >= $windowEndTs) {
                 continue;
             }
 
-            $trendLabel = ((int) $from['phase']) === 4 ? 'decroissant' : 'croissant';
-            $this->appendTextSymbolicZone(
-                $zones,
-                $trendStartTs,
-                $trendEndTs,
-                $trendLabel,
-                'shade-3',
-                'trend',
-                $startTs,
-                $endTs,
-                $durationSeconds
-            );
+            $visibleStartTs = max($fullStartTs, $windowStartTs);
+            $visibleEndTs = min($fullEndTs, $windowEndTs);
+            if ($visibleEndTs <= $visibleStartTs) {
+                continue;
+            }
+
+            $phaseKey = (string) $zone['phase_key'];
+            $zones[] = [
+                'zone_key' => sprintf('%s:%d:%d:%d', $phaseKey, $fullStartTs, $fullEndTs, (int) $zone['id']),
+                'type' => 'orb_window',
+                'tone' => $this->textZoneToneFromPhaseKey($phaseKey),
+                'label' => $phaseKey,
+                'phase_key' => $phaseKey,
+                'start_ts' => $visibleStartTs,
+                'end_ts' => $visibleEndTs,
+                'full_start_ts' => $fullStartTs,
+                'full_end_ts' => $fullEndTs,
+                'left' => $this->positionPercent($visibleStartTs, $windowStartTs, $durationSeconds),
+                'width' => $this->widthPercent($visibleStartTs, $visibleEndTs, $durationSeconds),
+                'event_ts' => $zone['event_at_utc']->getTimestamp(),
+                'sequence_no' => $zone['sequence_no'],
+                'lunation_key' => $zone['lunation_key'],
+            ];
         }
 
         usort(
             $zones,
-            static fn (array $a, array $b): int => ($a['full_start_ts'] <=> $b['full_start_ts']) ?: ($a['full_end_ts'] <=> $b['full_end_ts'])
+            static fn (array $a, array $b): int =>
+                ($a['full_start_ts'] <=> $b['full_start_ts'])
+                ?: (($a['full_end_ts'] <=> $b['full_end_ts'])
+                    ?: ((int) ($a['sequence_no'] ?? 0) <=> (int) ($b['sequence_no'] ?? 0)))
         );
 
         return $zones;
     }
 
-    /**
-     * @param array<int, array<string, mixed>> $zones
-     */
-    private function appendTextSymbolicZone(
-        array &$zones,
-        int $fullStartTs,
-        int $fullEndTs,
-        string $label,
-        string $tone,
-        string $type,
-        int $windowStartTs,
-        int $windowEndTs,
-        int $durationSeconds
-    ): void {
-        if ($fullEndTs <= $fullStartTs) {
-            return;
+    private function textZoneToneFromPhaseKey(string $phaseKey): string
+    {
+        if (str_starts_with($phaseKey, 'influence_')) {
+            return 'shade-3';
         }
-        if ($fullEndTs <= $windowStartTs || $fullStartTs >= $windowEndTs) {
-            return;
+        if (str_contains($phaseKey, 'core_')) {
+            return 'shade-2';
         }
 
-        $visibleStartTs = max($fullStartTs, $windowStartTs);
-        $visibleEndTs = min($fullEndTs, $windowEndTs);
-        if ($visibleEndTs <= $visibleStartTs) {
-            return;
-        }
-
-        $zones[] = [
-            'zone_key' => sprintf('%s:%d:%d', $type, $fullStartTs, $fullEndTs),
-            'type' => $type,
-            'tone' => $tone,
-            'label' => $label,
-            'start_ts' => $visibleStartTs,
-            'end_ts' => $visibleEndTs,
-            'full_start_ts' => $fullStartTs,
-            'full_end_ts' => $fullEndTs,
-            'left' => $this->positionPercent($visibleStartTs, $windowStartTs, $durationSeconds),
-            'width' => $this->widthPercent($visibleStartTs, $visibleEndTs, $durationSeconds),
-        ];
+        return 'shade-1';
     }
 
     private function sanitizeSpan(string $span): string

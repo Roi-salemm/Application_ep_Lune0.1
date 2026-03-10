@@ -16,6 +16,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_orb_window_phase_key', columns: ['phase_key'])]
 #[ORM\Index(name: 'idx_orb_window_event_at', columns: ['event_at_utc'])]
 #[ORM\Index(name: 'idx_orb_window_calc_method', columns: ['calculation_method'])]
+#[ORM\Index(name: 'idx_orb_window_family_method_event', columns: ['window_family', 'calculation_method', 'event_at_utc'])]
 #[ORM\Index(name: 'idx_orb_window_window', columns: ['starts_at_utc', 'ends_at_utc'])]
 #[ORM\Index(name: 'idx_orb_window_phase_family_event', columns: ['phase_key', 'window_family', 'event_at_utc'])]
 #[ORM\Index(name: 'idx_orb_window_lunation_family_seq', columns: ['lunation_key', 'window_family', 'sequence_no'])]

@@ -36,10 +36,12 @@ final class OrbWindowController extends AbstractController
             $msMappingRepository->findPhaseEventMonthCoverage(self::START_YEAR, self::END_YEAR),
             true
         );
-        $parsedCoverage = array_fill_keys(
-            $orbWindowRepository->findMonthCoverageByFamily($family, self::START_YEAR, self::END_YEAR),
-            true
-        );
+        $parsedCoverage = $method !== null
+            ? array_fill_keys(
+                $orbWindowRepository->findMonthCoverageByFamilyAndMethod($family, $method, self::START_YEAR, self::END_YEAR),
+                true
+            )
+            : [];
 
         $monthCoverage = $this->buildMonthCoverage($sourceCoverage, $parsedCoverage);
         $yearCoverage = $this->buildYearCoverage($monthCoverage);
@@ -242,4 +244,3 @@ final class OrbWindowController extends AbstractController
         return $value !== '' ? $value : OrbWindowParseService::FAMILY_INFLUENCE_ORB;
     }
 }
-
