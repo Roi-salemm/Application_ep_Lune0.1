@@ -22,17 +22,17 @@ class SwScheduleRepository extends ServiceEntityRepository
     }
 
     /**
-     * @param string[] $displayCodes
+     * @param string[] $readingModes
      * @return SwSchedule[]
      */
     public function findTimelineEntriesForAdmin(
         \DateTimeImmutable $startUtc,
         \DateTimeImmutable $endUtc,
-        array $displayCodes,
+        array $readingModes,
         string $family = 'symbolic',
         string $lang = 'fr'
     ): array {
-        if ($displayCodes === []) {
+        if ($readingModes === []) {
             return [];
         }
 
@@ -40,12 +40,12 @@ class SwScheduleRepository extends ServiceEntityRepository
             ->addSelect('d', 'c')
             ->innerJoin('s.display', 'd')
             ->innerJoin('s.content', 'c')
-            ->andWhere('d.code IN (:codes)')
+            ->andWhere('d.readingMode IN (:readingModes)')
             ->andWhere('d.family = :family')
             ->andWhere('d.lang = :lang')
             ->andWhere('s.startsAtUtc < :endUtc')
             ->andWhere('s.endsAtUtc > :startUtc')
-            ->setParameter('codes', $displayCodes)
+            ->setParameter('readingModes', $readingModes)
             ->setParameter('family', $family)
             ->setParameter('lang', $lang)
             ->setParameter('startUtc', $startUtc)

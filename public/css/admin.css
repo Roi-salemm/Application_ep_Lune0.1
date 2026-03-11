@@ -1852,7 +1852,9 @@ thead .admin-table__cell {
 }
 
 .symbolic-label--synodic {
-    height: var(--symbolic-synodic-zone-row-height);
+    height: calc(var(--symbolic-synodic-zone-row-height) + (var(--symbolic-synodic-extra-rows) * var(--symbolic-synodic-entry-row-height)));
+    align-items: flex-start;
+    padding-top: 12px;
 }
 
 .symbolic-label--text-symbolic {
@@ -1978,18 +1980,13 @@ thead .admin-table__cell {
 }
 
 .symbolic-track--synodic {
-    height: var(--symbolic-synodic-zone-row-height);
-    min-height: var(--symbolic-synodic-zone-row-height);
+    height: calc(var(--symbolic-synodic-zone-row-height) + (var(--symbolic-synodic-extra-rows) * var(--symbolic-synodic-entry-row-height)));
+    min-height: calc(var(--symbolic-synodic-zone-row-height) + (var(--symbolic-synodic-extra-rows) * var(--symbolic-synodic-entry-row-height)));
     background: rgba(255, 255, 255, 0.02);
 }
 
 .symbolic-track--synodic.is-problem {
     background: rgba(130, 14, 14, 0.22);
-}
-
-/* Synodique: on garde la logique create dans le code mais le bouton + est masque visuellement. */
-.symbolic-track--synodic .symbolic-gap-add--zone {
-    display: none;
 }
 
 .symbolic-track--text-symbolic-empty {
@@ -2078,6 +2075,24 @@ thead .admin-table__cell {
         rgba(255, 245, 245, 0.72) 12px
     );
     color: #4b0000;
+}
+
+.symbolic-synodic-entry-alert {
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: #d01010;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+    z-index: 6;
+    pointer-events: none;
 }
 
 .symbolic-gap-add--zone {
@@ -2274,6 +2289,13 @@ thead .admin-table__cell {
     align-items: center;
     color: var(--admin-text);
     font-size: 13px;
+}
+
+.admin-form__section {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px 12px;
+    margin-bottom: 12px;
 }
 
 .symbolic-delete-form {

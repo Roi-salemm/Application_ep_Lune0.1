@@ -40,9 +40,9 @@
                 <div class="symbolic-label symbolic-label--thin">Lune annee</div>
                 <div class="symbolic-label symbolic-label--compact">Zone d'influance</div>
                 <div class="symbolic-label symbolic-label--compact">Evenement :</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">stellaire</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic">synodique</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">apellation</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">astronomical event</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic">influence (synodic)</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">lunationName</div>
                 <div class="symbolic-label symbolic-label--compact symbolic-label--text-symbolic">Texte symbolique</div>
             </aside>
 
@@ -188,107 +188,131 @@
         <div class="admin-modal__backdrop" data-modal-close></div>
         <div class="admin-modal__dialog admin-modal__dialog--wide" role="dialog" aria-modal="true">
             <div class="admin-modal__header">Ajouter un texte timeline</div>
-            <form class="admin-modal__body admin-form" method="post" action="{{ path('admin_symbolic_text_create') }}">
-                <input type="hidden" name="_token" value="{{ csrf_token('create_symbolic_text') }}">
+            {{ form_start(create_form, {'attr': {'class': 'admin-modal__body admin-form'}}) }}
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
 
-                <div class="admin-form__row">
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Ligne</span>
-                        <select class="admin-form__select" name="display_code" data-create-display-code required>
-                            {% for row in row_definitions %}
-                                {% if row.code != 'symbolic_text' %}
-                                    <option value="{{ row.code }}">{{ row.label }}</option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Texte</span>
-                        <input class="admin-form__input" type="text" name="label" data-create-label required>
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Sous-texte</span>
-                        <input class="admin-form__input" type="text" name="subtitle">
-                    </label>
+                <div class="admin-form__section">
+                    <div class="admin-form__label">SW Display</div>
+                    <div class="admin-form__row">
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Ligne</span>
+                            {{ form_widget(create_form.row_code) }}
+                            {{ form_errors(create_form.row_code) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Lang</span>
+                            {{ form_widget(create_form.display_lang) }}
+                            {{ form_errors(create_form.display_lang) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Comment</span>
+                            {{ form_widget(create_form.display_comment) }}
+                            {{ form_errors(create_form.display_comment) }}
+                        </label>
+                    </div>
+                    <div class="admin-form__row symbolic-checks">
+                        <label>{{ form_widget(create_form.display_is_active) }} is_active</label>
+                        {{ form_errors(create_form.display_is_active) }}
+                    </div>
                 </div>
 
-                <div class="admin-form__row">
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Debut UTC</span>
-                        <input class="admin-form__input" type="text" name="starts_at_utc" data-create-start placeholder="YYYY-MM-DD HH:MM" required>
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Fin UTC</span>
-                        <input class="admin-form__input" type="text" name="ends_at_utc" data-create-end placeholder="YYYY-MM-DD HH:MM" required>
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Couleur (#RRGGBB)</span>
-                        <input class="admin-form__input" type="text" name="color" value="#315A7B">
-                    </label>
+                <div class="admin-form__section">
+                    <div class="admin-form__label">SW Content</div>
+                    <div class="admin-form__row">
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Texte</span>
+                            {{ form_widget(create_form.label) }}
+                            {{ form_errors(create_form.label) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Sous-texte</span>
+                            {{ form_widget(create_form.subtitle) }}
+                            {{ form_errors(create_form.subtitle) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Couleur (#RRGGBB)</span>
+                            {{ form_widget(create_form.color) }}
+                            {{ form_errors(create_form.color) }}
+                        </label>
+                    </div>
+                    <div class="admin-form__row">
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Icone</span>
+                            {{ form_widget(create_form.icon) }}
+                            {{ form_errors(create_form.icon) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Status</span>
+                            {{ form_widget(create_form.status) }}
+                            {{ form_errors(create_form.status) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Schema version</span>
+                            {{ form_widget(create_form.schema_version) }}
+                            {{ form_errors(create_form.schema_version) }}
+                        </label>
+                    </div>
+                    <div class="admin-form__row">
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Editorial notes</span>
+                            {{ form_widget(create_form.editorial_notes) }}
+                            {{ form_errors(create_form.editorial_notes) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Content JSON (IA / humain)</span>
+                            {{ form_widget(create_form.content_json) }}
+                            {{ form_errors(create_form.content_json) }}
+                        </label>
+                    </div>
+                    <div class="admin-form__row symbolic-checks">
+                        <label>{{ form_widget(create_form.content_is_current) }} is_current</label>
+                        <label>{{ form_widget(create_form.content_is_validated) }} is_validated</label>
+                    </div>
                 </div>
 
-                <div class="admin-form__row">
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Icone (texte)</span>
-                        <input class="admin-form__input" type="text" name="icon">
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Priorite</span>
-                        <input class="admin-form__input" type="number" name="priority" value="100">
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Type planning</span>
-                        <select class="admin-form__select" name="schedule_type">
-                            <option value="influence_window">influence_window</option>
-                            <option value="phase_window">phase_window</option>
-                        </select>
-                    </label>
+                <div class="admin-form__section">
+                    <div class="admin-form__label">SW Schedule</div>
+                    <div class="admin-form__row">
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Start at UTC</span>
+                            {{ form_widget(create_form.starts_at_utc) }}
+                            {{ form_errors(create_form.starts_at_utc) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">End at UTC</span>
+                            {{ form_widget(create_form.ends_at_utc) }}
+                            {{ form_errors(create_form.ends_at_utc) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Priorite</span>
+                            {{ form_widget(create_form.priority) }}
+                            {{ form_errors(create_form.priority) }}
+                        </label>
+                    </div>
+                    <div class="admin-form__row">
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Schedule comment</span>
+                            {{ form_widget(create_form.schedule_comment) }}
+                            {{ form_errors(create_form.schedule_comment) }}
+                        </label>
+                        <label class="admin-form__field">
+                            <span class="admin-form__label">Payload JSON</span>
+                            {{ form_widget(create_form.payload_json) }}
+                            {{ form_errors(create_form.payload_json) }}
+                        </label>
+                    </div>
+                    <div class="admin-form__row symbolic-checks">
+                        <label>{{ form_widget(create_form.schedule_is_published) }} is_published</label>
+                    </div>
                 </div>
 
-                <div class="admin-form__row">
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Statut</span>
-                        <select class="admin-form__select" name="status">
-                            <option value="validated">validated</option>
-                            <option value="review">review</option>
-                            <option value="draft">draft</option>
-                            <option value="archived">archived</option>
-                        </select>
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Schema version</span>
-                        <input class="admin-form__input" type="text" name="schema_version" value="1.0">
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Commentaire</span>
-                        <input class="admin-form__input" type="text" name="comment">
-                    </label>
-                </div>
-
-                <div class="admin-form__row">
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Notes editoriales</span>
-                        <textarea class="admin-form__input" name="editorial_notes" rows="3"></textarea>
-                    </label>
-                    <label class="admin-form__field">
-                        <span class="admin-form__label">Payload JSON (optionnel)</span>
-                        <textarea class="admin-form__input" name="payload_json" rows="3" placeholder='{"source":"admin"}'></textarea>
-                    </label>
-                </div>
-
-                <div class="admin-form__row symbolic-checks">
-                    <label><input type="checkbox" name="is_published" value="1" checked> publie</label>
-                    <label><input type="checkbox" name="is_validated" value="1" checked> valide humain</label>
-                    <label><input type="checkbox" name="is_current" value="1" checked> courant</label>
-                </div>
-
+                {{ form_rest(create_form) }}
                 <div class="admin-modal__actions">
                     <button class="admin-button admin-button--primary" type="submit">Creer</button>
                     <button class="admin-button" type="button" data-modal-close>Annuler</button>
                 </div>
-            </form>
+            {{ form_end(create_form, {'render_rest': false}) }}
         </div>
     </div>
 
@@ -449,16 +473,12 @@
                 var createTrigger = event.target.closest('[data-open-create]');
                 if (createTrigger) {
                     event.preventDefault();
-                    var createDisplay = createModal.querySelector('[data-create-display-code]');
+                    var createDisplay = createModal.querySelector('[data-create-row-code]') || createModal.querySelector('[data-create-display-code]');
                     var createStart = createModal.querySelector('[data-create-start]');
                     var createEnd = createModal.querySelector('[data-create-end]');
                     var createLabel = createModal.querySelector('[data-create-label]');
-                    var createScheduleType = createModal.querySelector('select[name="schedule_type"]');
                     if (createDisplay) {
                         createDisplay.value = createTrigger.getAttribute('data-display-code') || createDisplay.value;
-                    }
-                    if (createScheduleType) {
-                        createScheduleType.value = createTrigger.getAttribute('data-schedule-type') || createScheduleType.value;
                     }
                     if (createStart) {
                         createStart.value = createTrigger.getAttribute('data-start') || '';
@@ -1035,7 +1055,35 @@
                 };
             }
 
-            function renderSynodic(zones) {
+            function packTimelineEntries(entries) {
+                var rows = [];
+                (entries || []).forEach(function (entry) {
+                    var placed = false;
+                    for (var i = 0; i < rows.length; i++) {
+                        var row = rows[i];
+                        var last = row[row.length - 1];
+                        if (entry.startTs >= last.endTs) {
+                            row.push(entry);
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) {
+                        rows.push([entry]);
+                    }
+                });
+                return rows;
+            }
+
+            function utcDayKey(ts) {
+                var d = new Date(ts * 1000);
+                var y = d.getUTCFullYear();
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                return y + '-' + m + '-' + day;
+            }
+
+            function renderSynodic(zones, entries) {
                 var track = timeline.querySelector('[data-track-synodic]');
                 if (!track) {
                     return;
@@ -1054,42 +1102,120 @@
                     return (a.full_start_ts - b.full_start_ts) || (a.full_end_ts - b.full_end_ts);
                 });
 
-                track.classList.remove('is-problem');
+                var clippedEntries = (entries || []).map(function (entry) {
+                    if (!entry || typeof entry.start_ts !== 'number' || typeof entry.end_ts !== 'number') {
+                        return null;
+                    }
+                    var startTs = Math.max(entry.start_ts, state.visibleStartTs);
+                    var endTs = Math.min(entry.end_ts, state.visibleEndTs);
+                    if (endTs <= startTs) {
+                        return null;
+                    }
+                    return {
+                        source: entry,
+                        startTs: startTs,
+                        endTs: endTs
+                    };
+                }).filter(Boolean);
 
-                if (!normalizedZones.length) {
-                    track.classList.add('is-problem');
-                    track.innerHTML = '' +
-                        '<div class="symbolic-synodic-zones-row">' +
-                        '<div class="symbolic-text-problem symbolic-text-problem--missing" style="left:0%;width:100%;">PROBLEME: aucune zone orb_window (multi_section_phase)</div>' +
-                        '</div>';
-                    return;
+                clippedEntries.sort(function (a, b) {
+                    return (a.startTs - b.startTs) || (a.endTs - b.endTs);
+                });
+
+                var readyEntries = [];
+                var pendingEntries = [];
+                clippedEntries.forEach(function (entry) {
+                    if (entry.source && entry.source.is_ready) {
+                        readyEntries.push(entry);
+                        return;
+                    }
+                    pendingEntries.push(entry);
+                });
+
+                var readyByDay = {};
+                readyEntries.forEach(function (entry) {
+                    var dayKey = utcDayKey(entry.source.start_ts || entry.startTs);
+                    if (!readyByDay[dayKey]) {
+                        readyByDay[dayKey] = [];
+                    }
+                    readyByDay[dayKey].push(entry);
+                });
+
+                var primaryReady = [];
+                var overflowReady = [];
+                var dayAlerts = [];
+                Object.keys(readyByDay).sort().forEach(function (dayKey) {
+                    var dayEntries = readyByDay[dayKey];
+                    dayEntries.sort(function (a, b) {
+                        return (a.startTs - b.startTs) || (a.endTs - b.endTs);
+                    });
+                    if (dayEntries.length > 0) {
+                        primaryReady.push(dayEntries[0]);
+                    }
+                    if (dayEntries.length > 1) {
+                        dayAlerts.push({
+                            dayKey: dayKey,
+                            count: dayEntries.length,
+                            startTs: dayEntries[0].startTs,
+                            endTs: dayEntries[dayEntries.length - 1].endTs
+                        });
+                        for (var i = 1; i < dayEntries.length; i++) {
+                            overflowReady.push(dayEntries[i]);
+                        }
+                    }
+                });
+
+                primaryReady.sort(function (a, b) {
+                    return (a.startTs - b.startTs) || (a.endTs - b.endTs);
+                });
+
+                var extraEntries = overflowReady.concat(pendingEntries);
+                extraEntries.sort(function (a, b) {
+                    return (a.startTs - b.startTs) || (a.endTs - b.endTs);
+                });
+                var packedExtraRows = packTimelineEntries(extraEntries);
+
+                var entryRows = [primaryReady];
+                packedExtraRows.forEach(function (rowEntries) {
+                    entryRows.push(rowEntries);
+                });
+                var entryRowsCount = Math.max(1, entryRows.length);
+                var layout = timeline.closest('.symbolic-layout');
+                if (layout) {
+                    layout.style.setProperty('--symbolic-synodic-extra-rows', String(entryRowsCount));
                 }
 
+                track.classList.remove('is-problem');
+
                 var problems = detectSynodicZoneProblems(normalizedZones);
-                var hasProblem = problems.missing.length > 0 || problems.overlaps.length > 0;
-                if (hasProblem) {
+                var hasZoneProblem = !normalizedZones.length || problems.missing.length > 0 || problems.overlaps.length > 0;
+                var hasValidationProblem = dayAlerts.length > 0;
+                if (hasZoneProblem || hasValidationProblem) {
                     track.classList.add('is-problem');
                 }
 
                 var html = '<div class="symbolic-synodic-zones-row">';
-                normalizedZones.forEach(function (zone) {
-                    var fullStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
-                    var fullEndTs = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
-                    var startTs = Math.max(fullStartTs, state.visibleStartTs);
-                    var endTs = Math.min(fullEndTs, state.visibleEndTs);
-                    if (endTs <= startTs) {
-                        return;
-                    }
+                if (!normalizedZones.length) {
+                    html += '<div class="symbolic-text-problem symbolic-text-problem--missing" style="left:0%;width:100%;">PROBLEME: aucune zone orb_window (multi_section_phase)</div>';
+                } else {
+                    normalizedZones.forEach(function (zone) {
+                        var fullStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
+                        var fullEndTs = typeof zone.full_end_ts === 'number' ? zone.full_end_ts : zone.end_ts;
+                        var startTs = Math.max(fullStartTs, state.visibleStartTs);
+                        var endTs = Math.min(fullEndTs, state.visibleEndTs);
+                        if (endTs <= startTs) {
+                            return;
+                        }
 
-                    var tone = zone.tone || 'shade-1';
-                    var title = (zone.label || '') + ' (' + formatUtcPrecise(fullStartTs) + ' -> ' + formatUtcPrecise(fullEndTs) + ')';
-                    html += '' +
-                        '<div class="symbolic-synodic-zone symbolic-text-zone symbolic-text-zone--' + escapeHtml(tone) + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;" title="' + escapeHtml(title) + '">' +
-                        '<span class="symbolic-text-zone__label">' + escapeHtml(zone.label || '') + '</span>' +
-                        '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte" data-open-create data-display-code="influence_synodic" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>';
-
-                    html += '</div>';
-                });
+                        var tone = zone.tone || 'shade-1';
+                        var title = (zone.label || '') + ' (' + formatUtcPrecise(fullStartTs) + ' -> ' + formatUtcPrecise(fullEndTs) + ')';
+                        html += '' +
+                            '<div class="symbolic-synodic-zone symbolic-text-zone symbolic-text-zone--' + escapeHtml(tone) + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;" title="' + escapeHtml(title) + '">' +
+                            '<span class="symbolic-text-zone__label">' + escapeHtml(zone.label || '') + '</span>' +
+                            '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte" data-open-create data-display-code="influence_synodic" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>' +
+                            '</div>';
+                    });
+                }
 
                 problems.missing.forEach(function (segment) {
                     if (!segment || segment.end_ts <= segment.start_ts) {
@@ -1109,7 +1235,31 @@
                         '<span>CHEVAUCHEMENT</span>' +
                         '</div>';
                 });
+
+                dayAlerts.forEach(function (alert) {
+                    var centerTs = Math.floor((alert.startTs + alert.endTs) / 2);
+                    html += '' +
+                        '<div class="symbolic-synodic-entry-alert" style="left:' + positionPercent(centerTs) + '%;" title="PROBLEME: ' + escapeHtml(String(alert.count)) + ' textes valides le meme jour">!</div>';
+                });
+
                 html += '</div>';
+
+                entryRows.forEach(function (rowEntries) {
+                    html += '<div class="symbolic-text-entries-row symbolic-synodic-entries-row">';
+                    rowEntries.forEach(function (entryPack) {
+                        var entry = entryPack.source || {};
+                        var readyClass = entry.is_ready ? '' : ' is-warning';
+                        html += '' +
+                            '<article class="symbolic-text-entry' + readyClass + '" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#315A7B') + ';">' +
+                            '<div class="symbolic-text-entry__text">' +
+                            '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
+                            (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
+                            '</div>' +
+                            buildEditButtonHtml(entry, 'influence_synodic') +
+                            '</article>';
+                    });
+                    html += '</div>';
+                });
 
                 track.innerHTML = html;
             }
@@ -1191,7 +1341,7 @@
                 renderLunation(data.lunation);
                 renderSymbolic(data.symbolic);
                 renderRows(data.entriesByRow);
-                renderSynodic(data.textSymbolicZones);
+                renderSynodic(data.textSymbolicZones, data.entriesByRow.influence_synodic || []);
                 updateWindowLabels();
             }
 

@@ -2,9 +2,11 @@
 
 namespace App\Controller\Admin;
 
+use App\DTO\Admin\SymbolicTextCreateInput;
 use App\Entity\SwContent;
 use App\Entity\SwDisplay;
 use App\Entity\SwSchedule;
+use App\Form\Admin\SymbolicTextCreateType;
 use App\Repository\MsMappingRepository;
 use App\Repository\OrbWindowRepository;
 use App\Repository\SwContentRepository;
@@ -55,7 +57,7 @@ final class SymbolicTextController extends AbstractController
         return [
             [
                 'code' => 'influence_stellar',
-                'label' => 'ev stellaire',
+                'label' => 'astronomical event',
                 'family' => 'symbolic',
                 'reading_mode' => 'astronomical_event',
                 'schedule_type' => 'influence_window',
@@ -63,7 +65,7 @@ final class SymbolicTextController extends AbstractController
             ],
             [
                 'code' => 'influence_synodic',
-                'label' => 'Synodique',
+                'label' => 'influence (synodic)',
                 'family' => 'symbolic',
                 'reading_mode' => 'influence',
                 'schedule_type' => 'influence_window',
@@ -71,7 +73,7 @@ final class SymbolicTextController extends AbstractController
             ],
             [
                 'code' => 'appellation',
-                'label' => 'Appellation',
+                'label' => 'lunationName',
                 'family' => 'symbolic',
                 'reading_mode' => 'lunation_name',
                 'schedule_type' => 'influence_window',
@@ -109,20 +111,27 @@ final class SymbolicTextController extends AbstractController
         $rowDefinitions = $this->rowDefinitions();
         $this->ensureDefaultDisplays($entityManager, $displayRepository, $rowDefinitions);
 
-        $displayCodes = array_map(
-            static fn (array $row): string => $row['code'],
-            $rowDefinitions
-        );
-
         $timelinePayload = $this->buildTimelinePayload(
             $startUtc,
             $endUtc,
             $rowDefinitions,
-            $displayCodes,
             $scheduleRepository,
             $msMappingRepository,
             $orbWindowRepository
         );
+
+        $createInput = new SymbolicTextCreateInput();
+        $createInput->row_code = 'influence_synodic';
+        $createInput->starts_at_utc = $startUtc->format('Y-m-d H:i');
+        $createInput->ends_at_utc = $endUtc->format('Y-m-d H:i');
+        $createForm = $this->createForm(SymbolicTextCreateType::class, $createInput, [
+            'row_definitions' => array_values(array_filter(
+                $rowDefinitions,
+                static fn (array $row): bool => ($row['code'] ?? '') !== 'symbolic_text'
+            )),
+            'action' => $this->generateUrl('admin_symbolic_text_create'),
+            'method' => 'POST',
+        ]);
 
         return $this->render('admin/symbolic_text.html.twig', [
             'active_menu' => 'symbolic_text',
@@ -149,6 +158,7 @@ final class SymbolicTextController extends AbstractController
             'day_markers' => $timelinePayload['day_markers'],
             'real_segments' => $timelinePayload['real_segments'],
             'initial_payload' => $timelinePayload,
+            'create_form' => $createForm->createView(),
         ]);
     }
 
@@ -169,16 +179,11 @@ final class SymbolicTextController extends AbstractController
         }
 
         $rowDefinitions = $this->rowDefinitions();
-        $displayCodes = array_map(
-            static fn (array $row): string => $row['code'],
-            $rowDefinitions
-        );
 
         $payload = $this->buildTimelinePayload(
             $startUtc,
             $endUtc,
             $rowDefinitions,
-            $displayCodes,
             $scheduleRepository,
             $msMappingRepository,
             $orbWindowRepository
@@ -191,86 +196,131 @@ final class SymbolicTextController extends AbstractController
     public function create(
         Request $request,
         EntityManagerInterface $entityManager,
-        SwDisplayRepository $displayRepository,
-        SwContentRepository $contentRepository
+        SwDisplayRepository $displayRepository
     ): RedirectResponse {
         $redirect = $this->redirectToTimeline($request);
-        if (!$this->isCsrfTokenValid('create_symbolic_text', (string) $request->request->get('_token', ''))) {
-            $this->addFlash('error', 'Jeton CSRF invalide.');
+        $rowDefinitions = array_values(array_filter(
+            $this->rowDefinitions(),
+            static fn (array $row): bool => ($row['code'] ?? '') !== 'symbolic_text'
+        ));
+
+        $input = new SymbolicTextCreateInput();
+        $form = $this->createForm(SymbolicTextCreateType::class, $input, [
+            'row_definitions' => $rowDefinitions,
+        ]);
+        $form->handleRequest($request);
+        if (!$form->isSubmitted()) {
+            $this->addFlash('error', 'Soumission create invalide.');
+            return $redirect;
+        }
+        if (!$form->isValid()) {
+            $this->flashFormErrors($form);
             return $redirect;
         }
 
-        $displayCode = trim((string) $request->request->get('display_code', ''));
-        $display = $displayRepository->findOneByCode($displayCode);
-        if (!$display instanceof SwDisplay) {
+        $row = $this->findRowDefinitionByCode($input->row_code, $rowDefinitions);
+        if ($row === null) {
             $this->addFlash('error', 'Ligne timeline inconnue.');
             return $redirect;
         }
 
-        $startsAtUtc = $this->parseUtcInput((string) $request->request->get('starts_at_utc', ''));
-        $endsAtUtc = $this->parseUtcInput((string) $request->request->get('ends_at_utc', ''));
+        $startsAtUtc = $this->parseUtcInput($input->starts_at_utc);
+        $endsAtUtc = $this->parseUtcInput($input->ends_at_utc);
         if (!$startsAtUtc || !$endsAtUtc || $endsAtUtc <= $startsAtUtc) {
             $this->addFlash('error', 'Plage horaire UTC invalide.');
             return $redirect;
         }
 
         $payloadError = null;
-        $payloadJson = $this->parseOptionalJson((string) $request->request->get('payload_json', ''), $payloadError);
+        $payloadJson = $this->parseOptionalJson((string) ($input->payload_json ?? ''), $payloadError);
         if ($payloadError !== null) {
             $this->addFlash('error', $payloadError);
             return $redirect;
         }
 
-        $label = trim((string) $request->request->get('label', ''));
-        if ($label === '') {
-            $this->addFlash('error', 'Le texte est obligatoire.');
+        $defaultColor = $this->findDefaultColorByCode($input->row_code, $this->rowDefinitions());
+        $resolvedLabel = trim((string) ($input->label ?? ''));
+        $resolvedSubtitle = trim((string) ($input->subtitle ?? ''));
+        $resolvedIcon = trim((string) ($input->icon ?? ''));
+        $resolvedEditorialNotes = trim((string) ($input->editorial_notes ?? ''));
+        $resolvedColor = $this->sanitizeColor((string) ($input->color ?? ''), $defaultColor);
+        $status = $this->sanitizeStatus((string) ($input->status ?? 'draft'));
+        $schemaVersion = $this->sanitizeSchemaVersion((string) ($input->schema_version ?? '1.0'));
+
+        $contentJson = [];
+        $rawContentJson = trim((string) ($input->content_json ?? ''));
+        if ($rawContentJson !== '') {
+            $contentError = null;
+            $decodedContentJson = $this->parseOptionalJson($rawContentJson, $contentError);
+            if ($contentError !== null || $decodedContentJson === null) {
+                $this->addFlash('error', $contentError ?? 'content_json invalide.');
+                return $redirect;
+            }
+            $contentJson = $decodedContentJson;
+            $resolvedLabel = trim((string) ($contentJson['label'] ?? $contentJson['title'] ?? $resolvedLabel));
+            $resolvedSubtitle = trim((string) ($contentJson['subtitle'] ?? $resolvedSubtitle));
+            $resolvedIcon = trim((string) ($contentJson['icon'] ?? $resolvedIcon));
+            $resolvedEditorialNotes = trim((string) ($contentJson['editorial_notes'] ?? $resolvedEditorialNotes));
+            $resolvedColor = $this->sanitizeColor((string) ($contentJson['color'] ?? $contentJson['tone'] ?? $resolvedColor), $defaultColor);
+            $input->display_is_active = $this->resolveJsonBool($contentJson, ['is_active', 'isActive'], $input->display_is_active);
+            $input->content_is_current = $this->resolveJsonBool($contentJson, ['is_current', 'isCurrent'], $input->content_is_current);
+            $input->content_is_validated = $this->resolveJsonBool($contentJson, ['is_validated', 'isValidated'], $input->content_is_validated);
+            $input->schedule_is_published = $this->resolveJsonBool($contentJson, ['is_published', 'isPublished'], $input->schedule_is_published);
+            $status = $this->sanitizeStatus((string) ($contentJson['status'] ?? $status));
+            $schemaVersion = $this->sanitizeSchemaVersion((string) ($contentJson['schema_version'] ?? $contentJson['schemaVersion'] ?? $schemaVersion));
+        }
+
+        if ($resolvedLabel === '') {
+            $this->addFlash('error', 'Le texte est obligatoire (champ Texte ou content_json.label).');
             return $redirect;
         }
 
-        $isCurrent = $this->requestBool($request, 'is_current');
-        if ($isCurrent) {
-            $contentRepository->clearCurrentForDisplay($display);
-        }
+        $display = new SwDisplay();
+        $display->setCode($this->buildUniqueDisplayCode($input->row_code, $displayRepository));
+        $display->setFamily((string) $row['family']);
+        $display->setReadingMode((string) $row['reading_mode']);
+        $display->setLang($this->sanitizeLang((string) $input->display_lang));
+        $display->setIsActive($input->display_is_active);
+        $display->setComment($this->nullIfEmpty((string) ($input->display_comment ?? '')));
 
-        $isValidated = $this->requestBool($request, 'is_validated');
+        $isCurrent = $input->content_is_current;
+        $isValidated = $input->content_is_validated;
         $nowUtc = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        $defaultColor = $this->findDefaultColorByCode($displayCode, $this->rowDefinitions());
-
-        $contentJson = array_filter([
-            'label' => $label,
-            'subtitle' => trim((string) $request->request->get('subtitle', '')) ?: null,
-            'color' => $this->sanitizeColor((string) $request->request->get('color', ''), $defaultColor),
-            'icon' => trim((string) $request->request->get('icon', '')) ?: null,
-        ], static fn ($value): bool => $value !== null && $value !== '');
 
         $content = new SwContent();
         $content->setDisplay($display);
-        $content->setVersionNo($contentRepository->findMaxVersionNoForDisplay($display) + 1);
-        $content->setStatus($this->sanitizeStatus((string) $request->request->get('status', 'validated')));
+        $content->setVersionNo(1);
+        $content->setStatus($status);
         $content->setIsCurrent($isCurrent);
         $content->setIsValidated($isValidated);
         $content->setContentJson($contentJson);
-        $content->setSchemaVersion($this->sanitizeSchemaVersion((string) $request->request->get('schema_version', '1.0')));
-        $content->setComment($this->nullIfEmpty((string) $request->request->get('comment', '')));
-        $content->setEditorialNotes($this->nullIfEmpty((string) $request->request->get('editorial_notes', '')));
+        $content->setSchemaVersion($schemaVersion);
+        $content->setComment($this->nullIfEmpty($resolvedLabel));
+        $content->setEditorialNotes($this->nullIfEmpty($resolvedEditorialNotes));
         $content->setValidatedAtUtc($isValidated ? $nowUtc : null);
+
+        $scheduleComment = trim((string) ($input->schedule_comment ?? ''));
+        if ($scheduleComment === '') {
+            $scheduleComment = $resolvedLabel;
+        }
 
         $schedule = new SwSchedule();
         $schedule->setDisplay($display);
         $schedule->setContent($content);
-        $schedule->setScheduleType($this->sanitizeScheduleType((string) $request->request->get('schedule_type', 'influence_window')));
+        $schedule->setScheduleType($this->sanitizeScheduleType((string) ($row['schedule_type'] ?? 'influence_window')));
         $schedule->setStartsAtUtc($startsAtUtc);
         $schedule->setEndsAtUtc($endsAtUtc);
-        $schedule->setPriority((int) $request->request->get('priority', 100));
-        $schedule->setIsPublished($this->requestBool($request, 'is_published'));
-        $schedule->setComment($this->nullIfEmpty((string) $request->request->get('comment', '')));
+        $schedule->setPriority((int) $input->priority);
+        $schedule->setIsPublished($input->schedule_is_published);
+        $schedule->setComment($this->nullIfEmpty($scheduleComment));
         $schedule->setPayloadJson($payloadJson);
 
+        $entityManager->persist($display);
         $entityManager->persist($content);
         $entityManager->persist($schedule);
         $entityManager->flush();
 
-        $this->addFlash('success', 'Element timeline cree.');
+        $this->addFlash('success', 'Element timeline cree (3 tables).');
 
         return $redirect;
     }
@@ -408,19 +458,23 @@ final class SymbolicTextController extends AbstractController
 
     /**
      * @param array<int, array<string, string>> $rowDefinitions
-     * @param string[] $displayCodes
      * @return array<string, mixed>
      */
     private function buildTimelinePayload(
         \DateTimeImmutable $startUtc,
         \DateTimeImmutable $endUtc,
         array $rowDefinitions,
-        array $displayCodes,
         SwScheduleRepository $scheduleRepository,
         MsMappingRepository $msMappingRepository,
         OrbWindowRepository $orbWindowRepository
     ): array {
-        $schedules = $scheduleRepository->findTimelineEntriesForAdmin($startUtc, $endUtc, $displayCodes);
+        $readingModes = array_values(array_unique(array_map(
+            static fn (array $row): string => (string) ($row['reading_mode'] ?? ''),
+            $rowDefinitions
+        )));
+        $readingModes = array_values(array_filter($readingModes, static fn (string $value): bool => $value !== ''));
+
+        $schedules = $scheduleRepository->findTimelineEntriesForAdmin($startUtc, $endUtc, $readingModes);
 
         $durationSeconds = max(1, $endUtc->getTimestamp() - $startUtc->getTimestamp());
         $entriesByRow = $this->buildEntriesByRow($schedules, $rowDefinitions, $startUtc, $endUtc, $durationSeconds);
@@ -522,8 +576,8 @@ final class SymbolicTextController extends AbstractController
                 continue;
             }
 
-            $code = $display->getCode();
-            if (!array_key_exists($code, $rowMap)) {
+            $rowCode = $this->resolveRowCodeForDisplay($display, $rowDefinitions);
+            if ($rowCode === null || !array_key_exists($rowCode, $rowMap)) {
                 continue;
             }
 
@@ -534,18 +588,19 @@ final class SymbolicTextController extends AbstractController
             }
 
             $json = $content->getContentJson();
-            $defaultColor = $this->findDefaultColorByCode($code, $rowDefinitions);
+            $defaultColor = $this->findDefaultColorByCode($rowCode, $rowDefinitions);
             $colorRaw = is_array($json) ? (string) ($json['color'] ?? $json['tone'] ?? '') : '';
             $color = $this->sanitizeColor($colorRaw, $defaultColor);
             $label = is_array($json) ? trim((string) ($json['label'] ?? $json['title'] ?? '')) : '';
             $subtitle = is_array($json) ? trim((string) ($json['subtitle'] ?? '')) : '';
             if ($label === '') {
-                $label = $display->getCode();
+                $fallbackComment = trim((string) ($schedule->getComment() ?? ($display->getComment() ?? '')));
+                $label = $fallbackComment !== '' ? $fallbackComment : $display->getReadingMode();
             }
 
             $isReady = $display->isActive() && $content->isValidated() && $content->isCurrent() && $schedule->isPublished();
 
-            $rowMap[$code][] = [
+            $rowMap[$rowCode][] = [
                 'id' => (string) $schedule->getId(),
                 'left' => $this->positionPercent($itemStartTs, $startTs, $durationSeconds),
                 'width' => $this->widthPercent($itemStartTs, $itemEndTs, $durationSeconds),
@@ -1025,6 +1080,104 @@ final class SymbolicTextController extends AbstractController
         return 'shade-1';
     }
 
+    /**
+     * @param array<int, array<string, string>> $rowDefinitions
+     * @return array<string, string>|null
+     */
+    private function findRowDefinitionByCode(string $code, array $rowDefinitions): ?array
+    {
+        $needle = strtolower(trim($code));
+        foreach ($rowDefinitions as $row) {
+            $rowCode = strtolower(trim((string) ($row['code'] ?? '')));
+            if ($rowCode === $needle) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    private function buildUniqueDisplayCode(string $rowCode, SwDisplayRepository $displayRepository): string
+    {
+        $prefix = preg_replace('/[^a-z0-9_]+/', '_', strtolower(trim($rowCode)));
+        $prefix = trim((string) $prefix, '_');
+        if ($prefix === '') {
+            $prefix = 'symbolic';
+        }
+
+        for ($i = 0; $i < 8; $i++) {
+            try {
+                $suffix = substr(bin2hex(random_bytes(4)), 0, 8);
+            } catch (\Throwable) {
+                $suffix = substr(md5(uniqid((string) mt_rand(), true)), 0, 8);
+            }
+            $candidate = sprintf('%s_%s_%s', $prefix, gmdate('YmdHis'), $suffix);
+            $candidate = substr($candidate, 0, 150);
+            if (!$displayRepository->findOneBy(['code' => $candidate]) instanceof SwDisplay) {
+                return $candidate;
+            }
+        }
+
+        try {
+            $tail = bin2hex(random_bytes(12));
+        } catch (\Throwable) {
+            $tail = md5(uniqid((string) mt_rand(), true));
+        }
+
+        return substr($prefix . '_' . $tail, 0, 150);
+    }
+
+    /**
+     * @param array<string, mixed> $json
+     * @param string[] $keys
+     */
+    private function resolveJsonBool(array $json, array $keys, bool $fallback): bool
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $json)) {
+                continue;
+            }
+            $value = $json[$key];
+            if (is_bool($value)) {
+                return $value;
+            }
+            if (is_int($value) || is_float($value)) {
+                return (int) $value !== 0;
+            }
+            if (is_string($value)) {
+                $normalized = strtolower(trim($value));
+                if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                    return true;
+                }
+                if (in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                    return false;
+                }
+            }
+        }
+
+        return $fallback;
+    }
+
+    private function sanitizeLang(string $lang): string
+    {
+        $value = strtolower(trim($lang));
+        if ($value === '') {
+            return 'fr';
+        }
+
+        return substr($value, 0, 10);
+    }
+
+    private function flashFormErrors(\Symfony\Component\Form\FormInterface $form): void
+    {
+        foreach ($form->getErrors(true, true) as $error) {
+            $message = trim($error->getMessage());
+            if ($message !== '') {
+                $this->addFlash('error', $message);
+            }
+        }
+    }
+
     private function sanitizeSpan(string $span): string
     {
         $span = trim($span);
@@ -1108,6 +1261,25 @@ final class SymbolicTextController extends AbstractController
     {
         $trimmed = trim($value);
         return $trimmed !== '' ? $trimmed : null;
+    }
+
+    /**
+     * @param array<int, array<string, string>> $rowDefinitions
+     */
+    private function resolveRowCodeForDisplay(SwDisplay $display, array $rowDefinitions): ?string
+    {
+        $displayFamily = strtolower(trim($display->getFamily()));
+        $displayMode = strtolower(trim($display->getReadingMode()));
+
+        foreach ($rowDefinitions as $row) {
+            $family = strtolower(trim((string) ($row['family'] ?? '')));
+            $mode = strtolower(trim((string) ($row['reading_mode'] ?? '')));
+            if ($family === $displayFamily && $mode === $displayMode) {
+                return (string) ($row['code'] ?? '');
+            }
+        }
+
+        return null;
     }
 
     /**

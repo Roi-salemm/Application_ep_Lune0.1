@@ -32,5 +32,3 @@
 - Ajouter des commentaires utiles en francais dans les fichiers modifies si la logique n'est pas evidente.
 - Conserver la coherence du code existant et minimiser les changements.
 
-## 7) Salut
-- salut
