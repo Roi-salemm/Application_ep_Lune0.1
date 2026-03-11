@@ -38,12 +38,13 @@
                 <div class="symbolic-label">Temps</div>
                 <div class="symbolic-label">Astronomie</div>
                 <div class="symbolic-label symbolic-label--thin">Lune annee</div>
-                <div class="symbolic-label symbolic-label--compact">Zone d'influance</div>
+                <div class="symbolic-label symbolic-label--compact">Family Symbolic</div>
+                <div class="symbolic-label symbolic-label--compact">Weather parse</div>
+                <div class="symbolic-label symbolic-label--compact">Weather</div>
                 <div class="symbolic-label symbolic-label--compact">Evenement :</div>
                 <div class="symbolic-label symbolic-label--sub symbolic-label--compact">astronomical event</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic">influence (synodic)</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic">influence</div>
                 <div class="symbolic-label symbolic-label--sub symbolic-label--compact">lunationName</div>
-                <div class="symbolic-label symbolic-label--compact symbolic-label--text-symbolic">Texte symbolique</div>
             </aside>
 
             <div class="symbolic-layout__timeline"
@@ -101,24 +102,23 @@
                     {% else %}
                         {% for segment in symbolic_segments %}
                             <div class="symbolic-phase-band"
-                                 style="left: {{ segment.left }}%; width: {{ segment.width }}%; --phase-color: {{ segment.color }};"
-                                 data-symbolic-key="{{ segment.full_start_ts ~ '-' ~ segment.full_end_ts ~ '-' ~ segment.label }}"
-                                 data-phase-label="{{ segment.label|e('html_attr') }}"
-                                 data-phase-start="{{ segment.full_start_ts }}"
-                                 data-phase-end="{{ segment.full_end_ts }}">
+                                style="left: {{ segment.left }}%; width: {{ segment.width }}%; --phase-color: {{ segment.color }};"
+                                data-symbolic-key="{{ segment.full_start_ts ~ '-' ~ segment.full_end_ts ~ '-' ~ segment.label }}"
+                                data-phase-label="{{ segment.label|e('html_attr') }}"
+                                data-phase-start="{{ segment.full_start_ts }}"
+                                data-phase-end="{{ segment.full_end_ts }}">
                                 <span>{{ segment.label }}</span>
-                                <button type="button"
-                                        class="symbolic-gap-add symbolic-gap-add--zone"
-                                        title="Ajouter un texte symbolique"
-                                        data-open-create
-                                        data-display-code="symbolic_text"
-                                        data-schedule-type="phase_window"
-                                        data-start="{{ segment.full_start_ts|date('Y-m-d H:i:s', 'UTC') }}"
-                                        data-end="{{ segment.full_end_ts|date('Y-m-d H:i:s', 'UTC') }}">+</button>
                             </div>
                         {% endfor %}
                     {% endif %}
                 </div>
+
+                <div class="symbolic-track symbolic-track--parse"
+                     data-track-weather-parse
+                     data-parse-action="{{ path('admin_symbolic_text_parse_weather_week') }}"
+                     data-parse-token="{{ csrf_token('parse_symbolic_text_weather_week') }}"></div>
+
+                <div class="symbolic-track symbolic-track--content symbolic-track--weather" data-track-weather></div>
 
                 <div class="symbolic-track symbolic-track--event-group" aria-hidden="true"></div>
 
@@ -442,14 +442,130 @@
         </div>
     </div>
 
+    <div class="admin-modal" data-symbolic-weather-zone-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-modal-close></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Parse Weather sur cette zone</div>
+            <form class="admin-modal__body admin-form"
+                  method="post"
+                  action="{{ path('admin_symbolic_text_parse_weather_week') }}"
+                  data-weather-zone-form>
+                <input type="hidden" name="_token" value="{{ csrf_token('parse_symbolic_text_weather_week') }}">
+                <input type="hidden" name="zone_start_utc" value="" data-weather-zone-start>
+                <input type="hidden" name="zone_end_utc" value="" data-weather-zone-end>
+                <input type="hidden" name="span" value="{{ span }}">
+                <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+
+                <div class="admin-form__row">
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Phase key</span>
+                        <select class="admin-form__select" name="phase_key" data-weather-zone-phase required>
+                            <option value="0">0 (Nouvelle lune)</option>
+                            <option value="1">1 (Premier croissant)</option>
+                            <option value="2">2 (Premier quartier)</option>
+                            <option value="3">3 (Gibbeuse croissante)</option>
+                            <option value="4">4 (Pleine lune)</option>
+                            <option value="5">5 (Gibbeuse decroissante)</option>
+                            <option value="6">6 (Dernier quartier)</option>
+                            <option value="7">7 (Dernier croissant)</option>
+                        </select>
+                    </label>
+                    <label class="admin-form__field">
+                        <span class="admin-form__label">Variant no</span>
+                        <select class="admin-form__select" name="variant_no" data-weather-zone-variant required></select>
+                    </label>
+                </div>
+
+                <div class="admin-form__row">
+                    <div class="admin-form__field">
+                        <span class="admin-form__label">Zone UTC</span>
+                        <div class="admin-form__hint" data-weather-zone-range>n/a</div>
+                    </div>
+                </div>
+
+                <div class="admin-modal__actions">
+                    <button class="admin-button admin-button--primary" type="submit">Valider</button>
+                    <button class="admin-button" type="button" data-modal-close>Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="application/json" id="symbolic-initial-payload">{{ initial_payload|json_encode|raw }}</script>
+    <script type="application/json" id="symbolic-weather-variants">{{ weather_variant_options|default([])|json_encode|raw }}</script>
 
     <script>
         (function () {
             var createModal = document.querySelector('[data-symbolic-create-modal]');
             var editModal = document.querySelector('[data-symbolic-edit-modal]');
-            if (!createModal || !editModal) {
+            var weatherZoneModal = document.querySelector('[data-symbolic-weather-zone-modal]');
+            if (!createModal || !editModal || !weatherZoneModal) {
                 return;
+            }
+            var weatherVariantsNode = document.getElementById('symbolic-weather-variants');
+            var weatherVariantOptions = [];
+            if (weatherVariantsNode) {
+                try {
+                    weatherVariantOptions = JSON.parse(weatherVariantsNode.textContent || '[]');
+                } catch (e) {
+                    weatherVariantOptions = [];
+                }
+            }
+            var weatherVariantsByPhase = {};
+            weatherVariantOptions.forEach(function (item) {
+                if (!item || typeof item.phase_key === 'undefined' || typeof item.variant_no === 'undefined') {
+                    return;
+                }
+                var phase = parseInt(item.phase_key, 10);
+                var variantNo = parseInt(item.variant_no, 10);
+                if (Number.isNaN(phase) || Number.isNaN(variantNo) || phase < 0 || phase > 7 || variantNo < 1) {
+                    return;
+                }
+                if (!weatherVariantsByPhase[phase]) {
+                    weatherVariantsByPhase[phase] = [];
+                }
+                weatherVariantsByPhase[phase].push({
+                    phase_key: phase,
+                    variant_no: variantNo,
+                    label: String(item.label || '').trim()
+                });
+            });
+            Object.keys(weatherVariantsByPhase).forEach(function (phaseKey) {
+                weatherVariantsByPhase[phaseKey].sort(function (a, b) {
+                    return a.variant_no - b.variant_no;
+                });
+            });
+
+            function escapeHtmlLocal(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function parsePhaseIndex(raw) {
+                var value = String(raw || '').trim().toLowerCase();
+                if (/^\d+$/.test(value)) {
+                    var numeric = parseInt(value, 10);
+                    return (numeric >= 0 && numeric <= 7) ? numeric : null;
+                }
+                if (value.indexOf('phase_') === 0) {
+                    var tail = parseInt(value.slice(6), 10);
+                    return Number.isNaN(tail) ? null : ((tail >= 0 && tail <= 7) ? tail : null);
+                }
+                var map = {
+                    'new_moon': 0,
+                    'waxing_crescent': 1,
+                    'first_quarter': 2,
+                    'waxing_gibbous': 3,
+                    'full_moon': 4,
+                    'waning_gibbous': 5,
+                    'last_quarter': 6,
+                    'waning_crescent': 7
+                };
+                return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : null;
             }
 
             function openModal(modal) {
@@ -465,6 +581,67 @@
             function closeAllModals() {
                 closeModal(createModal);
                 closeModal(editModal);
+                closeModal(weatherZoneModal);
+            }
+
+            function populateWeatherVariantSelect(phaseIndex, preferredVariantNo) {
+                var variantSelect = weatherZoneModal.querySelector('[data-weather-zone-variant]');
+                if (!variantSelect) {
+                    return;
+                }
+                var options = weatherVariantsByPhase[phaseIndex] || [];
+                var html = '';
+                if (!options.length) {
+                    html = '<option value="">Aucune variante validee/usee</option>';
+                    variantSelect.innerHTML = html;
+                    return;
+                }
+                options.forEach(function (item) {
+                    var text = 'Variante ' + String(item.variant_no);
+                    if (item.label) {
+                        text += ' - ' + item.label;
+                    }
+                    html += '<option value="' + escapeHtmlLocal(item.variant_no) + '">' + escapeHtmlLocal(text) + '</option>';
+                });
+                variantSelect.innerHTML = html;
+
+                if (typeof preferredVariantNo === 'number' && preferredVariantNo > 0) {
+                    variantSelect.value = String(preferredVariantNo);
+                    if (variantSelect.value !== String(preferredVariantNo)) {
+                        variantSelect.selectedIndex = 0;
+                    }
+                } else {
+                    variantSelect.selectedIndex = 0;
+                }
+            }
+
+            function openWeatherZoneModal(trigger) {
+                var zoneStart = trigger.getAttribute('data-zone-start') || '';
+                var zoneEnd = trigger.getAttribute('data-zone-end') || '';
+                var phaseRaw = trigger.getAttribute('data-phase-index') || trigger.getAttribute('data-phase-key') || '';
+                var defaultPhase = parsePhaseIndex(phaseRaw);
+
+                var startInput = weatherZoneModal.querySelector('[data-weather-zone-start]');
+                var endInput = weatherZoneModal.querySelector('[data-weather-zone-end]');
+                var phaseSelect = weatherZoneModal.querySelector('[data-weather-zone-phase]');
+                var rangeNode = weatherZoneModal.querySelector('[data-weather-zone-range]');
+                if (!startInput || !endInput || !phaseSelect || !rangeNode) {
+                    return;
+                }
+
+                startInput.value = zoneStart;
+                endInput.value = zoneEnd;
+                rangeNode.textContent = zoneStart + ' -> ' + zoneEnd;
+
+                if (defaultPhase === null) {
+                    defaultPhase = 0;
+                }
+                phaseSelect.value = String(defaultPhase);
+                if (phaseSelect.value !== String(defaultPhase)) {
+                    phaseSelect.selectedIndex = 0;
+                }
+                populateWeatherVariantSelect(parseInt(phaseSelect.value, 10), null);
+                openModal(weatherZoneModal);
             }
 
             document.addEventListener('click', function (event) {
@@ -495,6 +672,13 @@
                         createLabel.value = '';
                     }
                     openModal(createModal);
+                    return;
+                }
+
+                var weatherZoneTrigger = event.target.closest('[data-open-weather-zone]');
+                if (weatherZoneTrigger) {
+                    event.preventDefault();
+                    openWeatherZoneModal(weatherZoneTrigger);
                     return;
                 }
 
@@ -563,6 +747,14 @@
                     openModal(editModal);
                 }
             });
+
+            var phaseSelectNode = weatherZoneModal.querySelector('[data-weather-zone-phase]');
+            if (phaseSelectNode) {
+                phaseSelectNode.addEventListener('change', function () {
+                    var phase = parseInt(phaseSelectNode.value || '0', 10);
+                    populateWeatherVariantSelect(phase, null);
+                });
+            }
 
             document.addEventListener('keydown', function (event) {
                 if (event.key === 'Escape') {
@@ -798,7 +990,8 @@
                 var astronomyMap = {};
                 var symbolicMap = {};
                 var lunationMap = {};
-                var textSymbolicZoneMap = {};
+                var textSymbolicMap = {};
+                var weatherEntriesMap = {};
                 var entriesByRow = {};
 
                 state.chunks.forEach(function (chunk) {
@@ -841,7 +1034,25 @@
                         if (!overlaps(zone.full_start_ts, zone.full_end_ts, state.visibleStartTs, state.visibleEndTs)) {
                             return;
                         }
-                        textSymbolicZoneMap[String(zone.zone_key || '') + ':' + String(zone.full_start_ts) + ':' + String(zone.full_end_ts)] = zone;
+                        var zoneKey = String(zone.zone_key || (String(zone.full_start_ts) + ':' + String(zone.full_end_ts) + ':' + String(zone.label || '')));
+                        textSymbolicMap[zoneKey] = zone;
+                    });
+
+                    (payload.weather_entries || []).forEach(function (entry) {
+                        if (!entry || typeof entry.start_ts !== 'number' || typeof entry.end_ts !== 'number') {
+                            return;
+                        }
+                        if (!overlaps(entry.start_ts, entry.end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                            return;
+                        }
+                        var weatherKey = String(entry.id || (String(entry.start_ts) + ':' + String(entry.end_ts))) + ':weather';
+                        if (!weatherEntriesMap[weatherKey]) {
+                            weatherEntriesMap[weatherKey] = entry;
+                            return;
+                        }
+                        var existingWeather = weatherEntriesMap[weatherKey];
+                        existingWeather.start_ts = Math.min(existingWeather.start_ts, entry.start_ts);
+                        existingWeather.end_ts = Math.max(existingWeather.end_ts, entry.end_ts);
                     });
 
                     var payloadEntries = payload.entries_by_row || {};
@@ -877,10 +1088,11 @@
                 var lunation = Object.keys(lunationMap).map(function (k) { return lunationMap[k]; });
                 lunation.sort(function (a, b) { return a.full_start_ts - b.full_start_ts; });
 
-                var textSymbolicZones = Object.keys(textSymbolicZoneMap).map(function (k) { return textSymbolicZoneMap[k]; });
-                textSymbolicZones.sort(function (a, b) {
-                    return (a.full_start_ts - b.full_start_ts) || (a.full_end_ts - b.full_end_ts);
-                });
+                var textSymbolicZones = Object.keys(textSymbolicMap).map(function (k) { return textSymbolicMap[k]; });
+                textSymbolicZones.sort(function (a, b) { return a.full_start_ts - b.full_start_ts; });
+
+                var weatherEntries = Object.keys(weatherEntriesMap).map(function (k) { return weatherEntriesMap[k]; });
+                weatherEntries.sort(function (a, b) { return a.start_ts - b.start_ts; });
 
                 var normalizedEntriesByRow = {};
                 Object.keys(entriesByRow).forEach(function (rowCode) {
@@ -894,6 +1106,7 @@
                     symbolic: symbolic,
                     lunation: lunation,
                     textSymbolicZones: textSymbolicZones,
+                    weatherEntries: weatherEntries,
                     entriesByRow: normalizedEntriesByRow
                 };
             }
@@ -965,6 +1178,29 @@
                     }
                     var key = String(fullStartTs) + '-' + String(fullEndTs) + '-' + String(segment.label || '');
                     var selectedClass = state.selectedSymbolicKey === key ? ' is-selected' : '';
+                    var phaseKey = String(segment.phase_key || '');
+                    var phaseIndex = (function (raw) {
+                        var value = String(raw || '').trim().toLowerCase();
+                        if (/^\d+$/.test(value)) {
+                            var numeric = parseInt(value, 10);
+                            return (numeric >= 0 && numeric <= 7) ? numeric : '';
+                        }
+                        if (value.indexOf('phase_') === 0) {
+                            var tail = parseInt(value.slice(6), 10);
+                            return (!Number.isNaN(tail) && tail >= 0 && tail <= 7) ? tail : '';
+                        }
+                        var map = {
+                            'new_moon': 0,
+                            'waxing_crescent': 1,
+                            'first_quarter': 2,
+                            'waxing_gibbous': 3,
+                            'full_moon': 4,
+                            'waning_gibbous': 5,
+                            'last_quarter': 6,
+                            'waning_crescent': 7
+                        };
+                        return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : '';
+                    })(phaseKey);
                     return '' +
                         '<div class="symbolic-phase-band' + selectedClass + '" ' +
                         'data-symbolic-key="' + escapeHtml(key) + '" ' +
@@ -973,10 +1209,275 @@
                         'data-phase-end="' + String(fullEndTs) + '" ' +
                         'style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--phase-color:' + escapeHtml(segment.color || '#325a80') + ';">' +
                         '<span>' + escapeHtml(segment.label || '') + '</span>' +
-                        '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte symbolique" data-open-create data-display-code="symbolic_text" data-schedule-type="phase_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>' +
+                        '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Parser cette zone Weather" data-open-weather-zone data-zone-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-zone-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '" data-phase-key="' + escapeHtml(phaseKey) + '" data-phase-index="' + escapeHtml(phaseIndex) + '">+</button>' +
                         '</div>';
                 }).join('');
                 track.innerHTML = html || '<div class="symbolic-track__empty">Influence symbolique indisponible (orb_window influence_orb / midpoint_partition_v1 absent).</div>';
+            }
+
+            function renderWeatherParseLunations(segments) {
+                var track = timeline.querySelector('[data-track-weather-parse]');
+                if (!track) {
+                    return;
+                }
+
+                var parseAction = track.getAttribute('data-parse-action') || '';
+                var parseToken = track.getAttribute('data-parse-token') || '';
+                if (!parseAction || !parseToken) {
+                    track.innerHTML = '<div class="symbolic-track__empty">Parse indisponible.</div>';
+                    return;
+                }
+
+                var html = '';
+                (segments || []).forEach(function (segment) {
+                    if (!segment || typeof segment.full_start_ts !== 'number' || typeof segment.full_end_ts !== 'number') {
+                        return;
+                    }
+                    var fullStartTs = segment.full_start_ts;
+                    var fullEndTs = segment.full_end_ts;
+                    var visibleStart = Math.max(fullStartTs, state.visibleStartTs);
+                    var visibleEnd = Math.min(fullEndTs, state.visibleEndTs);
+                    if (visibleEnd <= visibleStart) {
+                        return;
+                    }
+
+                    var buttonLabel = 'Parse ' + String(segment.label || 'Lunaison');
+                    html += '' +
+                        '<form method="post" action="' + escapeHtml(parseAction) + '" class="symbolic-parse-form symbolic-parse-week" style="left:' + positionPercent(visibleStart) + '%;width:' + widthPercent(visibleStart, visibleEnd) + '%;">' +
+                        '<input type="hidden" name="_token" value="' + escapeHtml(parseToken) + '">' +
+                        '<input type="hidden" name="parse_start_utc" value="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '">' +
+                        '<input type="hidden" name="parse_end_utc" value="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">' +
+                        '<input type="hidden" name="span" value="' + escapeHtml(state.span) + '">' +
+                        '<input type="hidden" name="end_utc" value="' + escapeHtml(formatUtc(state.visibleEndTs)) + '">' +
+                        '<button type="submit" class="symbolic-parse-button" title="' + escapeHtml(buttonLabel) + '">' +
+                        escapeHtml(buttonLabel) +
+                        '</button>' +
+                        '</form>';
+                });
+
+                track.innerHTML = html || '<div class="symbolic-track__empty">Aucune lunaison visible.</div>';
+            }
+
+            function renderWeatherRow(segments, entries) {
+                var track = timeline.querySelector('[data-track-weather]');
+                if (!track) {
+                    return;
+                }
+
+                var normalizedSegments = (segments || []).map(function (segment) {
+                    if (!segment || typeof segment.full_start_ts !== 'number' || typeof segment.full_end_ts !== 'number') {
+                        return null;
+                    }
+                    if (!overlaps(segment.full_start_ts, segment.full_end_ts, state.visibleStartTs, state.visibleEndTs)) {
+                        return null;
+                    }
+                    return segment;
+                }).filter(Boolean);
+                normalizedSegments.sort(function (a, b) {
+                    return (a.full_start_ts - b.full_start_ts) || (a.full_end_ts - b.full_end_ts);
+                });
+
+                var clippedEntries = (entries || []).map(function (entry) {
+                    if (!entry || typeof entry.start_ts !== 'number' || typeof entry.end_ts !== 'number') {
+                        return null;
+                    }
+                    var startTs = Math.max(entry.start_ts, state.visibleStartTs);
+                    var endTs = Math.min(entry.end_ts, state.visibleEndTs);
+                    if (endTs <= startTs) {
+                        return null;
+                    }
+                    return {
+                        source: entry,
+                        startTs: startTs,
+                        endTs: endTs
+                    };
+                }).filter(Boolean);
+                clippedEntries.sort(function (a, b) {
+                    return (a.startTs - b.startTs) || (a.endTs - b.endTs);
+                });
+
+                var html = '';
+                var missingSegments = [];
+                normalizedSegments.forEach(function (zone) {
+                    var zoneStart = zone.full_start_ts;
+                    var zoneEnd = zone.full_end_ts;
+                    var visibleStart = Math.max(zoneStart, state.visibleStartTs);
+                    var visibleEnd = Math.min(zoneEnd, state.visibleEndTs);
+                    if (visibleEnd <= visibleStart) {
+                        return;
+                    }
+                    var hasEntry = clippedEntries.some(function (entry) {
+                        return overlaps(entry.startTs, entry.endTs, zoneStart, zoneEnd);
+                    });
+                    if (!hasEntry) {
+                        missingSegments.push({
+                            start_ts: visibleStart,
+                            end_ts: visibleEnd
+                        });
+                    }
+                });
+
+                function phaseNameFr(phaseKey) {
+                    var map = {
+                        0: 'Nouvelle lune',
+                        1: 'Premier croissant',
+                        2: 'Premier quartier',
+                        3: 'Gibbeuse croissante',
+                        4: 'Pleine lune',
+                        5: 'Gibbeuse decroissante',
+                        6: 'Dernier quartier',
+                        7: 'Dernier croissant'
+                    };
+                    return Object.prototype.hasOwnProperty.call(map, phaseKey) ? map[phaseKey] : 'Phase inconnue';
+                }
+
+                function normalizePhaseKey(raw) {
+                    var value = String(raw || '').trim().toLowerCase();
+                    if (/^\d+$/.test(value)) {
+                        var n = parseInt(value, 10);
+                        return (n >= 0 && n <= 7) ? n : null;
+                    }
+                    if (value.indexOf('phase_') === 0) {
+                        var tail = parseInt(value.slice(6), 10);
+                        return (!Number.isNaN(tail) && tail >= 0 && tail <= 7) ? tail : null;
+                    }
+                    var map = {
+                        'new_moon': 0,
+                        'waxing_crescent': 1,
+                        'first_quarter': 2,
+                        'waxing_gibbous': 3,
+                        'full_moon': 4,
+                        'waning_gibbous': 5,
+                        'last_quarter': 6,
+                        'waning_crescent': 7
+                    };
+                    return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : null;
+                }
+
+                function positiveIntOrNull(raw) {
+                    var value = String(raw || '').trim();
+                    if (!/^\d+$/.test(value)) {
+                        return null;
+                    }
+                    var n = parseInt(value, 10);
+                    return n > 0 ? n : null;
+                }
+
+                function normalizeBool(value) {
+                    if (typeof value === 'boolean') {
+                        return value;
+                    }
+                    if (typeof value === 'number') {
+                        return value !== 0;
+                    }
+                    if (typeof value === 'string') {
+                        var normalized = value.trim().toLowerCase();
+                        if (['1', 'true', 'yes', 'on'].indexOf(normalized) >= 0) {
+                            return true;
+                        }
+                        if (['0', 'false', 'no', 'off'].indexOf(normalized) >= 0) {
+                            return false;
+                        }
+                    }
+                    return null;
+                }
+
+                function boolLabel(value) {
+                    if (value === true) {
+                        return 'true';
+                    }
+                    if (value === false) {
+                        return 'false';
+                    }
+                    return 'n/a';
+                }
+
+                function parsePayloadJson(raw) {
+                    if (typeof raw !== 'string' || raw.trim() === '') {
+                        return null;
+                    }
+                    try {
+                        var parsed = JSON.parse(raw);
+                        return (parsed && typeof parsed === 'object') ? parsed : null;
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
+                function extractWeatherMeta(entry) {
+                    var meta = (entry && entry.symbolic_weather && typeof entry.symbolic_weather === 'object') ? entry.symbolic_weather : {};
+                    var payload = parsePayloadJson(entry.payload_json || '');
+
+                    var phaseKey = normalizePhaseKey(meta.phase_key);
+                    if (phaseKey === null) {
+                        phaseKey = normalizePhaseKey(entry.phase_key);
+                    }
+                    if (phaseKey === null && payload) {
+                        phaseKey = normalizePhaseKey(payload.phase_key || payload.orb_phase_key);
+                    }
+
+                    var variantNo = positiveIntOrNull(meta.variant_no);
+                    if (variantNo === null) {
+                        variantNo = positiveIntOrNull(entry.variant_no);
+                    }
+                    if (variantNo === null && payload) {
+                        variantNo = positiveIntOrNull(payload.variant_no);
+                    }
+
+                    var variantId = String(meta.variant_id || entry.variant_id || (payload ? (payload.variant_id || '') : '') || '').trim();
+                    var isValidated = normalizeBool(meta.is_validated);
+                    if (isValidated === null && payload) {
+                        isValidated = normalizeBool(payload.is_validated);
+                    }
+                    var isUsed = normalizeBool(meta.is_used);
+                    if (isUsed === null && payload) {
+                        isUsed = normalizeBool(payload.is_used);
+                    }
+
+                    return {
+                        phaseKey: phaseKey,
+                        variantNo: variantNo,
+                        variantId: variantId,
+                        isValidated: isValidated,
+                        isUsed: isUsed
+                    };
+                }
+
+                clippedEntries.forEach(function (entryPack) {
+                    var entry = entryPack.source || {};
+                    var meta = extractWeatherMeta(entry);
+                    var phaseLabel = meta.phaseKey === null ? 'n/a' : (String(meta.phaseKey) + ' (' + phaseNameFr(meta.phaseKey) + ')');
+                    var variantNoLabel = meta.variantNo === null ? 'n/a' : String(meta.variantNo);
+                    var variantIdLabel = meta.variantId !== '' ? meta.variantId : 'n/a';
+                    var metaLine = 'phase_key: ' + phaseLabel
+                        + ' | variant_no: ' + variantNoLabel
+                        + ' | variant_id: ' + variantIdLabel
+                        + ' | is_validated: ' + boolLabel(meta.isValidated)
+                        + ' | is_used: ' + boolLabel(meta.isUsed);
+
+                    html += '' +
+                        '<article class="symbolic-text-entry symbolic-text-entry--weather" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:#2D66A0;">' +
+                        '<div class="symbolic-text-entry__text symbolic-text-entry__text--weather">' +
+                        '<div class="symbolic-weather-body">' + escapeHtml(entry.label || '') + '</div>' +
+                        '<small class="symbolic-weather-meta">' + escapeHtml(metaLine) + '</small>' +
+                        '</div>' +
+                        '</article>';
+                });
+
+                missingSegments.forEach(function (segment) {
+                    if (!segment || segment.end_ts <= segment.start_ts) {
+                        return;
+                    }
+                    html += '' +
+                        '<div class="symbolic-text-problem symbolic-text-problem--weather-missing" style="left:' + positionPercent(segment.start_ts) + '%;width:' + widthPercent(segment.start_ts, segment.end_ts) + '%;" title="Texte Weather manquant pour cette zone">' +
+                        '<span>TEXTE MANQUANT</span>' +
+                        '</div>';
+                });
+
+                if (!clippedEntries.length) {
+                    html += '<div class="symbolic-track__empty symbolic-track__empty--warning">! Donnee Weather manquante</div>';
+                }
+                track.innerHTML = html;
             }
 
             function formatUtcInput(ts) {
@@ -1202,7 +1703,7 @@
 
                 var html = '<div class="symbolic-synodic-zones-row">';
                 if (!normalizedZones.length) {
-                    html += '<div class="symbolic-text-problem symbolic-text-problem--missing" style="left:0%;width:100%;">PROBLEME: aucune zone orb_window (multi_section_phase)</div>';
+                    html += '<div class="symbolic-text-problem symbolic-text-problem--missing" style="left:0%;width:100%;">PROBLEME: aucune zone orb_window (midpoint_partition_v1)</div>';
                 } else {
                     normalizedZones.forEach(function (zone) {
                         var fullStartTs = typeof zone.full_start_ts === 'number' ? zone.full_start_ts : zone.start_ts;
@@ -1347,8 +1848,10 @@
                 renderAstronomy(data.astronomy);
                 renderLunation(data.lunation);
                 renderSymbolic(data.symbolic);
+                renderWeatherParseLunations(data.lunation || []);
+                renderWeatherRow(data.symbolic, data.weatherEntries || []);
                 renderRows(data.entriesByRow);
-                renderSynodic(data.textSymbolicZones, data.entriesByRow.influence_synodic || []);
+                renderSynodic(data.textSymbolicZones || [], data.entriesByRow.influence_synodic || []);
                 updateWindowLabels();
             }
 

@@ -65,4 +65,36 @@ class SwScheduleRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * Retourne les schedules Weather termines avant une date de reference.
+     * Pourquoi: permettre la rotation coherente variant_no a partir du dernier historique en base.
+     *
+     * @return SwSchedule[]
+     */
+    public function findWeatherSchedulesEndingBefore(
+        \DateTimeImmutable $beforeUtc,
+        int $limit = 4000,
+        string $family = 'symbolic',
+        string $readingMode = 'weather',
+        string $lang = 'fr'
+    ): array {
+        return $this->createQueryBuilder('s')
+            ->addSelect('d', 'c')
+            ->innerJoin('s.display', 'd')
+            ->innerJoin('s.content', 'c')
+            ->andWhere('d.family = :family')
+            ->andWhere('d.readingMode = :readingMode')
+            ->andWhere('d.lang = :lang')
+            ->andWhere('s.endsAtUtc <= :beforeUtc')
+            ->setParameter('family', $family)
+            ->setParameter('readingMode', $readingMode)
+            ->setParameter('lang', $lang)
+            ->setParameter('beforeUtc', $beforeUtc)
+            ->orderBy('s.endsAtUtc', 'DESC')
+            ->addOrderBy('s.startsAtUtc', 'DESC')
+            ->setMaxResults(max(1, $limit))
+            ->getQuery()
+            ->getResult();
+    }
 }

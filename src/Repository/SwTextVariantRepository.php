@@ -32,5 +32,33 @@ class SwTextVariantRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
-}
 
+    /**
+     * Retourne les variantes activables pour le parse auto Weather.
+     * Pourquoi: ne garder que les variantes validees/actives et les ordonner pour la rotation variant_no.
+     *
+     * @return SwTextVariant[]
+     */
+    public function findValidatedUsedWeatherVariants(
+        string $family = 'symbolic',
+        string $readingMode = 'weather',
+        string $lang = 'fr'
+    ): array {
+        return $this->createQueryBuilder('v')
+            ->andWhere('v.family = :family')
+            ->andWhere('v.readingMode = :readingMode')
+            ->andWhere('v.lang = :lang')
+            ->andWhere('v.isValidated = :isValidated')
+            ->andWhere('v.isUsed = :isUsed')
+            ->setParameter('family', $family)
+            ->setParameter('readingMode', $readingMode)
+            ->setParameter('lang', $lang)
+            ->setParameter('isValidated', true)
+            ->setParameter('isUsed', true)
+            ->orderBy('v.phaseKey', 'ASC')
+            ->addOrderBy('v.variantNo', 'ASC')
+            ->addOrderBy('v.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+}

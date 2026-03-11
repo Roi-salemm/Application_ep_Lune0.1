@@ -6,12 +6,14 @@ use App\DTO\Admin\SymbolicTextCreateInput;
 use App\Entity\SwContent;
 use App\Entity\SwDisplay;
 use App\Entity\SwSchedule;
+use App\Entity\SwTextVariant;
 use App\Form\Admin\SymbolicTextCreateType;
 use App\Repository\MsMappingRepository;
 use App\Repository\OrbWindowRepository;
 use App\Repository\SwContentRepository;
 use App\Repository\SwDisplayRepository;
 use App\Repository\SwScheduleRepository;
+use App\Repository\SwTextVariantRepository;
 use App\Service\Moon\OrbWindowParseService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,7 +27,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 /**
  * Controle l onglet admin Symbolic Text et son CRUD timeline.
  * Pourquoi: relier une timeline visuelle a la base sw_display/sw_content/sw_schedule avec un placement temporel exact.
- * Info: toutes les dates sont manipulees en UTC; la ligne "Texte symbolique" est alignee sur orb_window (multi_section_phase).
+ * Info: toutes les dates sont manipulees en UTC; la ligne "Family Symbolic / Weather" est alignee sur orb_window (multi_section_phase).
  */
 final class SymbolicTextController extends AbstractController
 {
@@ -46,6 +48,7 @@ final class SymbolicTextController extends AbstractController
             '2j' => 172800,
             '4j' => 345600,
             '7j' => 604800,
+            '14j' => 1209600,
         ];
     }
 
@@ -65,7 +68,7 @@ final class SymbolicTextController extends AbstractController
             ],
             [
                 'code' => 'influence_synodic',
-                'label' => 'influence (synodic)',
+                'label' => 'influence',
                 'family' => 'symbolic',
                 'reading_mode' => 'influence',
                 'schedule_type' => 'influence_window',
@@ -79,14 +82,6 @@ final class SymbolicTextController extends AbstractController
                 'schedule_type' => 'influence_window',
                 'default_color' => '#0f5a1b',
             ],
-            [
-                'code' => 'symbolic_text',
-                'label' => 'Texte symbolique',
-                'family' => 'symbolic',
-                'reading_mode' => 'weather',
-                'schedule_type' => 'phase_window',
-                'default_color' => '#7A7F87',
-            ],
         ];
     }
 
@@ -96,6 +91,7 @@ final class SymbolicTextController extends AbstractController
         EntityManagerInterface $entityManager,
         SwDisplayRepository $displayRepository,
         SwScheduleRepository $scheduleRepository,
+        SwTextVariantRepository $variantRepository,
         MsMappingRepository $msMappingRepository,
         OrbWindowRepository $orbWindowRepository
     ): Response {
@@ -118,6 +114,9 @@ final class SymbolicTextController extends AbstractController
             $scheduleRepository,
             $msMappingRepository,
             $orbWindowRepository
+        );
+        $weatherVariantOptions = $this->buildWeatherVariantOptions(
+            $variantRepository->findValidatedUsedWeatherVariants('symbolic', 'weather')
         );
 
         $createInput = new SymbolicTextCreateInput();
@@ -152,9 +151,11 @@ final class SymbolicTextController extends AbstractController
             'symbolic_segments' => $timelinePayload['symbolic_segments'],
             'lunation_segments' => $timelinePayload['lunation_segments'],
             'text_symbolic_zones' => $timelinePayload['text_symbolic_zones'],
+            'weather_entries' => $timelinePayload['weather_entries'],
             'day_markers' => $timelinePayload['day_markers'],
             'real_segments' => $timelinePayload['real_segments'],
             'initial_payload' => $timelinePayload,
+            'weather_variant_options' => $weatherVariantOptions,
             'create_form' => $createForm->createView(),
         ]);
     }
@@ -187,6 +188,338 @@ final class SymbolicTextController extends AbstractController
         );
 
         return $this->json($payload);
+    }
+
+    /**
+     * Parse automatique des textes Weather depuis SWTextVariant vers SWDisplay/SWContent/SWSchedule.
+     * Pourquoi: produire soit une lunaison complete, soit une zone unique, avec rotation variant_no coherente.
+     */
+    #[Route('/admin/symbolic-text/parse-weather-week', name: 'admin_symbolic_text_parse_weather_week', methods: ['POST'])]
+    public function parseWeatherWeek(
+        Request $request,
+        EntityManagerInterface $entityManager,
+        SwDisplayRepository $displayRepository,
+        SwScheduleRepository $scheduleRepository,
+        SwTextVariantRepository $variantRepository,
+        OrbWindowRepository $orbWindowRepository
+    ): RedirectResponse {
+        $redirect = $this->redirectToTimeline($request);
+        if (!$this->isCsrfTokenValid('parse_symbolic_text_weather_week', (string) $request->request->get('_token', ''))) {
+            $this->addFlash('error', 'Jeton CSRF invalide pour le parse Weather.');
+            return $redirect;
+        }
+
+        $utc = new \DateTimeZone('UTC');
+        $zoneStartUtc = $this->parseUtcInput((string) $request->request->get('zone_start_utc', ''));
+        $zoneEndUtc = $this->parseUtcInput((string) $request->request->get('zone_end_utc', ''));
+        $isSingleZoneParse = $zoneStartUtc instanceof \DateTimeImmutable && $zoneEndUtc instanceof \DateTimeImmutable;
+        $forcedPhaseIndex = null;
+        $forcedVariantNo = null;
+
+        if ($isSingleZoneParse) {
+            if ($zoneEndUtc <= $zoneStartUtc) {
+                $this->addFlash('error', 'Zone Weather invalide.');
+                return $redirect;
+            }
+            $parseStartUtc = $zoneStartUtc;
+            $parseEndUtc = $zoneEndUtc;
+
+            $forcedPhaseIndex = $this->phaseIndexFromInfluencePhaseKey((string) $request->request->get('phase_key', ''));
+            $forcedVariantNoRaw = trim((string) $request->request->get('variant_no', ''));
+            $forcedVariantNo = ctype_digit($forcedVariantNoRaw) ? (int) $forcedVariantNoRaw : null;
+            if ($forcedPhaseIndex === null || $forcedVariantNo === null || $forcedVariantNo < 1) {
+                $this->addFlash('error', 'Selection phase/variante invalide pour le parse zone.');
+                return $redirect;
+            }
+        } else {
+            $parseStartInputUtc = $this->parseUtcInput((string) $request->request->get('parse_start_utc', ''));
+            if (!$parseStartInputUtc) {
+                $this->addFlash('error', 'Debut de parse invalide.');
+                return $redirect;
+            }
+
+            $parseEndInputUtc = $this->parseUtcInput((string) $request->request->get('parse_end_utc', ''));
+            if ($parseEndInputUtc instanceof \DateTimeImmutable && $parseEndInputUtc > $parseStartInputUtc) {
+                $parseStartUtc = $parseStartInputUtc;
+                $parseEndUtc = $parseEndInputUtc;
+            } else {
+                // Compatibilite: fallback legacy (7 jours) si le front n envoie pas encore parse_end_utc.
+                $parseStartUtc = $this->normalizeToIsoWeekStart($parseStartInputUtc);
+                $parseEndUtc = $parseStartUtc->modify('+7 days');
+            }
+        }
+
+        $todayStartUtc = (new \DateTimeImmutable('now', $utc))->setTime(0, 0, 0);
+        if ($parseEndUtc <= $todayStartUtc) {
+            $this->addFlash('warning', 'Parse ignore: plage totalement anterieure a aujourd hui.');
+            return $redirect;
+        }
+
+        $rowDefinitions = $this->rowDefinitions();
+        $this->ensureDefaultDisplays($entityManager, $displayRepository, $rowDefinitions);
+        $weatherFamily = 'symbolic';
+        $weatherReadingMode = 'weather';
+        $weatherScheduleType = 'influence_window';
+        $weatherDefaultColor = '#2D66A0';
+
+        $sourceZones = $orbWindowRepository->findTimelineZonesByFamilyAndMethod(
+            OrbWindowParseService::FAMILY_INFLUENCE_ORB,
+            OrbWindowParseService::METHOD_INFLUENCE_ORB,
+            $parseStartUtc,
+            $parseEndUtc
+        );
+        $targetZones = $isSingleZoneParse
+            ? $this->selectSingleWeatherParseZone(
+                $sourceZones,
+                $parseStartUtc,
+                $parseEndUtc,
+                $todayStartUtc,
+                $forcedPhaseIndex,
+                $forcedVariantNo
+            )
+            : $this->selectWeatherParseZones($sourceZones, $parseStartUtc, $parseEndUtc, $todayStartUtc);
+        if ($targetZones === []) {
+            $this->addFlash('warning', 'Aucune zone Weather eligible sur la plage choisie.');
+            return $redirect;
+        }
+
+        $variantsByPhase = $this->groupVariantsByPhase($variantRepository->findValidatedUsedWeatherVariants(
+            $weatherFamily,
+            $weatherReadingMode
+        ));
+
+        $rewriteStartTs = null;
+        $rewriteEndTs = null;
+        foreach ($targetZones as $zone) {
+            $zoneStartTs = (int) ($zone['write_start_ts'] ?? 0);
+            $zoneEndTs = (int) ($zone['write_end_ts'] ?? 0);
+            if ($zoneEndTs <= $zoneStartTs) {
+                continue;
+            }
+            $rewriteStartTs = $rewriteStartTs === null ? $zoneStartTs : min($rewriteStartTs, $zoneStartTs);
+            $rewriteEndTs = $rewriteEndTs === null ? $zoneEndTs : max($rewriteEndTs, $zoneEndTs);
+        }
+
+        $removedSchedules = 0;
+        $trimmedSchedules = 0;
+        $removedContents = 0;
+        $orphanCandidates = [];
+
+        if ($rewriteStartTs !== null && $rewriteEndTs !== null && $rewriteEndTs > $rewriteStartTs) {
+            $rewriteStartUtc = (new \DateTimeImmutable('@' . $rewriteStartTs))->setTimezone($utc);
+            $rewriteEndUtc = (new \DateTimeImmutable('@' . $rewriteEndTs))->setTimezone($utc);
+            $existing = $scheduleRepository->findTimelineEntriesForAdmin(
+                $rewriteStartUtc,
+                $rewriteEndUtc,
+                [$weatherReadingMode],
+                $weatherFamily
+            );
+
+            foreach ($existing as $schedule) {
+                if (!$schedule instanceof SwSchedule) {
+                    continue;
+                }
+                $display = $schedule->getDisplay();
+                if (!$display instanceof SwDisplay) {
+                    continue;
+                }
+                if (
+                    strtolower(trim($display->getFamily())) !== strtolower($weatherFamily)
+                    || strtolower(trim($display->getReadingMode())) !== strtolower($weatherReadingMode)
+                ) {
+                    continue;
+                }
+
+                $existingStartTs = $schedule->getStartsAtUtc()->getTimestamp();
+                $existingEndTs = $schedule->getEndsAtUtc()->getTimestamp();
+                if ($existingEndTs <= $todayStartUtc->getTimestamp()) {
+                    continue;
+                }
+                if (!$this->timeRangeOverlaps($existingStartTs, $existingEndTs, $rewriteStartTs, $rewriteEndTs)) {
+                    continue;
+                }
+
+                if ($existingStartTs < $todayStartUtc->getTimestamp()) {
+                    $schedule->setEndsAtUtc($todayStartUtc);
+                    $trimmedSchedules++;
+                    continue;
+                }
+
+                $content = $schedule->getContent();
+                $entityManager->remove($schedule);
+                $removedSchedules++;
+                if ($content instanceof SwContent && $content->getId() !== null) {
+                    $orphanCandidates[(string) $content->getId()] = $content;
+                }
+            }
+
+            if ($removedSchedules > 0 || $trimmedSchedules > 0) {
+                $entityManager->flush();
+            }
+
+            foreach ($orphanCandidates as $content) {
+                if (!$content instanceof SwContent) {
+                    continue;
+                }
+                if ($scheduleRepository->countByContent($content) > 0) {
+                    continue;
+                }
+                $entityManager->remove($content);
+                $removedContents++;
+            }
+            if ($removedContents > 0) {
+                $entityManager->flush();
+            }
+        }
+
+        $rotationBeforeUtc = $rewriteStartTs !== null
+            ? (new \DateTimeImmutable('@' . $rewriteStartTs))->setTimezone($utc)
+            : $parseStartUtc;
+        $historySchedules = $scheduleRepository->findWeatherSchedulesEndingBefore(
+            $rotationBeforeUtc,
+            4000,
+            $weatherFamily,
+            $weatherReadingMode
+        );
+        $lastVariantNoByPhase = $this->buildLastVariantNoByPhaseFromSchedules($historySchedules);
+
+        $created = 0;
+        $missingVariantZones = 0;
+        $unknownPhaseZones = 0;
+        $nowUtc = new \DateTimeImmutable('now', $utc);
+
+        foreach ($targetZones as $zone) {
+            $phaseIndex = (int) ($zone['phase_index'] ?? -1);
+            if ($phaseIndex < 0 || $phaseIndex > 7) {
+                $unknownPhaseZones++;
+                continue;
+            }
+
+            $phaseVariants = $this->sortVariantsByVariantNo($variantsByPhase[$phaseIndex] ?? []);
+            if ($phaseVariants === []) {
+                $missingVariantZones++;
+                continue;
+            }
+
+            $forcedVariantNoForZone = isset($zone['forced_variant_no']) ? (int) $zone['forced_variant_no'] : null;
+            $variant = $this->pickNextWeatherVariant(
+                $phaseVariants,
+                $lastVariantNoByPhase[$phaseIndex] ?? null,
+                $forcedVariantNoForZone
+            );
+            if (!$variant instanceof SwTextVariant) {
+                $missingVariantZones++;
+                continue;
+            }
+            $lastVariantNoByPhase[$phaseIndex] = $variant->getVariantNo();
+
+            $writeStartTs = (int) ($zone['write_start_ts'] ?? 0);
+            $writeEndTs = (int) ($zone['write_end_ts'] ?? 0);
+            if ($writeEndTs <= $writeStartTs) {
+                continue;
+            }
+            $writeStartUtc = (new \DateTimeImmutable('@' . $writeStartTs))->setTimezone($utc);
+            $writeEndUtc = (new \DateTimeImmutable('@' . $writeEndTs))->setTimezone($utc);
+
+            $label = trim($variant->getCardText());
+            if ($label === '') {
+                $missingVariantZones++;
+                continue;
+            }
+            $subtitle = trim((string) ($variant->getTitle() ?? ''));
+            $defaultColor = $weatherDefaultColor;
+            $autoCode = $this->buildAutoDisplayCode('weather_auto');
+            $lunationKey = trim((string) ($zone['lunation_key'] ?? ''));
+
+            $display = new SwDisplay();
+            $display->setCode($autoCode);
+            $display->setFamily($weatherFamily);
+            $display->setReadingMode($weatherReadingMode);
+            $display->setLang($variant->getLang() !== '' ? $variant->getLang() : 'fr');
+            $display->setIsActive(true);
+            $display->setComment($this->nullIfEmpty('Parse auto Weather depuis SWTextVariant.'));
+
+            $contentJson = array_filter([
+                'label' => $label,
+                'subtitle' => $subtitle,
+                'color' => $defaultColor,
+                'variant_id' => $variant->getId(),
+                'symbolic_weather' => [
+                    'phase_key' => $variant->getPhaseKey(),
+                    'variant_no' => $variant->getVariantNo(),
+                    'variant_id' => $variant->getId(),
+                    'is_validated' => $variant->isValidated(),
+                    'is_used' => $variant->isUsed(),
+                ],
+            ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+            $content = new SwContent();
+            $content->setDisplay($display);
+            $content->setVersionNo(1);
+            $content->setStatus('validated');
+            $content->setIsCurrent(true);
+            $content->setIsValidated(true);
+            $content->setContentJson($contentJson);
+            $content->setSchemaVersion('1.0');
+            $content->setComment($this->nullIfEmpty($this->truncateForVarchar($label, 255)));
+            $content->setEditorialNotes($this->nullIfEmpty('Genere automatiquement depuis SWTextVariant.'));
+            $content->setValidatedAtUtc($nowUtc);
+
+            $payloadJson = [
+                'source' => 'sw_text_variant',
+                'variant_id' => $variant->getId(),
+                'phase_key' => $variant->getPhaseKey(),
+                'variant_no' => $variant->getVariantNo(),
+                'lunation_key' => $lunationKey !== '' ? $lunationKey : null,
+                'orb_phase_key' => (string) ($zone['phase_key'] ?? ''),
+                'generated_at_utc' => $nowUtc->format('Y-m-d H:i:s'),
+            ];
+
+            $schedule = new SwSchedule();
+            $schedule->setDisplay($display);
+            $schedule->setContent($content);
+            $schedule->setScheduleType($this->sanitizeScheduleType($weatherScheduleType));
+            $schedule->setStartsAtUtc($writeStartUtc);
+            $schedule->setEndsAtUtc($writeEndUtc);
+            $schedule->setPriority(100);
+            $schedule->setIsPublished(true);
+            $schedule->setComment($this->nullIfEmpty($this->truncateForVarchar($label, 255)));
+            $schedule->setPayloadJson($payloadJson);
+
+            $entityManager->persist($display);
+            $entityManager->persist($content);
+            $entityManager->persist($schedule);
+            $created++;
+        }
+
+        if ($created > 0) {
+            $entityManager->flush();
+        }
+
+        $this->addFlash(
+            'success',
+            sprintf(
+                'Parse Weather (%s) termine: %d cree(s), %d re-ecrit(s), %d tronque(s), %d contenu(s) orphelin(s) supprime(s).',
+                $isSingleZoneParse ? 'zone' : 'lunaison',
+                $created,
+                $removedSchedules,
+                $trimmedSchedules,
+                $removedContents
+            )
+        );
+
+        if ($missingVariantZones > 0 || $unknownPhaseZones > 0) {
+            $this->addFlash(
+                'warning',
+                sprintf(
+                    'Zones non remplies: %d sans variante valide/usee, %d avec phase non reconnue.',
+                    $missingVariantZones,
+                    $unknownPhaseZones
+                )
+            );
+        }
+
+        return $redirect;
     }
 
     #[Route('/admin/symbolic-text/create', name: 'admin_symbolic_text_create', methods: ['POST'])]
@@ -492,6 +825,27 @@ final class SymbolicTextController extends AbstractController
             $durationSeconds
         );
 
+        $weatherSchedules = $scheduleRepository->findTimelineEntriesForAdmin(
+            $startUtc,
+            $endUtc,
+            ['weather']
+        );
+        $weatherEntriesByRow = $this->buildEntriesByRow(
+            $weatherSchedules,
+            [[
+                'code' => 'family_symbolic_weather',
+                'label' => 'Weather',
+                'family' => 'symbolic',
+                'reading_mode' => 'weather',
+                'schedule_type' => 'influence_window',
+                'default_color' => '#2D66A0',
+            ]],
+            $startUtc,
+            $endUtc,
+            $durationSeconds
+        );
+        $weatherEntries = $weatherEntriesByRow['family_symbolic_weather'] ?? [];
+
         $dayMarkers = $this->buildDayMarkers($startUtc, $endUtc, $durationSeconds);
         $realSegments = $this->buildRealSegments($dayMarkers, $startUtc, $endUtc, $durationSeconds);
 
@@ -507,9 +861,46 @@ final class SymbolicTextController extends AbstractController
             'symbolic_segments' => $symbolicSegments,
             'lunation_segments' => $lunationSegments,
             'text_symbolic_zones' => $textSymbolicZones,
+            'weather_entries' => $weatherEntries,
             'day_markers' => $dayMarkers,
             'real_segments' => $realSegments,
         ];
+    }
+
+    /**
+     * Prepare les options de variantes Weather pour le modal de parse zone.
+     *
+     * @param SwTextVariant[] $variants
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildWeatherVariantOptions(array $variants): array
+    {
+        $options = [];
+        foreach ($variants as $variant) {
+            if (!$variant instanceof SwTextVariant) {
+                continue;
+            }
+            $label = trim($variant->getCardText());
+            if ($label === '') {
+                $label = trim((string) ($variant->getTitle() ?? ''));
+            }
+            $options[] = [
+                'id' => $variant->getId(),
+                'phase_key' => $variant->getPhaseKey(),
+                'variant_no' => $variant->getVariantNo(),
+                'label' => $this->truncateForVarchar($label, 160),
+            ];
+        }
+
+        usort(
+            $options,
+            static fn (array $a, array $b): int =>
+                ((int) ($a['phase_key'] ?? 0) <=> (int) ($b['phase_key'] ?? 0))
+                ?: (((int) ($a['variant_no'] ?? 0) <=> (int) ($b['variant_no'] ?? 0))
+                    ?: ((string) ($a['id'] ?? '') <=> (string) ($b['id'] ?? '')))
+        );
+
+        return $options;
     }
 
     /**
@@ -526,6 +917,20 @@ final class SymbolicTextController extends AbstractController
 
         foreach ($rowDefinitions as $row) {
             if (isset($existing[$row['code']])) {
+                $display = $existing[$row['code']];
+                $expectedFamily = (string) ($row['family'] ?? 'symbolic');
+                $expectedMode = (string) ($row['reading_mode'] ?? 'weather');
+                $currentFamily = strtolower(trim($display->getFamily()));
+                $currentMode = strtolower(trim($display->getReadingMode()));
+
+                if ($currentFamily !== strtolower($expectedFamily)) {
+                    $display->setFamily($expectedFamily);
+                    $changed = true;
+                }
+                if ($currentMode !== strtolower($expectedMode)) {
+                    $display->setReadingMode($expectedMode);
+                    $changed = true;
+                }
                 continue;
             }
 
@@ -624,6 +1029,12 @@ final class SymbolicTextController extends AbstractController
                     ? (string) json_encode($schedule->getPayloadJson(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
                     : '',
                 'icon' => is_array($json) ? (string) ($json['icon'] ?? '') : '',
+                'symbolic_weather' => (is_array($json) && isset($json['symbolic_weather']) && is_array($json['symbolic_weather']))
+                    ? $json['symbolic_weather']
+                    : null,
+                'variant_id' => is_array($json) ? ($json['variant_id'] ?? null) : null,
+                'phase_key' => is_array($json) ? ($json['phase_key'] ?? null) : null,
+                'variant_no' => is_array($json) ? ($json['variant_no'] ?? null) : null,
                 'update_token' => $this->csrfTokenManager->getToken('update_symbolic_text_' . (string) $schedule->getId())->getValue(),
                 'delete_token' => $this->csrfTokenManager->getToken('delete_symbolic_text_' . (string) $schedule->getId())->getValue(),
             ];
@@ -1266,6 +1677,408 @@ final class SymbolicTextController extends AbstractController
             return strtoupper($value);
         }
         return $fallback;
+    }
+
+    /**
+     * Normalise une date UTC vers le debut de semaine ISO (lundi 00:00:00 UTC).
+     * Pourquoi: le parse Weather doit toujours etre cale sur des semaines reelles lundi->dimanche.
+     */
+    private function normalizeToIsoWeekStart(\DateTimeImmutable $value): \DateTimeImmutable
+    {
+        $utc = new \DateTimeZone('UTC');
+        $utcValue = $value->setTimezone($utc);
+        $weekDay = (int) $utcValue->format('N'); // 1=lundi ... 7=dimanche
+
+        return $utcValue
+            ->setTime(0, 0, 0)
+            ->modify(sprintf('-%d days', $weekDay - 1));
+    }
+
+    /**
+     * Selectionne une zone unique de parse Weather (bouton + sur Family Symbolic).
+     * Pourquoi: parser strictement la zone cliquee avec la variante choisie dans le modal.
+     *
+     * @param array<int, array{
+     *   id:int,
+     *   phase_key:string,
+     *   starts_at_utc:\DateTimeImmutable,
+     *   ends_at_utc:\DateTimeImmutable,
+     *   event_at_utc:\DateTimeImmutable,
+     *   sequence_no:int|null,
+     *   lunation_key:string|null
+     * }> $sourceZones
+     * @return array<int, array<string, mixed>>
+     */
+    private function selectSingleWeatherParseZone(
+        array $sourceZones,
+        \DateTimeImmutable $parseStartUtc,
+        \DateTimeImmutable $parseEndUtc,
+        \DateTimeImmutable $todayStartUtc,
+        ?int $forcedPhaseIndex,
+        ?int $forcedVariantNo
+    ): array {
+        $parseStartTs = $parseStartUtc->getTimestamp();
+        $parseEndTs = $parseEndUtc->getTimestamp();
+        $todayStartTs = $todayStartUtc->getTimestamp();
+
+        if ($parseEndTs <= $parseStartTs || $parseEndTs <= $todayStartTs) {
+            return [];
+        }
+
+        $matched = null;
+        foreach ($sourceZones as $zone) {
+            $zoneStartTs = $zone['starts_at_utc']->getTimestamp();
+            $zoneEndTs = $zone['ends_at_utc']->getTimestamp();
+            if ($zoneStartTs === $parseStartTs && $zoneEndTs === $parseEndTs) {
+                $matched = $zone;
+                break;
+            }
+        }
+
+        $phaseIndex = $forcedPhaseIndex;
+        $phaseKey = '';
+        $zoneId = 0;
+        $lunationKey = '';
+        if ($matched !== null) {
+            $phaseKey = (string) ($matched['phase_key'] ?? '');
+            $zoneId = (int) ($matched['id'] ?? 0);
+            $lunationKey = isset($matched['lunation_key']) ? (string) $matched['lunation_key'] : '';
+            if ($phaseIndex === null) {
+                $phaseIndex = $this->phaseIndexFromInfluencePhaseKey($phaseKey);
+            }
+        }
+
+        if ($phaseIndex === null || $phaseIndex < 0 || $phaseIndex > 7) {
+            return [];
+        }
+
+        $writeStartTs = max($parseStartTs, $todayStartTs);
+        $writeEndTs = $parseEndTs;
+        if ($writeEndTs <= $writeStartTs) {
+            return [];
+        }
+
+        return [[
+            'id' => $zoneId,
+            'phase_key' => $phaseKey,
+            'phase_index' => $phaseIndex,
+            'lunation_key' => $lunationKey,
+            'full_start_ts' => $parseStartTs,
+            'full_end_ts' => $parseEndTs,
+            'write_start_ts' => $writeStartTs,
+            'write_end_ts' => $writeEndTs,
+            'forced_variant_no' => $forcedVariantNo,
+        ]];
+    }
+
+    /**
+     * Construit le dernier variant_no connu par phase a partir de l historique Weather.
+     *
+     * @param SwSchedule[] $schedules
+     * @return array<int, int>
+     */
+    private function buildLastVariantNoByPhaseFromSchedules(array $schedules): array
+    {
+        $state = [];
+        foreach ($schedules as $schedule) {
+            if (!$schedule instanceof SwSchedule) {
+                continue;
+            }
+            $meta = $this->extractWeatherVariantMetaFromSchedule($schedule);
+            if ($meta === null) {
+                continue;
+            }
+            $phase = (int) $meta['phase_key'];
+            $variantNo = (int) $meta['variant_no'];
+            if ($phase < 0 || $phase > 7 || $variantNo < 1) {
+                continue;
+            }
+            if (!array_key_exists($phase, $state)) {
+                $state[$phase] = $variantNo;
+            }
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param SwTextVariant[] $variants
+     * @return SwTextVariant[]
+     */
+    private function sortVariantsByVariantNo(array $variants): array
+    {
+        usort(
+            $variants,
+            static fn (SwTextVariant $a, SwTextVariant $b): int =>
+                ($a->getVariantNo() <=> $b->getVariantNo()) ?: ((string) ($a->getId() ?? '') <=> (string) ($b->getId() ?? ''))
+        );
+
+        return $variants;
+    }
+
+    /**
+     * @param SwTextVariant[] $phaseVariants
+     */
+    private function pickNextWeatherVariant(array $phaseVariants, ?int $lastVariantNo, ?int $forcedVariantNo = null): ?SwTextVariant
+    {
+        if ($phaseVariants === []) {
+            return null;
+        }
+
+        if ($forcedVariantNo !== null) {
+            foreach ($phaseVariants as $candidate) {
+                if ($candidate->getVariantNo() === $forcedVariantNo) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        }
+
+        if ($lastVariantNo === null || $lastVariantNo < 1) {
+            return $phaseVariants[0];
+        }
+
+        $lastIndex = null;
+        foreach ($phaseVariants as $index => $candidate) {
+            if ($candidate->getVariantNo() === $lastVariantNo) {
+                $lastIndex = $index;
+            }
+        }
+        if ($lastIndex === null) {
+            return $phaseVariants[0];
+        }
+
+        $nextIndex = ($lastIndex + 1) % count($phaseVariants);
+
+        return $phaseVariants[$nextIndex] ?? $phaseVariants[0];
+    }
+
+    /**
+     * Extrait (phase_key, variant_no) depuis les metadonnees d une entree Weather existante.
+     * Pourquoi: garantir la rotation variant_no par rapport a l historique deja publie.
+     *
+     * @return array{phase_key:int,variant_no:int}|null
+     */
+    private function extractWeatherVariantMetaFromSchedule(SwSchedule $schedule): ?array
+    {
+        $content = $schedule->getContent();
+        if (!$content instanceof SwContent) {
+            return null;
+        }
+
+        $contentJson = $content->getContentJson();
+        if (is_array($contentJson)) {
+            $symbolicWeather = $contentJson['symbolic_weather'] ?? null;
+            if (is_array($symbolicWeather)) {
+                $phase = $this->phaseIndexFromInfluencePhaseKey((string) ($symbolicWeather['phase_key'] ?? ''));
+                $variantNoRaw = (string) ($symbolicWeather['variant_no'] ?? '');
+                if ($phase !== null && ctype_digit($variantNoRaw) && (int) $variantNoRaw > 0) {
+                    return [
+                        'phase_key' => $phase,
+                        'variant_no' => (int) $variantNoRaw,
+                    ];
+                }
+            }
+
+            $phaseLegacy = $this->phaseIndexFromInfluencePhaseKey((string) ($contentJson['phase_key'] ?? ''));
+            $variantLegacyRaw = (string) ($contentJson['variant_no'] ?? '');
+            if ($phaseLegacy !== null && ctype_digit($variantLegacyRaw) && (int) $variantLegacyRaw > 0) {
+                return [
+                    'phase_key' => $phaseLegacy,
+                    'variant_no' => (int) $variantLegacyRaw,
+                ];
+            }
+
+            $subtitle = (string) ($contentJson['subtitle'] ?? '');
+            if ($subtitle !== '') {
+                if (preg_match('/phase_key\s*=\s*(\d+)\s*,\s*variant_no\s*=\s*(\d+)/i', $subtitle, $m) === 1) {
+                    $phaseLegacy2 = (int) ($m[1] ?? -1);
+                    $variantLegacy2 = (int) ($m[2] ?? 0);
+                    if ($phaseLegacy2 >= 0 && $phaseLegacy2 <= 7 && $variantLegacy2 > 0) {
+                        return [
+                            'phase_key' => $phaseLegacy2,
+                            'variant_no' => $variantLegacy2,
+                        ];
+                    }
+                }
+            }
+        }
+
+        $payload = $schedule->getPayloadJson();
+        if (is_array($payload)) {
+            $phaseFromPayload = $this->phaseIndexFromInfluencePhaseKey((string) ($payload['phase_key'] ?? ''));
+            $variantFromPayloadRaw = (string) ($payload['variant_no'] ?? '');
+            if ($phaseFromPayload !== null && ctype_digit($variantFromPayloadRaw) && (int) $variantFromPayloadRaw > 0) {
+                return [
+                    'phase_key' => $phaseFromPayload,
+                    'variant_no' => (int) $variantFromPayloadRaw,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Construit la liste des zones de la semaine qui peuvent etre parsees.
+     * Pourquoi: inclure le chevauchement au debut, exclure celui de fin, et interdire toute ecriture dans le passe.
+     *
+     * @param array<int, array{
+     *   id:int,
+     *   phase_key:string,
+     *   starts_at_utc:\DateTimeImmutable,
+     *   ends_at_utc:\DateTimeImmutable,
+     *   event_at_utc:\DateTimeImmutable,
+     *   sequence_no:int|null,
+     *   lunation_key:string|null
+     * }> $sourceZones
+     * @return array<int, array<string, mixed>>
+     */
+    private function selectWeatherParseZones(
+        array $sourceZones,
+        \DateTimeImmutable $parseStartUtc,
+        \DateTimeImmutable $parseEndUtc,
+        \DateTimeImmutable $todayStartUtc
+    ): array {
+        $parseStartTs = $parseStartUtc->getTimestamp();
+        $parseEndTs = $parseEndUtc->getTimestamp();
+        $todayStartTs = $todayStartUtc->getTimestamp();
+        $zones = [];
+
+        foreach ($sourceZones as $zone) {
+            $fullStartTs = $zone['starts_at_utc']->getTimestamp();
+            $fullEndTs = $zone['ends_at_utc']->getTimestamp();
+            if ($fullEndTs <= $fullStartTs) {
+                continue;
+            }
+            if ($fullEndTs <= $parseStartTs || $fullStartTs >= $parseEndTs) {
+                continue;
+            }
+
+            // Regle metier: la zone qui depasse en fin de semaine est laissee pour la semaine suivante.
+            if ($fullEndTs > $parseEndTs) {
+                continue;
+            }
+
+            // Regle metier: aucune ecriture avant le debut du jour UTC courant.
+            if ($fullEndTs <= $todayStartTs) {
+                continue;
+            }
+
+            $phaseIndex = $this->phaseIndexFromInfluencePhaseKey((string) ($zone['phase_key'] ?? ''));
+            $writeStartTs = max($fullStartTs, $todayStartTs);
+            $writeEndTs = $fullEndTs;
+            if ($writeEndTs <= $writeStartTs) {
+                continue;
+            }
+
+            $zones[] = [
+                'id' => (int) ($zone['id'] ?? 0),
+                'phase_key' => (string) ($zone['phase_key'] ?? ''),
+                'phase_index' => $phaseIndex,
+                'lunation_key' => isset($zone['lunation_key']) ? (string) $zone['lunation_key'] : '',
+                'full_start_ts' => $fullStartTs,
+                'full_end_ts' => $fullEndTs,
+                'write_start_ts' => $writeStartTs,
+                'write_end_ts' => $writeEndTs,
+            ];
+        }
+
+        usort(
+            $zones,
+            static fn (array $a, array $b): int =>
+                ($a['full_start_ts'] <=> $b['full_start_ts'])
+                ?: (($a['full_end_ts'] <=> $b['full_end_ts'])
+                    ?: ((int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0)))
+        );
+
+        return $zones;
+    }
+
+    private function phaseIndexFromInfluencePhaseKey(string $phaseKey): ?int
+    {
+        $normalized = strtolower(trim($phaseKey));
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (ctype_digit($normalized)) {
+            $asInt = (int) $normalized;
+            return ($asInt >= 0 && $asInt <= 7) ? $asInt : null;
+        }
+        if (str_starts_with($normalized, 'phase_')) {
+            $tail = substr($normalized, 6);
+            if ($tail !== '' && ctype_digit($tail)) {
+                $asInt = (int) $tail;
+                return ($asInt >= 0 && $asInt <= 7) ? $asInt : null;
+            }
+        }
+
+        return match ($normalized) {
+            'new_moon' => 0,
+            'waxing_crescent' => 1,
+            'first_quarter' => 2,
+            'waxing_gibbous' => 3,
+            'full_moon' => 4,
+            'waning_gibbous' => 5,
+            'last_quarter' => 6,
+            'waning_crescent' => 7,
+            default => null,
+        };
+    }
+
+    /**
+     * @param SwTextVariant[] $variants
+     * @return array<int, SwTextVariant[]>
+     */
+    private function groupVariantsByPhase(array $variants): array
+    {
+        $grouped = [];
+        foreach ($variants as $variant) {
+            if (!$variant instanceof SwTextVariant) {
+                continue;
+            }
+            $phase = $variant->getPhaseKey();
+            if ($phase < 0 || $phase > 7) {
+                continue;
+            }
+            if (!isset($grouped[$phase])) {
+                $grouped[$phase] = [];
+            }
+            $grouped[$phase][] = $variant;
+        }
+
+        return $grouped;
+    }
+
+    private function buildAutoDisplayCode(string $prefix): string
+    {
+        return str_replace('.', '_', uniqid($prefix . '_', true));
+    }
+
+    private function timeRangeOverlaps(int $startA, int $endA, int $startB, int $endB): bool
+    {
+        return $startA < $endB && $endA > $startB;
+    }
+
+    private function truncateForVarchar(string $value, int $maxLength): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '' || $maxLength <= 0) {
+            return '';
+        }
+        if (mb_strlen($trimmed) <= $maxLength) {
+            return $trimmed;
+        }
+        if ($maxLength <= 1) {
+            return mb_substr($trimmed, 0, $maxLength);
+        }
+        if ($maxLength <= 3) {
+            return mb_substr($trimmed, 0, $maxLength);
+        }
+
+        return mb_substr($trimmed, 0, $maxLength - 3) . '...';
     }
 
     private function positionPercent(int $timestamp, int $startTs, int $durationSeconds): float

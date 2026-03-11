@@ -2149,6 +2149,15 @@ thead .admin-table__cell {
     background: rgba(34, 54, 100, 0.2);
 }
 
+.symbolic-track--parse {
+    background: rgba(21, 25, 34, 0.62);
+}
+
+.symbolic-track--weather {
+    height: 124px;
+    background: rgba(38, 86, 140, 0.22);
+}
+
 .symbolic-track--event-group {
     background: rgba(255, 255, 255, 0.012);
 }
@@ -2251,6 +2260,12 @@ thead .admin-table__cell {
     color: #4b0000;
 }
 
+.symbolic-text-problem--weather-missing {
+    background: rgba(226, 122, 22, 0.95);
+    border-color: rgba(255, 188, 104, 0.98);
+    color: #fff7eb;
+}
+
 .symbolic-synodic-entry-alert {
     position: absolute;
     top: 4px;
@@ -2276,6 +2291,48 @@ thead .admin-table__cell {
     transform: none;
 }
 
+.symbolic-parse-form {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    margin: 0;
+    padding: 6px 4px;
+}
+
+.symbolic-parse-week {
+    display: block;
+}
+
+.symbolic-parse-button {
+    width: 100%;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(120deg, rgba(73, 86, 120, 0.88), rgba(44, 52, 72, 0.94));
+    color: #f0f5ff;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.symbolic-parse-button:hover {
+    border-color: rgba(225, 176, 76, 0.72);
+    color: #ffe4ac;
+}
+
+.admin-form__hint {
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #d8dfe8;
+    font-size: 12px;
+}
+
 .symbolic-text-entry {
     position: absolute;
     top: 5px;
@@ -2290,6 +2347,17 @@ thead .admin-table__cell {
     padding: 0 6px;
     color: #f0f6ff;
     min-width: 70px;
+}
+
+.symbolic-text-entry--weather {
+    top: 6px;
+    height: calc(100% - 12px);
+    border-radius: 8px;
+    border-color: rgba(189, 218, 255, 0.38);
+    background: linear-gradient(135deg, rgba(45, 102, 160, 0.98), rgba(33, 76, 124, 0.96));
+    box-shadow: inset 0 0 0 1px rgba(26, 56, 92, 0.65);
+    display: block;
+    padding: 8px 10px;
 }
 
 .symbolic-text-entry.is-warning {
@@ -2313,6 +2381,38 @@ thead .admin-table__cell {
     color: rgba(255, 255, 255, 0.78);
     font-size: 10px;
     line-height: 1;
+}
+
+.symbolic-text-entry__text--weather {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: initial;
+}
+
+.symbolic-weather-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    line-height: 1.3;
+    color: #f1f7ff;
+}
+
+.symbolic-weather-meta {
+    flex: 0 0 auto;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(203, 227, 255, 0.26);
+    color: rgba(230, 241, 255, 0.92);
+    font-size: 10px;
+    line-height: 1.35;
+    white-space: normal;
 }
 
 .symbolic-phase-band {
