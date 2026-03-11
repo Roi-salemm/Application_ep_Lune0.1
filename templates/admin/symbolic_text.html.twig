@@ -97,7 +97,7 @@
 
                 <div class="symbolic-track symbolic-track--symbolic" data-track-symbolic>
                     {% if symbolic_segments is empty %}
-                        <div class="symbolic-track__empty">Influence symbolique indisponible (donnees astronomiques insuffisantes).</div>
+                        <div class="symbolic-track__empty">Influence symbolique indisponible (orb_window influence_orb / midpoint_partition_v1 absent).</div>
                     {% else %}
                         {% for segment in symbolic_segments %}
                             <div class="symbolic-phase-band"
@@ -107,6 +107,14 @@
                                  data-phase-start="{{ segment.full_start_ts }}"
                                  data-phase-end="{{ segment.full_end_ts }}">
                                 <span>{{ segment.label }}</span>
+                                <button type="button"
+                                        class="symbolic-gap-add symbolic-gap-add--zone"
+                                        title="Ajouter un texte symbolique"
+                                        data-open-create
+                                        data-display-code="symbolic_text"
+                                        data-schedule-type="phase_window"
+                                        data-start="{{ segment.full_start_ts|date('Y-m-d H:i:s', 'UTC') }}"
+                                        data-end="{{ segment.full_end_ts|date('Y-m-d H:i:s', 'UTC') }}">+</button>
                             </div>
                         {% endfor %}
                     {% endif %}
@@ -119,14 +127,13 @@
                         <div class="symbolic-track symbolic-track--synodic"
                              data-track-synodic
                              data-display-code="{{ row.code }}"></div>
-                    {% elseif row.code == 'symbolic_text' %}
-                        <div class="symbolic-track symbolic-track--text-symbolic-empty"
-                             data-track-text-symbolic-empty
-                             aria-hidden="true"></div>
                     {% else %}
                         {% set entries = entries_by_row[row.code]|default([]) %}
                         {% set gaps = gaps_by_row[row.code]|default([]) %}
-                        <div class="symbolic-track symbolic-track--content" data-row-code="{{ row.code }}" data-track-row="{{ row.code }}">
+                        <div class="symbolic-track symbolic-track--content"
+                             data-row-code="{{ row.code }}"
+                             data-track-row="{{ row.code }}"
+                             data-row-schedule-type="{{ row.schedule_type }}">
                             {% for gap in gaps %}
                                 <button type="button"
                                         class="symbolic-gap-add"
@@ -333,9 +340,7 @@
                         <span class="admin-form__label">Ligne</span>
                         <select class="admin-form__select" name="display_code" data-edit-display-code required>
                             {% for row in row_definitions %}
-                                {% if row.code != 'symbolic_text' %}
-                                    <option value="{{ row.code }}">{{ row.label }}</option>
-                                {% endif %}
+                                <option value="{{ row.code }}">{{ row.label }}</option>
                             {% endfor %}
                         </select>
                     </label>
@@ -947,7 +952,7 @@
                     return;
                 }
                 if (!segments.length) {
-                    track.innerHTML = '<div class="symbolic-track__empty">Influence symbolique indisponible (donnees astronomiques insuffisantes).</div>';
+                    track.innerHTML = '<div class="symbolic-track__empty">Influence symbolique indisponible (orb_window influence_orb / midpoint_partition_v1 absent).</div>';
                     return;
                 }
                 var html = segments.map(function (segment) {
@@ -968,9 +973,10 @@
                         'data-phase-end="' + String(fullEndTs) + '" ' +
                         'style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--phase-color:' + escapeHtml(segment.color || '#325a80') + ';">' +
                         '<span>' + escapeHtml(segment.label || '') + '</span>' +
+                        '<button type="button" class="symbolic-gap-add symbolic-gap-add--zone" title="Ajouter un texte symbolique" data-open-create data-display-code="symbolic_text" data-schedule-type="phase_window" data-start="' + escapeHtml(formatUtcWithSeconds(fullStartTs)) + '" data-end="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">+</button>' +
                         '</div>';
                 }).join('');
-                track.innerHTML = html || '<div class="symbolic-track__empty">Influence symbolique indisponible (donnees astronomiques insuffisantes).</div>';
+                track.innerHTML = html || '<div class="symbolic-track__empty">Influence symbolique indisponible (orb_window influence_orb / midpoint_partition_v1 absent).</div>';
             }
 
             function formatUtcInput(ts) {
@@ -1268,6 +1274,7 @@
                 var rows = timeline.querySelectorAll('[data-track-row]');
                 rows.forEach(function (rowNode) {
                     var rowCode = rowNode.getAttribute('data-track-row') || '';
+                    var rowScheduleType = rowNode.getAttribute('data-row-schedule-type') || 'influence_window';
                     var entries = entriesByRow[rowCode] || [];
                     var html = '';
 
@@ -1294,13 +1301,13 @@
                     clipped.forEach(function (entry) {
                         if (entry.startTs - cursor >= minGapSeconds) {
                             var centerTs = cursor + Math.floor((entry.startTs - cursor) / 2);
-                            html += '<button type="button" class="symbolic-gap-add" style="left:' + positionPercent(centerTs) + '%;" title="Ajouter un texte" data-open-create data-display-code="' + escapeHtml(rowCode) + '" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcInput(cursor)) + '" data-end="' + escapeHtml(formatUtcInput(entry.startTs)) + '">+</button>';
+                            html += '<button type="button" class="symbolic-gap-add" style="left:' + positionPercent(centerTs) + '%;" title="Ajouter un texte" data-open-create data-display-code="' + escapeHtml(rowCode) + '" data-schedule-type="' + escapeHtml(rowScheduleType) + '" data-start="' + escapeHtml(formatUtcInput(cursor)) + '" data-end="' + escapeHtml(formatUtcInput(entry.startTs)) + '">+</button>';
                         }
                         cursor = Math.max(cursor, entry.endTs);
                     });
                     if (state.visibleEndTs - cursor >= minGapSeconds) {
                         var centerTail = cursor + Math.floor((state.visibleEndTs - cursor) / 2);
-                        html += '<button type="button" class="symbolic-gap-add" style="left:' + positionPercent(centerTail) + '%;" title="Ajouter un texte" data-open-create data-display-code="' + escapeHtml(rowCode) + '" data-schedule-type="influence_window" data-start="' + escapeHtml(formatUtcInput(cursor)) + '" data-end="' + escapeHtml(formatUtcInput(state.visibleEndTs)) + '">+</button>';
+                        html += '<button type="button" class="symbolic-gap-add" style="left:' + positionPercent(centerTail) + '%;" title="Ajouter un texte" data-open-create data-display-code="' + escapeHtml(rowCode) + '" data-schedule-type="' + escapeHtml(rowScheduleType) + '" data-start="' + escapeHtml(formatUtcInput(cursor)) + '" data-end="' + escapeHtml(formatUtcInput(state.visibleEndTs)) + '">+</button>';
                     }
 
                     clipped.forEach(function (entryPack) {

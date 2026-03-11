@@ -125,10 +125,7 @@ final class SymbolicTextController extends AbstractController
         $createInput->starts_at_utc = $startUtc->format('Y-m-d H:i');
         $createInput->ends_at_utc = $endUtc->format('Y-m-d H:i');
         $createForm = $this->createForm(SymbolicTextCreateType::class, $createInput, [
-            'row_definitions' => array_values(array_filter(
-                $rowDefinitions,
-                static fn (array $row): bool => ($row['code'] ?? '') !== 'symbolic_text'
-            )),
+            'row_definitions' => $rowDefinitions,
             'action' => $this->generateUrl('admin_symbolic_text_create'),
             'method' => 'POST',
         ]);
@@ -199,10 +196,7 @@ final class SymbolicTextController extends AbstractController
         SwDisplayRepository $displayRepository
     ): RedirectResponse {
         $redirect = $this->redirectToTimeline($request);
-        $rowDefinitions = array_values(array_filter(
-            $this->rowDefinitions(),
-            static fn (array $row): bool => ($row['code'] ?? '') !== 'symbolic_text'
-        ));
+        $rowDefinitions = $this->rowDefinitions();
 
         $input = new SymbolicTextCreateInput();
         $form = $this->createForm(SymbolicTextCreateType::class, $input, [
@@ -484,7 +478,12 @@ final class SymbolicTextController extends AbstractController
             $msMappingRepository->findPhaseEventsForTimeline($startUtc, $endUtc, 10000)
         );
         $astronomyPoints = $this->buildAstronomyPoints($phaseEvents, $startUtc, $endUtc, $durationSeconds);
-        $symbolicSegments = $this->buildSymbolicSegments($phaseEvents, $startUtc, $endUtc, $durationSeconds);
+        $symbolicSegments = $this->buildInfluenceOrbSegmentsFromOrbWindow(
+            $orbWindowRepository,
+            $startUtc,
+            $endUtc,
+            $durationSeconds
+        );
         $lunationSegments = $this->buildLunationYearSegments($phaseEvents, $startUtc, $endUtc, $durationSeconds);
         $textSymbolicZones = $this->buildTextSymbolicZonesFromOrbWindow(
             $orbWindowRepository,
@@ -780,61 +779,65 @@ final class SymbolicTextController extends AbstractController
      * @param array<int, array{phase:int, phase_hour:\DateTimeImmutable}> $phaseEvents
      * @return array<int, array<string, mixed>>
      */
-    private function buildSymbolicSegments(
-        array $phaseEvents,
+    private function buildInfluenceOrbSegmentsFromOrbWindow(
+        OrbWindowRepository $orbWindowRepository,
         \DateTimeImmutable $startUtc,
         \DateTimeImmutable $endUtc,
         int $durationSeconds
     ): array {
-        $segments = [];
-        $startTs = $startUtc->getTimestamp();
-        $endTs = $endUtc->getTimestamp();
-        $count = count($phaseEvents);
+        $sourceZones = $orbWindowRepository->findTimelineZonesByFamilyAndMethod(
+            OrbWindowParseService::FAMILY_INFLUENCE_ORB,
+            OrbWindowParseService::METHOD_INFLUENCE_ORB,
+            $startUtc,
+            $endUtc
+        );
 
-        if ($count === 0) {
-            return $segments;
+        if ($sourceZones === []) {
+            return [];
         }
 
-        for ($i = 0; $i < $count; $i++) {
-            $currentTs = $phaseEvents[$i]['phase_hour']->getTimestamp();
-            $previousTs = $i > 0 ? $phaseEvents[$i - 1]['phase_hour']->getTimestamp() : null;
-            $nextTs = $i < ($count - 1) ? $phaseEvents[$i + 1]['phase_hour']->getTimestamp() : null;
+        $windowStartTs = $startUtc->getTimestamp();
+        $windowEndTs = $endUtc->getTimestamp();
+        $segments = [];
 
-            if ($previousTs === null && $nextTs === null) {
+        foreach ($sourceZones as $zone) {
+            $fullStartTs = $zone['starts_at_utc']->getTimestamp();
+            $fullEndTs = $zone['ends_at_utc']->getTimestamp();
+            if ($fullEndTs <= $fullStartTs) {
+                continue;
+            }
+            if ($fullEndTs <= $windowStartTs || $fullStartTs >= $windowEndTs) {
                 continue;
             }
 
-            $symbolicStartTs = $previousTs !== null
-                ? (int) floor(($previousTs + $currentTs) / 2)
-                : (int) floor($currentTs - (($nextTs - $currentTs) / 2));
-
-            $symbolicEndTs = $nextTs !== null
-                ? (int) floor(($currentTs + $nextTs) / 2)
-                : (int) floor($currentTs + (($currentTs - $previousTs) / 2));
-
-            if ($symbolicEndTs <= $symbolicStartTs) {
+            $visibleStartTs = max($fullStartTs, $windowStartTs);
+            $visibleEndTs = min($fullEndTs, $windowEndTs);
+            if ($visibleEndTs <= $visibleStartTs) {
                 continue;
             }
 
-            if ($symbolicEndTs <= $startTs || $symbolicStartTs >= $endTs) {
-                continue;
-            }
-
-            $visibleStartTs = max($symbolicStartTs, $startTs);
-            $visibleEndTs = min($symbolicEndTs, $endTs);
-            $meta = $this->phaseMeta((int) $phaseEvents[$i]['phase']);
+            $phaseKey = (string) ($zone['phase_key'] ?? '');
+            $meta = $this->influenceOrbMetaFromPhaseKey($phaseKey);
 
             $segments[] = [
                 'start_ts' => $visibleStartTs,
                 'end_ts' => $visibleEndTs,
-                'full_start_ts' => $symbolicStartTs,
-                'full_end_ts' => $symbolicEndTs,
-                'left' => $this->positionPercent($visibleStartTs, $startTs, $durationSeconds),
+                'full_start_ts' => $fullStartTs,
+                'full_end_ts' => $fullEndTs,
+                'left' => $this->positionPercent($visibleStartTs, $windowStartTs, $durationSeconds),
                 'width' => $this->widthPercent($visibleStartTs, $visibleEndTs, $durationSeconds),
                 'label' => $meta['label'],
                 'color' => $meta['color'],
+                'phase_key' => $phaseKey,
             ];
         }
+
+        usort(
+            $segments,
+            static fn (array $a, array $b): int =>
+                ($a['full_start_ts'] <=> $b['full_start_ts'])
+                ?: ($a['full_end_ts'] <=> $b['full_end_ts'])
+        );
 
         return $segments;
     }
@@ -1078,6 +1081,26 @@ final class SymbolicTextController extends AbstractController
         }
 
         return 'shade-1';
+    }
+
+    /**
+     * @return array{label:string,color:string}
+     */
+    private function influenceOrbMetaFromPhaseKey(string $phaseKey): array
+    {
+        $key = strtolower(trim($phaseKey));
+
+        return match ($key) {
+            'new_moon' => ['label' => 'Nouvelle lune', 'color' => '#6A7078'],
+            'waxing_crescent' => ['label' => 'Premier croissant', 'color' => '#727983'],
+            'first_quarter' => ['label' => 'Premier quartier', 'color' => '#7A818A'],
+            'waxing_gibbous' => ['label' => 'Gibbeuse croissante', 'color' => '#848A92'],
+            'full_moon' => ['label' => 'Pleine lune', 'color' => '#8D929A'],
+            'waning_gibbous' => ['label' => 'Gibbeuse decroissante', 'color' => '#777E88'],
+            'last_quarter' => ['label' => 'Dernier quartier', 'color' => '#6F7680'],
+            'waning_crescent' => ['label' => 'Dernier croissant', 'color' => '#666E78'],
+            default => ['label' => $phaseKey !== '' ? $phaseKey : 'Influence', 'color' => '#737A84'],
+        };
     }
 
     /**

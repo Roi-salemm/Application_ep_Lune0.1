@@ -6,15 +6,15 @@
 {% block title %}{{ page_title|default('Administration') }}{% endblock %}
 
 {% block stylesheets %}
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260309-orb-window">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=20260311-sidebar-icons">
 {% endblock %}
 
 {% block body %}
 <div class="admin-layout">
     <aside class="admin-sidebar">
         <div class="admin-sidebar__brand">
-            <div class="admin-sidebar__logo">LE</div>
-            <span class="admin-sidebar__brand-text">Lune EP</span>
+            <div class="admin-sidebar__logo">EP</div>
+            <span class="admin-sidebar__brand-text">EP CC - Moon</span>
         </div>
         <nav class="admin-sidebar__nav" aria-label="Navigation admin">
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'horizon' ? 'admin-sidebar__item--active' : '' }}"
@@ -120,6 +120,18 @@
                     </svg>
                 </span>
                 <span class="admin-sidebar__label">Symbolic Text</span>
+            </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'sw_text_variant' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_sw_text_variant') }}" style="--delay: 7.65">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M5 6h14M5 12h14M5 18h14" />
+                        <circle cx="9" cy="6" r="1.2" />
+                        <circle cx="15" cy="12" r="1.2" />
+                        <circle cx="9" cy="18" r="1.2" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">SWTextVariant</span>
             </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'card_management' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_card_management') }}" style="--delay: 7.7">

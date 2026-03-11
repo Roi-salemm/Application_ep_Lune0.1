@@ -1,0 +1,511 @@
+{# Ecran admin SWTextVariant.
+   Pourquoi: afficher toute la table, editer une ligne, et mettre a jour les flags en lot via AJAX.
+   Info: phase_key reste numerique en base, le libelle FR n'est qu'un support visuel. #}
+{% extends 'admin/base.html.twig' %}
+
+{% set phase_labels = {
+    0: 'Nouvelle lune',
+    1: 'Premier croissant',
+    2: 'Premier quartier',
+    3: 'Gibbeuse croissante',
+    4: 'Pleine lune',
+    5: 'Gibbeuse decroissante',
+    6: 'Dernier quartier',
+    7: 'Dernier croissant'
+} %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <section class="admin-card">
+        <div class="admin-modal__actions">
+            <button type="button" class="admin-button admin-button--primary" data-open-new>Nouveau</button>
+        </div>
+    </section>
+
+    <section class="admin-card" id="sw-text-variant-form-card" hidden>
+        <div class="admin-card__header">
+            <h2 class="admin-card__title" data-form-title>Nouveau texte</h2>
+        </div>
+        {{ form_start(create_form, {
+            'attr': {
+                'class': 'admin-form',
+                'data-variant-form': '',
+                'data-create-action': path('admin_sw_text_variant_create'),
+                'data-update-action-template': path('admin_sw_text_variant_update', {id: 'VARIANT_ID'})
+            }
+        }) }}
+            <div class="admin-form__row">
+                <label class="admin-form__field"><span class="admin-form__label">family</span>{{ form_widget(create_form.family) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">reading_mode</span>{{ form_widget(create_form.readingMode) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">lang</span>{{ form_widget(create_form.lang) }}</label>
+            </div>
+            <div class="admin-form__row">
+                <label class="admin-form__field"><span class="admin-form__label">phase_key</span>{{ form_widget(create_form.phaseKey) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">variant_no</span>{{ form_widget(create_form.variantNo) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">text_version</span>{{ form_widget(create_form.textVersion) }}</label>
+            </div>
+            <div class="admin-form__row">
+                <label class="admin-form__field"><span class="admin-form__label">title</span>{{ form_widget(create_form.title) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">source_variant_id</span>{{ form_widget(create_form.source_variant_id) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">comment</span>{{ form_widget(create_form.comment) }}</label>
+            </div>
+            <div class="admin-form__row">
+                <label class="admin-form__field"><span class="admin-form__label">card_text</span>{{ form_widget(create_form.cardText) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">full_text</span>{{ form_widget(create_form.fullText) }}</label>
+            </div>
+            <div class="admin-form__row">
+                <label class="admin-form__field"><span class="admin-form__label">editorial_notes</span>{{ form_widget(create_form.editorialNotes) }}</label>
+            </div>
+            <div class="admin-form__row symbolic-checks">
+                <label>{{ form_widget(create_form.isValidated) }} is_validated</label>
+                <label>{{ form_widget(create_form.isUsed) }} is_used</label>
+            </div>
+            {{ form_rest(create_form) }}
+            <div class="admin-modal__actions">
+                <button class="admin-button admin-button--primary" type="submit" data-form-submit>Creer</button>
+                <button class="admin-button" type="button" data-close-form>Annuler</button>
+            </div>
+        {{ form_end(create_form) }}
+    </section>
+
+    <section class="admin-card admin-card--table">
+        <div class="admin-modal__actions swtv-table-actions">
+            <button
+                type="button"
+                class="admin-button admin-button--primary"
+                data-save-flags
+                data-save-url="{{ path('admin_sw_text_variant_bulk_update_flags') }}"
+                data-csrf-token="{{ csrf_token('bulk_toggle_sw_text_variant') }}"
+                disabled
+            >
+                Mettre a jour
+            </button>
+            <span class="swtv-save-status" data-save-status>Aucune modification.</span>
+        </div>
+        <div class="admin-table-wrap">
+            <table class="admin-table swtv-table">
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="id" data-sort-type="int">id</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="family" data-sort-type="text">family</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="reading_mode" data-sort-type="text">reading_mode</button></th>
+                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="lang" data-sort-type="text">lang</button></th>
+                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="phase_key" data-sort-type="int">phase_key</button></th>
+                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="variant_no" data-sort-type="int">variant_no</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="title" data-sort-type="text">title</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="card_text" data-sort-type="text">card_text</button></th>
+                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="text_version" data-sort-type="int">text_version</button></th>
+                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="source_variant_id" data-sort-type="int">source_variant_id</button></th>
+                        <th class="admin-table__cell swtv-col--switch"><button type="button" class="admin-table__sort" data-sort-key="is_validated" data-sort-type="bool">is_validated</button></th>
+                        <th class="admin-table__cell swtv-col--switch"><button type="button" class="admin-table__sort" data-sort-key="is_used" data-sort-type="bool">is_used</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="updated_at_utc" data-sort-type="date">updated_at_utc</button></th>
+                        <th class="admin-table__cell admin-table__cell--actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody data-variant-tbody>
+                    {% for variant in variants %}
+                        {% set phaseLabel = phase_labels[variant.phaseKey] ?? ('Phase ' ~ variant.phaseKey) %}
+                        <tr class="admin-table__row"
+                            data-variant-row
+                            data-id="{{ variant.id }}"
+                            data-family="{{ variant.family|e('html_attr') }}"
+                            data-reading-mode="{{ variant.readingMode|e('html_attr') }}"
+                            data-lang="{{ variant.lang|e('html_attr') }}"
+                            data-phase-key="{{ variant.phaseKey }}"
+                            data-variant-no="{{ variant.variantNo }}"
+                            data-title="{{ (variant.title ?? '')|e('html_attr') }}"
+                            data-card-text="{{ variant.cardText|e('html_attr') }}"
+                            data-full-text="{{ (variant.fullText ?? '')|e('html_attr') }}"
+                            data-text-version="{{ variant.textVersion }}"
+                            data-is-validated="{{ variant.isValidated ? '1' : '0' }}"
+                            data-is-used="{{ variant.isUsed ? '1' : '0' }}"
+                            data-comment="{{ (variant.comment ?? '')|e('html_attr') }}"
+                            data-editorial-notes="{{ (variant.editorialNotes ?? '')|e('html_attr') }}"
+                            data-source-variant-id="{{ variant.sourceVariant ? variant.sourceVariant.id : '' }}"
+                            data-sort-id="{{ variant.id }}"
+                            data-sort-family="{{ variant.family|lower|e('html_attr') }}"
+                            data-sort-reading_mode="{{ variant.readingMode|lower|e('html_attr') }}"
+                            data-sort-lang="{{ variant.lang|lower|e('html_attr') }}"
+                            data-sort-phase_key="{{ variant.phaseKey }}"
+                            data-sort-variant_no="{{ variant.variantNo }}"
+                            data-sort-title="{{ (variant.title ?? '')|lower|e('html_attr') }}"
+                            data-sort-card_text="{{ variant.cardText|lower|e('html_attr') }}"
+                            data-sort-text_version="{{ variant.textVersion }}"
+                            data-sort-source_variant_id="{{ variant.sourceVariant ? variant.sourceVariant.id : '-1' }}"
+                            data-sort-is_validated="{{ variant.isValidated ? '1' : '0' }}"
+                            data-sort-is_used="{{ variant.isUsed ? '1' : '0' }}"
+                            data-sort-updated_at_utc="{{ variant.updatedAtUtc ? variant.updatedAtUtc|date('U') : '0' }}">
+                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.id }}</td>
+                            <td class="admin-table__cell">{{ variant.family }}</td>
+                            <td class="admin-table__cell">{{ variant.readingMode }}</td>
+                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.lang }}</td>
+                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.phaseKey }} ({{ phaseLabel }})</td>
+                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.variantNo }}</td>
+                            <td class="admin-table__cell">{{ variant.title }}</td>
+                            <td class="admin-table__cell swtv-cell--card">{{ variant.cardText }}</td>
+                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.textVersion }}</td>
+                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.sourceVariant ? variant.sourceVariant.id : '' }}</td>
+                            <td class="admin-table__cell swtv-cell--switch">
+                                <label class="swtv-switch" title="is_validated">
+                                    <input
+                                        type="checkbox"
+                                        class="swtv-switch__input"
+                                        data-flag-switch
+                                        data-flag-name="is_validated"
+                                        {{ variant.isValidated ? 'checked' : '' }}
+                                    >
+                                    <span class="swtv-switch__slider"></span>
+                                </label>
+                            </td>
+                            <td class="admin-table__cell swtv-cell--switch">
+                                <label class="swtv-switch" title="is_used">
+                                    <input
+                                        type="checkbox"
+                                        class="swtv-switch__input"
+                                        data-flag-switch
+                                        data-flag-name="is_used"
+                                        {{ variant.isUsed ? 'checked' : '' }}
+                                    >
+                                    <span class="swtv-switch__slider"></span>
+                                </label>
+                            </td>
+                            <td class="admin-table__cell">{{ variant.updatedAtUtc ? variant.updatedAtUtc|date('Y-m-d H:i') : '' }}</td>
+                            <td class="admin-table__cell admin-table__cell--actions">
+                                <form method="post" action="{{ path('admin_sw_text_variant_delete', {id: variant.id}) }}" onsubmit="return confirm('Confirmer la suppression de cette ligne ?');">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('delete_sw_text_variant_' ~ variant.id) }}">
+                                    <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td class="admin-table__cell" colspan="14">Aucune ligne en base.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+            var formCard = document.getElementById('sw-text-variant-form-card');
+            var form = document.querySelector('[data-variant-form]');
+            var formTitle = document.querySelector('[data-form-title]');
+            var formSubmit = document.querySelector('[data-form-submit]');
+            var openNewButton = document.querySelector('[data-open-new]');
+            var closeButton = document.querySelector('[data-close-form]');
+            var saveFlagsButton = document.querySelector('[data-save-flags]');
+            var saveStatus = document.querySelector('[data-save-status]');
+            var tableBody = document.querySelector('[data-variant-tbody]');
+            var pendingChanges = {};
+            var sortingState = { key: null, direction: 'asc' };
+            var isSavingFlags = false;
+
+            if (!formCard || !form || !formTitle || !formSubmit) {
+                return;
+            }
+
+            function field(name) {
+                return form.querySelector('[data-field="' + name + '"]');
+            }
+
+            function setField(name, value) {
+                var input = field(name);
+                if (!input) {
+                    return;
+                }
+                if (input.type === 'checkbox') {
+                    input.checked = value === '1';
+                    return;
+                }
+                input.value = value || '';
+            }
+
+            function resetForCreate() {
+                form.reset();
+                setField('family', 'symbolic');
+                setField('reading_mode', 'weather');
+                setField('lang', field('lang') && field('lang').value ? field('lang').value : 'fr');
+                form.setAttribute('action', form.getAttribute('data-create-action') || '');
+                formTitle.textContent = 'Nouveau texte';
+                formSubmit.textContent = 'Creer';
+                document.querySelectorAll('[data-variant-row]').forEach(function (row) {
+                    row.classList.remove('is-active');
+                });
+                formCard.hidden = false;
+                formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            function fillForEdit(row) {
+                var id = row.getAttribute('data-id') || '';
+                var template = form.getAttribute('data-update-action-template') || '';
+                if (!id || !template) {
+                    return;
+                }
+
+                form.setAttribute('action', template.replace('VARIANT_ID', encodeURIComponent(id)));
+                formTitle.textContent = 'Modifier un texte';
+                formSubmit.textContent = 'Modifier le texte';
+
+                setField('family', row.getAttribute('data-family') || 'symbolic');
+                setField('reading_mode', row.getAttribute('data-reading-mode') || 'weather');
+                setField('lang', row.getAttribute('data-lang') || 'fr');
+                setField('phase_key', row.getAttribute('data-phase-key') || '0');
+                setField('variant_no', row.getAttribute('data-variant-no') || '1');
+                setField('title', row.getAttribute('data-title') || '');
+                setField('card_text', row.getAttribute('data-card-text') || '');
+                setField('full_text', row.getAttribute('data-full-text') || '');
+                setField('text_version', row.getAttribute('data-text-version') || '1');
+                setField('is_validated', row.getAttribute('data-is-validated') || '0');
+                setField('is_used', row.getAttribute('data-is-used') || '0');
+                setField('comment', row.getAttribute('data-comment') || '');
+                setField('editorial_notes', row.getAttribute('data-editorial-notes') || '');
+                setField('source_variant_id', row.getAttribute('data-source-variant-id') || '');
+
+                document.querySelectorAll('[data-variant-row]').forEach(function (node) {
+                    node.classList.remove('is-active');
+                });
+                row.classList.add('is-active');
+                formCard.hidden = false;
+                formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            function findRowById(id) {
+                var rows = document.querySelectorAll('[data-variant-row]');
+                for (var i = 0; i < rows.length; i++) {
+                    if (rows[i].getAttribute('data-id') === id) {
+                        return rows[i];
+                    }
+                }
+                return null;
+            }
+
+            function updateSaveUi(message) {
+                if (!saveFlagsButton || !saveStatus) {
+                    return;
+                }
+                var changedCount = Object.keys(pendingChanges).length;
+                saveFlagsButton.disabled = changedCount === 0 || isSavingFlags;
+                saveStatus.textContent = message || (changedCount > 0 ? changedCount + ' ligne(s) en attente.' : 'Aucune modification.');
+            }
+
+            function buildPendingEntryFromRow(row) {
+                return {
+                    id: row.getAttribute('data-id') || '',
+                    is_validated: row.getAttribute('data-is-validated') === '1' ? 1 : 0,
+                    is_used: row.getAttribute('data-is-used') === '1' ? 1 : 0
+                };
+            }
+
+            function syncDirtyState(row) {
+                var id = row.getAttribute('data-id') || '';
+                var pending = pendingChanges[id];
+                if (!pending) {
+                    row.classList.remove('is-dirty');
+                    return;
+                }
+
+                var originalValidated = row.getAttribute('data-is-validated') === '1' ? 1 : 0;
+                var originalUsed = row.getAttribute('data-is-used') === '1' ? 1 : 0;
+
+                if (pending.is_validated === originalValidated && pending.is_used === originalUsed) {
+                    delete pendingChanges[id];
+                    row.classList.remove('is-dirty');
+                } else {
+                    row.classList.add('is-dirty');
+                }
+            }
+
+            function toComparableValue(row, key, type) {
+                var raw = row.getAttribute('data-sort-' + key) || '';
+                if (type === 'int' || type === 'date' || type === 'bool') {
+                    var parsed = parseInt(raw, 10);
+                    return Number.isNaN(parsed) ? 0 : parsed;
+                }
+
+                return raw.toLowerCase();
+            }
+
+            function applySort(key, type) {
+                if (!tableBody) {
+                    return;
+                }
+
+                sortingState.direction = sortingState.key === key && sortingState.direction === 'asc' ? 'desc' : 'asc';
+                sortingState.key = key;
+
+                var rows = Array.prototype.slice.call(tableBody.querySelectorAll('[data-variant-row]'));
+                rows.sort(function (a, b) {
+                    var left = toComparableValue(a, key, type);
+                    var right = toComparableValue(b, key, type);
+
+                    if (left < right) {
+                        return sortingState.direction === 'asc' ? -1 : 1;
+                    }
+                    if (left > right) {
+                        return sortingState.direction === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                });
+
+                rows.forEach(function (row) {
+                    tableBody.appendChild(row);
+                });
+
+                // On met a jour un indicateur visuel simple (neutre/asc/desc) pour chaque bouton de tri.
+                document.querySelectorAll('.admin-table__sort').forEach(function (button) {
+                    button.classList.remove('is-active');
+                    button.classList.remove('is-asc');
+                    button.classList.remove('is-desc');
+                });
+
+                var activeButton = document.querySelector('.admin-table__sort[data-sort-key="' + key + '"]');
+                if (activeButton) {
+                    activeButton.classList.add('is-active');
+                    activeButton.classList.add(sortingState.direction === 'asc' ? 'is-asc' : 'is-desc');
+                }
+            }
+
+            function savePendingFlags() {
+                if (!saveFlagsButton) {
+                    return;
+                }
+
+                var saveUrl = saveFlagsButton.getAttribute('data-save-url') || '';
+                var csrfToken = saveFlagsButton.getAttribute('data-csrf-token') || '';
+                var items = Object.keys(pendingChanges).map(function (id) {
+                    return pendingChanges[id];
+                });
+
+                if (!saveUrl || !csrfToken || items.length === 0) {
+                    updateSaveUi();
+                    return;
+                }
+
+                isSavingFlags = true;
+                saveFlagsButton.textContent = 'Mise a jour...';
+                updateSaveUi('Envoi des modifications...');
+
+                fetch(saveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        _token: csrfToken,
+                        items: items
+                    })
+                })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(function (payload) {
+                        if (!payload || payload.success !== true) {
+                            throw new Error(payload && payload.message ? payload.message : 'Echec de sauvegarde.');
+                        }
+
+                        items.forEach(function (item) {
+                            var id = String(item.id || '');
+                            var row = findRowById(id);
+                            if (!row) {
+                                return;
+                            }
+                            var isValidated = item.is_validated === 1 ? '1' : '0';
+                            var isUsed = item.is_used === 1 ? '1' : '0';
+                            row.setAttribute('data-is-validated', isValidated);
+                            row.setAttribute('data-is-used', isUsed);
+                            row.setAttribute('data-sort-is_validated', isValidated);
+                            row.setAttribute('data-sort-is_used', isUsed);
+                            row.classList.remove('is-dirty');
+                        });
+
+                        pendingChanges = {};
+                        updateSaveUi((payload.updated || 0) + ' ligne(s) mise(s) a jour.');
+                    })
+                    .catch(function (error) {
+                        updateSaveUi('Erreur: ' + error.message);
+                    })
+                    .finally(function () {
+                        isSavingFlags = false;
+                        saveFlagsButton.textContent = 'Mettre a jour';
+                        updateSaveUi(saveStatus ? saveStatus.textContent : '');
+                    });
+            }
+
+            if (openNewButton) {
+                openNewButton.addEventListener('click', function () {
+                    resetForCreate();
+                });
+            }
+
+            if (closeButton) {
+                closeButton.addEventListener('click', function () {
+                    formCard.hidden = true;
+                });
+            }
+
+            document.querySelectorAll('[data-variant-row]').forEach(function (row) {
+                row.addEventListener('click', function (event) {
+                    if (event.target.closest('button') || event.target.closest('form') || event.target.closest('.swtv-switch')) {
+                        return;
+                    }
+                    fillForEdit(row);
+                });
+            });
+
+            document.querySelectorAll('[data-flag-switch]').forEach(function (switchInput) {
+                switchInput.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                });
+
+                switchInput.addEventListener('change', function () {
+                    var row = switchInput.closest('[data-variant-row]');
+                    if (!row) {
+                        return;
+                    }
+
+                    var id = row.getAttribute('data-id') || '';
+                    var flagName = switchInput.getAttribute('data-flag-name') || '';
+                    if (!id || (flagName !== 'is_validated' && flagName !== 'is_used')) {
+                        return;
+                    }
+
+                    if (!pendingChanges[id]) {
+                        pendingChanges[id] = buildPendingEntryFromRow(row);
+                    }
+
+                    pendingChanges[id][flagName] = switchInput.checked ? 1 : 0;
+                    syncDirtyState(row);
+                    updateSaveUi();
+                });
+            });
+
+            document.querySelectorAll('.admin-table__sort').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var key = button.getAttribute('data-sort-key') || '';
+                    var type = button.getAttribute('data-sort-type') || 'text';
+                    if (!key) {
+                        return;
+                    }
+                    applySort(key, type);
+                });
+            });
+
+            if (saveFlagsButton) {
+                saveFlagsButton.addEventListener('click', function () {
+                    savePendingFlags();
+                });
+            }
+
+            updateSaveUi();
+        })();
+    </script>
+{% endblock %}
