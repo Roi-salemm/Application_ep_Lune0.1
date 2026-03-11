@@ -1990,13 +1990,48 @@ thead .admin-table__cell {
 }
 
 .symbolic-layout__labels {
+    position: relative;
     background: rgba(7, 9, 12, 0.8);
     border-right: 1px solid var(--admin-border);
 }
 
+.symbolic-label-groups {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.symbolic-label-group {
+    position: absolute;
+    left: 10px;
+    width: 4px;
+    border-radius: 999px;
+    opacity: 0;
+}
+
+.symbolic-label-group--symbolic-all {
+    left: 2px;
+    width: 5px;
+    background: linear-gradient(180deg, rgba(168, 188, 210, 0.2), rgba(196, 216, 238, 0.66), rgba(168, 188, 210, 0.2));
+    box-shadow: 0 0 0 1px rgba(196, 216, 238, 0.2), 0 0 10px rgba(196, 216, 238, 0.16);
+}
+
+.symbolic-label-group--family-weather {
+    left: 10px;
+    background: linear-gradient(180deg, rgba(75, 154, 233, 0.22), rgba(95, 183, 255, 0.68), rgba(75, 154, 233, 0.22));
+    box-shadow: 0 0 0 1px rgba(95, 183, 255, 0.16), 0 0 12px rgba(95, 183, 255, 0.2);
+}
+
+.symbolic-label-group--event-stack {
+    left: 18px;
+    background: linear-gradient(180deg, rgba(222, 193, 124, 0.2), rgba(235, 208, 145, 0.62), rgba(222, 193, 124, 0.2));
+    box-shadow: 0 0 0 1px rgba(235, 208, 145, 0.14), 0 0 10px rgba(235, 208, 145, 0.16);
+}
+
 .symbolic-label {
     height: var(--symbolic-row-height);
-    padding: 12px 10px;
+    padding: 12px 10px 12px 30px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     color: #f0f4f8;
     font-size: 12px;
@@ -2007,6 +2042,8 @@ thead .admin-table__cell {
     overflow: hidden;
     text-overflow: ellipsis;
     box-sizing: border-box;
+    position: relative;
+    z-index: 1;
 }
 
 .symbolic-label--thin {
@@ -2017,7 +2054,7 @@ thead .admin-table__cell {
 }
 
 .symbolic-label--sub {
-    padding-left: 18px;
+    padding-left: 40px;
     color: #d7dde3;
 }
 
@@ -2500,6 +2537,18 @@ thead .admin-table__cell {
 
 .symbolic-entry.is-warning {
     border-color: rgba(240, 92, 92, 0.55);
+}
+
+.symbolic-entry.is-ready-past,
+.symbolic-text-entry.is-ready-past {
+    border-color: rgba(226, 196, 118, 0.58);
+    box-shadow: inset 0 0 0 1px rgba(226, 196, 118, 0.14);
+}
+
+.symbolic-entry.is-ready-upcoming,
+.symbolic-text-entry.is-ready-upcoming {
+    border-color: rgba(248, 222, 144, 0.95);
+    box-shadow: 0 0 0 1px rgba(248, 222, 144, 0.44), 0 0 14px rgba(248, 222, 144, 0.34), inset 0 0 0 1px rgba(255, 239, 194, 0.26);
 }
 
 .symbolic-entry__text {

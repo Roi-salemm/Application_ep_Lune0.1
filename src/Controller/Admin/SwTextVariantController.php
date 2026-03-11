@@ -33,7 +33,7 @@ final class SwTextVariantController extends AbstractController
         return $this->render('admin/sw_text_variant.html.twig', [
             'active_menu' => 'sw_text_variant',
             'page_title' => 'SWTextVariant',
-            'page_subtitle' => 'CRUD des variantes texte (family=symbolic, reading_mode=weather).',
+            'page_subtitle' => 'CRUD des variantes texte (family=symbolic, reading_mode=SYM_Weather).',
             'variants' => $variants,
             'create_form' => $createForm->createView(),
         ]);
@@ -60,7 +60,7 @@ final class SwTextVariantController extends AbstractController
         }
 
         $variant->setFamily('symbolic');
-        $variant->setReadingMode('weather');
+        $variant->setReadingMode('SYM_Weather');
         if ($this->applySourceVariantFromForm($form, $variant, $repository) === false) {
             return $this->redirectToRoute('admin_sw_text_variant');
         }
@@ -105,7 +105,7 @@ final class SwTextVariantController extends AbstractController
         }
 
         $variant->setFamily('symbolic');
-        $variant->setReadingMode('weather');
+        $variant->setReadingMode('SYM_Weather');
         if ($this->applySourceVariantFromForm($form, $variant, $repository) === false) {
             return $this->redirectToRoute('admin_sw_text_variant');
         }

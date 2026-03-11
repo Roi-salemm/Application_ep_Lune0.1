@@ -76,7 +76,7 @@ class SwScheduleRepository extends ServiceEntityRepository
         \DateTimeImmutable $beforeUtc,
         int $limit = 4000,
         string $family = 'symbolic',
-        string $readingMode = 'weather',
+        string $readingMode = 'SYM_Weather',
         string $lang = 'fr'
     ): array {
         return $this->createQueryBuilder('s')

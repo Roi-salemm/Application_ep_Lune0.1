@@ -6,6 +6,7 @@
 {% set page_title = page_title|default('Symbolic Text') %}
 {% set page_subtitle = page_subtitle|default('Edition timeline UTC') %}
 {% set active_menu = active_menu|default('symbolic_text') %}
+{% set now_ts = "now"|date('U') %}
 
 {% block admin_content %}
     {% for label, messages in app.flashes %}
@@ -35,16 +36,21 @@
 
         <div class="symbolic-layout">
             <aside class="symbolic-layout__labels" aria-label="Lignes timeline">
-                <div class="symbolic-label">Temps</div>
-                <div class="symbolic-label">Astronomie</div>
-                <div class="symbolic-label symbolic-label--thin">Lune annee</div>
-                <div class="symbolic-label symbolic-label--compact">Family Symbolic</div>
-                <div class="symbolic-label symbolic-label--compact">Weather parse</div>
-                <div class="symbolic-label symbolic-label--compact">Weather</div>
-                <div class="symbolic-label symbolic-label--compact">Evenement :</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">astronomical event</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic">influence</div>
-                <div class="symbolic-label symbolic-label--sub symbolic-label--compact">lunationName</div>
+                <div class="symbolic-label-groups" aria-hidden="true">
+                    <span class="symbolic-label-group symbolic-label-group--symbolic-all" data-label-group="symbolic-all"></span>
+                    <span class="symbolic-label-group symbolic-label-group--family-weather" data-label-group="family-weather"></span>
+                    <span class="symbolic-label-group symbolic-label-group--event-stack" data-label-group="event-stack"></span>
+                </div>
+                <div class="symbolic-label" data-label-row="real">Temps</div>
+                <div class="symbolic-label" data-label-row="astronomy">Astronomie</div>
+                <div class="symbolic-label symbolic-label--thin" data-label-row="lunation">Lune annee</div>
+                <div class="symbolic-label symbolic-label--compact" data-label-row="family_symbolic">Family Symbolic</div>
+                <div class="symbolic-label symbolic-label--compact" data-label-row="weather_parse">Weather parse</div>
+                <div class="symbolic-label symbolic-label--compact" data-label-row="weather">Weather</div>
+                <div class="symbolic-label symbolic-label--compact" data-label-row="event_group">Evenement :</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact" data-label-row="influence_stellar">astronomical event</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact symbolic-label--synodic" data-label-row="influence_synodic">influence</div>
+                <div class="symbolic-label symbolic-label--sub symbolic-label--compact" data-label-row="appellation">lunationName</div>
             </aside>
 
             <div class="symbolic-layout__timeline"
@@ -59,7 +65,7 @@
                     {% endfor %}
                 </div>
 
-                <div class="symbolic-track symbolic-track--real" data-track-real>
+                <div class="symbolic-track symbolic-track--real" data-track-real data-track-row-id="real">
                     {% for segment in real_segments %}
                         <div class="symbolic-real-cell" style="left: {{ segment.left }}%; width: {{ segment.width }}%;">
                             {{ segment.label }}
@@ -67,7 +73,7 @@
                     {% endfor %}
                 </div>
 
-                <div class="symbolic-track symbolic-track--astronomy" data-track-astronomy>
+                <div class="symbolic-track symbolic-track--astronomy" data-track-astronomy data-track-row-id="astronomy">
                     {% if astronomy_points is empty %}
                         <div class="symbolic-track__empty">Aucun evenement de phase dans cette fenetre.</div>
                     {% else %}
@@ -81,7 +87,7 @@
                     {% endif %}
                 </div>
 
-                <div class="symbolic-track symbolic-track--lunation" data-track-lunation>
+                <div class="symbolic-track symbolic-track--lunation" data-track-lunation data-track-row-id="lunation">
                     {% set lunation_segments_safe = lunation_segments|default([]) %}
                     {% if lunation_segments_safe is empty %}
                         <div class="symbolic-track__empty">Lunaisons indisponibles dans cette fenetre.</div>
@@ -96,7 +102,7 @@
                     {% endif %}
                 </div>
 
-                <div class="symbolic-track symbolic-track--symbolic" data-track-symbolic>
+                <div class="symbolic-track symbolic-track--symbolic" data-track-symbolic data-track-row-id="family_symbolic">
                     {% if symbolic_segments is empty %}
                         <div class="symbolic-track__empty">Influence symbolique indisponible (orb_window influence_orb / midpoint_partition_v1 absent).</div>
                     {% else %}
@@ -115,23 +121,26 @@
 
                 <div class="symbolic-track symbolic-track--parse"
                      data-track-weather-parse
+                     data-track-row-id="weather_parse"
                      data-parse-action="{{ path('admin_symbolic_text_parse_weather_week') }}"
                      data-parse-token="{{ csrf_token('parse_symbolic_text_weather_week') }}"></div>
 
-                <div class="symbolic-track symbolic-track--content symbolic-track--weather" data-track-weather></div>
+                <div class="symbolic-track symbolic-track--content symbolic-track--weather" data-track-weather data-track-row-id="weather"></div>
 
-                <div class="symbolic-track symbolic-track--event-group" aria-hidden="true"></div>
+                <div class="symbolic-track symbolic-track--event-group" data-track-row-id="event_group" aria-hidden="true"></div>
 
                 {% for row in row_definitions %}
                     {% if row.code == 'influence_synodic' %}
                         <div class="symbolic-track symbolic-track--synodic"
                              data-track-synodic
+                             data-track-row-id="{{ row.code }}"
                              data-display-code="{{ row.code }}"></div>
                     {% else %}
                         {% set entries = entries_by_row[row.code]|default([]) %}
                         {% set gaps = gaps_by_row[row.code]|default([]) %}
                         <div class="symbolic-track symbolic-track--content"
                              data-row-code="{{ row.code }}"
+                             data-track-row-id="{{ row.code }}"
                              data-track-row="{{ row.code }}"
                              data-row-schedule-type="{{ row.schedule_type }}">
                             {% for gap in gaps %}
@@ -151,7 +160,7 @@
                             {% endif %}
 
                             {% for entry in entries %}
-                                <article class="symbolic-entry {{ entry.is_ready ? '' : 'is-warning' }}"
+                                <article class="symbolic-entry {{ entry.is_ready ? (entry.end_ts <= now_ts ? 'is-ready-past' : 'is-ready-upcoming') : 'is-warning' }}"
                                          style="left: {{ entry.left }}%; width: {{ entry.width }}%; --entry-color: {{ entry.color }};">
                                     <div class="symbolic-entry__text">
                                         <strong>{{ entry.label }}</strong>
@@ -791,6 +800,7 @@
                 inFlight: {},
                 selectedSymbolicKey: null
             };
+            var labelsPanel = document.querySelector('.symbolic-layout__labels');
 
             function formatUtc(ts) {
                 var d = new Date(ts * 1000);
@@ -921,6 +931,24 @@
 
             function overlaps(startA, endA, startB, endB) {
                 return startA < endB && endA > startB;
+            }
+
+            function readyStateClass(entry, fallbackStartTs, fallbackEndTs) {
+                if (!entry || !entry.is_ready) {
+                    return ' is-warning';
+                }
+
+                var endTs = typeof entry.end_ts === 'number' ? entry.end_ts : fallbackEndTs;
+                if (typeof endTs !== 'number') {
+                    return ' is-ready-upcoming';
+                }
+
+                var nowTs = Math.floor(Date.now() / 1000);
+                if (endTs <= nowTs) {
+                    return ' is-ready-past';
+                }
+
+                return ' is-ready-upcoming';
             }
 
             function escapeHtml(value) {
@@ -1455,8 +1483,9 @@
                         + ' | is_validated: ' + boolLabel(meta.isValidated)
                         + ' | is_used: ' + boolLabel(meta.isUsed);
 
+                    var weatherReadyClass = readyStateClass(entry, entryPack.startTs, entryPack.endTs);
                     html += '' +
-                        '<article class="symbolic-text-entry symbolic-text-entry--weather" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:#2D66A0;">' +
+                        '<article class="symbolic-text-entry symbolic-text-entry--weather' + weatherReadyClass + '" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:#2D66A0;">' +
                         '<div class="symbolic-text-entry__text symbolic-text-entry__text--weather">' +
                         '<div class="symbolic-weather-body">' + escapeHtml(entry.label || '') + '</div>' +
                         '<small class="symbolic-weather-meta">' + escapeHtml(metaLine) + '</small>' +
@@ -1755,7 +1784,7 @@
                     html += '<div class="symbolic-text-entries-row symbolic-synodic-entries-row">';
                     rowEntries.forEach(function (entryPack) {
                         var entry = entryPack.source || {};
-                        var readyClass = entry.is_ready ? '' : ' is-warning';
+                        var readyClass = readyStateClass(entry, entryPack.startTs, entryPack.endTs);
                         html += '' +
                             '<article class="symbolic-text-entry' + readyClass + '" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#315A7B') + ';">' +
                             '<div class="symbolic-text-entry__text">' +
@@ -1815,7 +1844,7 @@
                         var entry = entryPack.source;
                         var startTs = entryPack.startTs;
                         var endTs = entryPack.endTs;
-                        var readyClass = entry.is_ready ? '' : ' is-warning';
+                        var readyClass = readyStateClass(entry, startTs, endTs);
                         html += '' +
                             '<article class="symbolic-entry' + readyClass + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#315A7B') + ';">' +
                             '<div class="symbolic-entry__text">' +
@@ -1828,6 +1857,57 @@
 
                     rowNode.innerHTML = html;
                 });
+            }
+
+            function syncLabelGroupBand(groupKey, startRowKey, endRowKey) {
+                if (!labelsPanel) {
+                    return;
+                }
+                var band = labelsPanel.querySelector('[data-label-group="' + groupKey + '"]');
+                var startLabel = labelsPanel.querySelector('[data-label-row="' + startRowKey + '"]');
+                var endLabel = labelsPanel.querySelector('[data-label-row="' + endRowKey + '"]');
+                if (!band || !startLabel || !endLabel) {
+                    return;
+                }
+
+                var top = startLabel.offsetTop;
+                var bottom = endLabel.offsetTop + endLabel.offsetHeight;
+                if (bottom <= top) {
+                    band.style.opacity = '0';
+                    return;
+                }
+
+                band.style.opacity = '1';
+                band.style.top = String(top) + 'px';
+                band.style.height = String(bottom - top) + 'px';
+            }
+
+            function syncTimelineLabelHeights() {
+                if (!labelsPanel) {
+                    return;
+                }
+
+                var labelNodes = labelsPanel.querySelectorAll('[data-label-row]');
+                labelNodes.forEach(function (labelNode) {
+                    var rowId = labelNode.getAttribute('data-label-row') || '';
+                    if (!rowId) {
+                        return;
+                    }
+                    var trackNode = timeline.querySelector('[data-track-row-id="' + rowId + '"]');
+                    if (!trackNode) {
+                        return;
+                    }
+
+                    var measuredHeight = trackNode.getBoundingClientRect().height;
+                    if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) {
+                        return;
+                    }
+                    labelNode.style.height = String(Math.ceil(measuredHeight)) + 'px';
+                });
+
+                syncLabelGroupBand('family-weather', 'family_symbolic', 'weather');
+                syncLabelGroupBand('event-stack', 'event_group', 'appellation');
+                syncLabelGroupBand('symbolic-all', 'family_symbolic', 'appellation');
             }
 
             function updateWindowLabels() {
@@ -1852,6 +1932,7 @@
                 renderWeatherRow(data.symbolic, data.weatherEntries || []);
                 renderRows(data.entriesByRow);
                 renderSynodic(data.textSymbolicZones || [], data.entriesByRow.influence_synodic || []);
+                syncTimelineLabelHeights();
                 updateWindowLabels();
             }
 
@@ -1896,6 +1977,10 @@
                     maybePrefetch();
                 });
             }
+
+            window.addEventListener('resize', function () {
+                syncTimelineLabelHeights();
+            });
 
             function hidePhaseTooltip() {
                 phaseTooltip.classList.add('is-hidden');

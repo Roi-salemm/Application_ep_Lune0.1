@@ -29,10 +29,10 @@ class SwDisplay
     #[ORM\Column(type: Types::STRING, length: 150)]
     private string $code;
 
-    #[ORM\Column(type: Types::STRING, length: 50, columnDefinition: "ENUM('symbolic','western_astro','jyotish','yijing')")]
+    #[ORM\Column(type: Types::STRING, length: 50, columnDefinition: "ENUM('symbolic','astrologie','jyotish','yijing')")]
     private string $family;
 
-    #[ORM\Column(name: 'reading_mode', type: Types::STRING, length: 50, columnDefinition: "ENUM('weather','influence','astronomical_event','lunation_name','void_of_course')")]
+    #[ORM\Column(name: 'reading_mode', type: Types::STRING, length: 50, columnDefinition: "ENUM('SYM_Weather','SYM_Influence','SYM_AstronomicalEvent','SYM_LunationName','AST_Void_of_cours')")]
     private string $readingMode;
 
     #[ORM\Column(type: Types::STRING, length: 10)]

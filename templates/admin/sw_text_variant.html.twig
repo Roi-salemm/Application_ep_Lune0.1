@@ -228,7 +228,7 @@
             function resetForCreate() {
                 form.reset();
                 setField('family', 'symbolic');
-                setField('reading_mode', 'weather');
+                setField('reading_mode', 'SYM_Weather');
                 setField('lang', field('lang') && field('lang').value ? field('lang').value : 'fr');
                 form.setAttribute('action', form.getAttribute('data-create-action') || '');
                 formTitle.textContent = 'Nouveau texte';
@@ -252,7 +252,7 @@
                 formSubmit.textContent = 'Modifier le texte';
 
                 setField('family', row.getAttribute('data-family') || 'symbolic');
-                setField('reading_mode', row.getAttribute('data-reading-mode') || 'weather');
+                setField('reading_mode', row.getAttribute('data-reading-mode') || 'SYM_Weather');
                 setField('lang', row.getAttribute('data-lang') || 'fr');
                 setField('phase_key', row.getAttribute('data-phase-key') || '0');
                 setField('variant_no', row.getAttribute('data-variant-no') || '1');

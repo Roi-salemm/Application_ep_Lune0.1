@@ -11,7 +11,7 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entite des variantes textuelles Symbolic Weather.
  * Pourquoi: isoler les contenus editoriaux exploitables par phase/version avec suivi de validation et de filiation.
- * Info: family=symbolic et reading_mode=weather sont imposes cote serveur pour rester coherents.
+ * Info: family=symbolic et reading_mode=SYM_Weather sont imposes cote serveur pour rester coherents.
  */
 #[ORM\Entity(repositoryClass: SwTextVariantRepository::class)]
 #[ORM\Table(name: 'sw_text_variant')]
@@ -28,7 +28,7 @@ class SwTextVariant
     private string $family = 'symbolic';
 
     #[ORM\Column(name: 'reading_mode', type: Types::STRING, length: 50)]
-    private string $readingMode = 'weather';
+    private string $readingMode = 'SYM_Weather';
 
     #[ORM\Column(type: Types::STRING, length: 10)]
     private string $lang = 'fr';
@@ -300,4 +300,3 @@ class SwTextVariant
         return new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
     }
 }
-

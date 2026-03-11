@@ -41,7 +41,7 @@ class SwTextVariantRepository extends ServiceEntityRepository
      */
     public function findValidatedUsedWeatherVariants(
         string $family = 'symbolic',
-        string $readingMode = 'weather',
+        string $readingMode = 'SYM_Weather',
         string $lang = 'fr'
     ): array {
         return $this->createQueryBuilder('v')

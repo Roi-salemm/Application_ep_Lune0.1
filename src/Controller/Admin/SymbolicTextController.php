@@ -31,6 +31,12 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  */
 final class SymbolicTextController extends AbstractController
 {
+    private const FAMILY_SYMBOLIC = 'symbolic';
+    private const READING_MODE_SYM_WEATHER = 'SYM_Weather';
+    private const READING_MODE_SYM_INFLUENCE = 'SYM_Influence';
+    private const READING_MODE_SYM_ASTRONOMICAL_EVENT = 'SYM_AstronomicalEvent';
+    private const READING_MODE_SYM_LUNATION_NAME = 'SYM_LunationName';
+
     public function __construct(private readonly CsrfTokenManagerInterface $csrfTokenManager)
     {
     }
@@ -61,24 +67,24 @@ final class SymbolicTextController extends AbstractController
             [
                 'code' => 'influence_stellar',
                 'label' => 'astronomical event',
-                'family' => 'symbolic',
-                'reading_mode' => 'astronomical_event',
+                'family' => self::FAMILY_SYMBOLIC,
+                'reading_mode' => self::READING_MODE_SYM_ASTRONOMICAL_EVENT,
                 'schedule_type' => 'influence_window',
                 'default_color' => '#5a1b1b',
             ],
             [
                 'code' => 'influence_synodic',
                 'label' => 'influence',
-                'family' => 'symbolic',
-                'reading_mode' => 'influence',
+                'family' => self::FAMILY_SYMBOLIC,
+                'reading_mode' => self::READING_MODE_SYM_INFLUENCE,
                 'schedule_type' => 'influence_window',
                 'default_color' => '#1f5378',
             ],
             [
                 'code' => 'appellation',
                 'label' => 'lunationName',
-                'family' => 'symbolic',
-                'reading_mode' => 'lunation_name',
+                'family' => self::FAMILY_SYMBOLIC,
+                'reading_mode' => self::READING_MODE_SYM_LUNATION_NAME,
                 'schedule_type' => 'influence_window',
                 'default_color' => '#0f5a1b',
             ],
@@ -116,7 +122,7 @@ final class SymbolicTextController extends AbstractController
             $orbWindowRepository
         );
         $weatherVariantOptions = $this->buildWeatherVariantOptions(
-            $variantRepository->findValidatedUsedWeatherVariants('symbolic', 'weather')
+            $variantRepository->findValidatedUsedWeatherVariants(self::FAMILY_SYMBOLIC, self::READING_MODE_SYM_WEATHER)
         );
 
         $createInput = new SymbolicTextCreateInput();
@@ -257,8 +263,8 @@ final class SymbolicTextController extends AbstractController
 
         $rowDefinitions = $this->rowDefinitions();
         $this->ensureDefaultDisplays($entityManager, $displayRepository, $rowDefinitions);
-        $weatherFamily = 'symbolic';
-        $weatherReadingMode = 'weather';
+        $weatherFamily = self::FAMILY_SYMBOLIC;
+        $weatherReadingMode = self::READING_MODE_SYM_WEATHER;
         $weatherScheduleType = 'influence_window';
         $weatherDefaultColor = '#2D66A0';
 
@@ -828,15 +834,15 @@ final class SymbolicTextController extends AbstractController
         $weatherSchedules = $scheduleRepository->findTimelineEntriesForAdmin(
             $startUtc,
             $endUtc,
-            ['weather']
+            [self::READING_MODE_SYM_WEATHER]
         );
         $weatherEntriesByRow = $this->buildEntriesByRow(
             $weatherSchedules,
             [[
                 'code' => 'family_symbolic_weather',
                 'label' => 'Weather',
-                'family' => 'symbolic',
-                'reading_mode' => 'weather',
+                'family' => self::FAMILY_SYMBOLIC,
+                'reading_mode' => self::READING_MODE_SYM_WEATHER,
                 'schedule_type' => 'influence_window',
                 'default_color' => '#2D66A0',
             ]],
@@ -918,8 +924,8 @@ final class SymbolicTextController extends AbstractController
         foreach ($rowDefinitions as $row) {
             if (isset($existing[$row['code']])) {
                 $display = $existing[$row['code']];
-                $expectedFamily = (string) ($row['family'] ?? 'symbolic');
-                $expectedMode = (string) ($row['reading_mode'] ?? 'weather');
+                $expectedFamily = (string) ($row['family'] ?? self::FAMILY_SYMBOLIC);
+                $expectedMode = (string) ($row['reading_mode'] ?? self::READING_MODE_SYM_WEATHER);
                 $currentFamily = strtolower(trim($display->getFamily()));
                 $currentMode = strtolower(trim($display->getReadingMode()));
 
