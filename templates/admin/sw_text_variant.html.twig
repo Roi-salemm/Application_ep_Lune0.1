@@ -45,7 +45,7 @@
                 <label class="admin-form__field"><span class="admin-form__label">lang</span>{{ form_widget(create_form.lang) }}</label>
             </div>
             <div class="admin-form__row">
-                <label class="admin-form__field"><span class="admin-form__label">phase_key</span>{{ form_widget(create_form.phaseKey) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">Fastkey <span class="swtv-required-dot" aria-hidden="true"></span></span>{{ form_widget(create_form.phaseKey) }}</label>
                 <label class="admin-form__field"><span class="admin-form__label">variant_no</span>{{ form_widget(create_form.variantNo) }}</label>
                 <label class="admin-form__field"><span class="admin-form__label">text_version</span>{{ form_widget(create_form.textVersion) }}</label>
             </div>
@@ -55,9 +55,13 @@
                 <label class="admin-form__field"><span class="admin-form__label">comment</span>{{ form_widget(create_form.comment) }}</label>
             </div>
             <div class="admin-form__row">
-                <label class="admin-form__field"><span class="admin-form__label">card_text</span>{{ form_widget(create_form.cardText) }}</label>
+                <label class="admin-form__field"><span class="admin-form__label">Card Text <span class="swtv-required-dot" aria-hidden="true"></span></span>{{ form_widget(create_form.cardText) }}</label>
                 <label class="admin-form__field"><span class="admin-form__label">full_text</span>{{ form_widget(create_form.fullText) }}</label>
             </div>
+            <p class="swtv-required-legend">
+                <span class="swtv-required-dot" aria-hidden="true"></span>
+                Champ indispensable pour enregistrer du contenu (Text Version ne sert que si on clique sur un texte existant pour le modifier).
+            </p>
             <div class="admin-form__row">
                 <label class="admin-form__field"><span class="admin-form__label">editorial_notes</span>{{ form_widget(create_form.editorialNotes) }}</label>
             </div>
@@ -95,14 +99,14 @@
                         <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="family" data-sort-type="text">family</button></th>
                         <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="reading_mode" data-sort-type="text">reading_mode</button></th>
                         <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="lang" data-sort-type="text">lang</button></th>
-                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="phase_key" data-sort-type="int">phase_key</button></th>
-                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="variant_no" data-sort-type="int">variant_no</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="title" data-sort-type="text">title</button></th>
+                        <th class="admin-table__cell swtv-col--phase"><button type="button" class="admin-table__sort" data-sort-key="phase_key" data-sort-type="int">fastkey</button></th>
+                        <th class="admin-table__cell swtv-col--variant-no"><button type="button" class="admin-table__sort" data-sort-key="variant_no" data-sort-type="int">variante no</button></th>
+                        <th class="admin-table__cell swtv-col--title"><button type="button" class="admin-table__sort" data-sort-key="title" data-sort-type="text">title</button></th>
                         <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="card_text" data-sort-type="text">card_text</button></th>
-                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="text_version" data-sort-type="int">text_version</button></th>
-                        <th class="admin-table__cell swtv-col--narrow"><button type="button" class="admin-table__sort" data-sort-key="source_variant_id" data-sort-type="int">source_variant_id</button></th>
-                        <th class="admin-table__cell swtv-col--switch"><button type="button" class="admin-table__sort" data-sort-key="is_validated" data-sort-type="bool">is_validated</button></th>
-                        <th class="admin-table__cell swtv-col--switch"><button type="button" class="admin-table__sort" data-sort-key="is_used" data-sort-type="bool">is_used</button></th>
+                        <th class="admin-table__cell swtv-col--text-version"><button type="button" class="admin-table__sort" data-sort-key="text_version" data-sort-type="int">text version</button></th>
+                        <th class="admin-table__cell swtv-col--source-variant"><button type="button" class="admin-table__sort" data-sort-key="source_variant_id" data-sort-type="int">source variant</button></th>
+                        <th class="admin-table__cell swtv-col--switch"><button type="button" class="admin-table__sort" data-sort-key="is_validated" data-sort-type="bool">is verified</button></th>
+                        <th class="admin-table__cell swtv-col--switch"><button type="button" class="admin-table__sort" data-sort-key="is_used" data-sort-type="bool">is used</button></th>
                         <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="updated_at_utc" data-sort-type="date">updated_at_utc</button></th>
                         <th class="admin-table__cell admin-table__cell--actions">Actions</th>
                     </tr>
@@ -144,12 +148,12 @@
                             <td class="admin-table__cell">{{ variant.family }}</td>
                             <td class="admin-table__cell">{{ variant.readingMode }}</td>
                             <td class="admin-table__cell swtv-cell--narrow">{{ variant.lang }}</td>
-                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.phaseKey }} ({{ phaseLabel }})</td>
-                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.variantNo }}</td>
-                            <td class="admin-table__cell">{{ variant.title }}</td>
+                            <td class="admin-table__cell swtv-cell--phase">{{ variant.phaseKey }} ({{ phaseLabel }})</td>
+                            <td class="admin-table__cell swtv-cell--variant-no">{{ variant.variantNo }}</td>
+                            <td class="admin-table__cell swtv-cell--title" title="{{ (variant.title ?? '')|e('html_attr') }}">{{ variant.title }}</td>
                             <td class="admin-table__cell swtv-cell--card">{{ variant.cardText }}</td>
-                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.textVersion }}</td>
-                            <td class="admin-table__cell swtv-cell--narrow">{{ variant.sourceVariant ? variant.sourceVariant.id : '' }}</td>
+                            <td class="admin-table__cell swtv-cell--text-version">{{ variant.textVersion }}</td>
+                            <td class="admin-table__cell swtv-cell--source-variant">{{ variant.sourceVariant ? variant.sourceVariant.id : '' }}</td>
                             <td class="admin-table__cell swtv-cell--switch">
                                 <label class="swtv-switch" title="is_validated">
                                     <input
@@ -201,9 +205,14 @@
             var saveFlagsButton = document.querySelector('[data-save-flags]');
             var saveStatus = document.querySelector('[data-save-status]');
             var tableBody = document.querySelector('[data-variant-tbody]');
+            var phaseField = null;
+            var variantNoField = null;
             var pendingChanges = {};
             var sortingState = { key: null, direction: 'asc' };
             var isSavingFlags = false;
+            var isCreateMode = true;
+            var isAutoSettingVariantNo = false;
+            var variantNoAutoEnabled = true;
 
             if (!formCard || !form || !formTitle || !formSubmit) {
                 return;
@@ -212,6 +221,9 @@
             function field(name) {
                 return form.querySelector('[data-field="' + name + '"]');
             }
+
+            phaseField = field('phase_key');
+            variantNoField = field('variant_no');
 
             function setField(name, value) {
                 var input = field(name);
@@ -225,14 +237,57 @@
                 input.value = value || '';
             }
 
+            function parsePositiveInt(value) {
+                var parsed = parseInt(String(value || ''), 10);
+                return Number.isNaN(parsed) || parsed < 1 ? null : parsed;
+            }
+
+            // Pre-remplissage securise de variant_no: on propose max+1 pour le fastkey choisi,
+            // tout en gardant le champ editable pour une saisie manuelle.
+            function getRecommendedVariantNoForPhase(phaseKeyValue) {
+                var targetPhase = parseInt(String(phaseKeyValue || ''), 10);
+                if (Number.isNaN(targetPhase)) {
+                    return 1;
+                }
+
+                var maxVariantNo = 0;
+                document.querySelectorAll('[data-variant-row]').forEach(function (row) {
+                    var phase = parseInt(row.getAttribute('data-phase-key') || '', 10);
+                    if (Number.isNaN(phase) || phase !== targetPhase) {
+                        return;
+                    }
+
+                    var variantNo = parsePositiveInt(row.getAttribute('data-variant-no') || '');
+                    if (variantNo !== null && variantNo > maxVariantNo) {
+                        maxVariantNo = variantNo;
+                    }
+                });
+
+                return maxVariantNo + 1;
+            }
+
+            function setRecommendedVariantNoFromPhase() {
+                if (!isCreateMode || !variantNoAutoEnabled || !phaseField || !variantNoField) {
+                    return;
+                }
+
+                var recommended = getRecommendedVariantNoForPhase(phaseField.value);
+                isAutoSettingVariantNo = true;
+                variantNoField.value = String(recommended);
+                isAutoSettingVariantNo = false;
+            }
+
             function resetForCreate() {
                 form.reset();
+                isCreateMode = true;
+                variantNoAutoEnabled = true;
                 setField('family', 'symbolic');
                 setField('reading_mode', 'SYM_Weather');
                 setField('lang', field('lang') && field('lang').value ? field('lang').value : 'fr');
                 form.setAttribute('action', form.getAttribute('data-create-action') || '');
                 formTitle.textContent = 'Nouveau texte';
                 formSubmit.textContent = 'Creer';
+                setRecommendedVariantNoFromPhase();
                 document.querySelectorAll('[data-variant-row]').forEach(function (row) {
                     row.classList.remove('is-active');
                 });
@@ -247,6 +302,8 @@
                     return;
                 }
 
+                isCreateMode = false;
+                variantNoAutoEnabled = false;
                 form.setAttribute('action', template.replace('VARIANT_ID', encodeURIComponent(id)));
                 formTitle.textContent = 'Modifier un texte';
                 formSubmit.textContent = 'Modifier le texte';
@@ -443,6 +500,20 @@
             if (openNewButton) {
                 openNewButton.addEventListener('click', function () {
                     resetForCreate();
+                });
+            }
+
+            if (phaseField) {
+                phaseField.addEventListener('change', function () {
+                    setRecommendedVariantNoFromPhase();
+                });
+            }
+
+            if (variantNoField) {
+                variantNoField.addEventListener('input', function () {
+                    if (isCreateMode && !isAutoSettingVariantNo) {
+                        variantNoAutoEnabled = false;
+                    }
                 });
             }
 

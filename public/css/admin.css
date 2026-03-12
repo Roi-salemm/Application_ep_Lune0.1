@@ -1134,6 +1134,50 @@ thead .admin-table__cell {
     text-align: center;
 }
 
+.swtv-table .swtv-col--phase,
+.swtv-table .swtv-cell--phase {
+    width: 130px;
+    max-width: 130px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.swtv-table .swtv-col--variant-no,
+.swtv-table .swtv-cell--variant-no {
+    width: 116px;
+    max-width: 116px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.swtv-table .swtv-col--text-version,
+.swtv-table .swtv-cell--text-version {
+    width: 132px;
+    max-width: 132px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.swtv-table .swtv-col--source-variant,
+.swtv-table .swtv-cell--source-variant {
+    width: 150px;
+    max-width: 150px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.swtv-table .swtv-col--title,
+.swtv-table .swtv-cell--title {
+    width: 120px;
+    max-width: 120px;
+}
+
+.swtv-table .swtv-cell--title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .swtv-table .swtv-cell--card {
     min-width: 860px;
     max-width: 1220px;
@@ -1145,8 +1189,8 @@ thead .admin-table__cell {
 
 .swtv-table .swtv-col--switch,
 .swtv-table .swtv-cell--switch {
-    width: 94px;
-    max-width: 94px;
+    width: 120px;
+    max-width: 120px;
     text-align: center;
 }
 
@@ -1158,6 +1202,7 @@ thead .admin-table__cell {
 .swtv-table .admin-table__sort {
     min-height: 24px;
     padding: 3px 9px;
+    white-space: nowrap;
     border-radius: 999px;
     border: 1px solid rgba(145, 152, 170, 0.28);
     background: rgba(24, 28, 39, 0.92);
@@ -1208,6 +1253,27 @@ thead .admin-table__cell {
 .swtv-save-status {
     color: var(--admin-muted);
     font-size: 12px;
+}
+
+/* SWTextVariant: repere visuel des champs indispensables dans le formulaire. */
+.swtv-required-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 6px;
+    border-radius: 999px;
+    vertical-align: middle;
+    background: radial-gradient(circle at 30% 30%, #ffe8a3 0%, #d8ab3f 58%, #9f6e0f 100%);
+    box-shadow: 0 0 0 1px rgba(255, 223, 140, 0.45);
+}
+
+.swtv-required-legend {
+    margin: 2px 0 10px;
+    color: var(--admin-muted);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .swtv-table .admin-table__row.is-dirty {
