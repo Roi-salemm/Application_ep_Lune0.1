@@ -140,7 +140,7 @@ final class SymbolicTextCreateType extends AbstractType
                 'attr' => [
                     'class' => 'admin-form__input',
                     'rows' => 4,
-                    'placeholder' => '{"label":"...","is_validated":false}',
+                    'placeholder' => '{"label":"...","content_card":[{"title":"","baseline":"","text":"","citation":"","commentaire":"","media":[]}],"media":[]}',
                 ],
             ])
             ->add('starts_at_utc', TextType::class, [
@@ -201,4 +201,3 @@ final class SymbolicTextCreateType extends AbstractType
         $resolver->setAllowedTypes('row_definitions', 'array');
     }
 }
-

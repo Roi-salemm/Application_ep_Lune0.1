@@ -28,6 +28,28 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  * Controle l onglet admin Symbolic Text et son CRUD timeline.
  * Pourquoi: relier une timeline visuelle a la base sw_display/sw_content/sw_schedule avec un placement temporel exact.
  * Info: toutes les dates sont manipulees en UTC; la ligne "Family Symbolic / Weather" est alignee sur orb_window (multi_section_phase).
+ *
+ * Resume pratique des champs de validation/publication (source des snapshots):
+ * - Table sw_display:
+ *   - is_active: interrupteur global de publication pour un display (autorise/interdit l envoi).
+ * - Table sw_content:
+ *   - status: etat editorial (draft/review/validated/archived).
+ *   - is_validated: drapeau technique de validation.
+ *   - is_current: version active parmi les versions d un meme display (une seule ligne true par display).
+ * - Table sw_schedule:
+ *   - is_published: publication temporelle de la fenetre.
+ *
+ * Matrice de coherence sw_content (regle conseillee):
+ * - is_validated=1 et is_current=1 => status=validated
+ * - is_validated=1 et is_current=0 => status=review
+ * - is_validated=0 et is_current=0 => status=draft
+ * - is_validated=0 et is_current=1 => etat invalide, correction auto vers draft + is_current=0
+ *
+ * Eligibilite d envoi en snapshot:
+ * - sw_display.is_active = 1
+ * - sw_content.is_validated = 1
+ * - sw_content.is_current = 1
+ * - sw_schedule.is_published = 1
  */
 final class SymbolicTextController extends AbstractController
 {
@@ -55,6 +77,7 @@ final class SymbolicTextController extends AbstractController
             '4j' => 345600,
             '7j' => 604800,
             '14j' => 1209600,
+            '30j' => 2592000,
         ];
     }
 
@@ -105,6 +128,7 @@ final class SymbolicTextController extends AbstractController
         $spanOptions = $this->spanOptions();
         $span = $this->sanitizeSpan((string) $request->query->get('span', '2j'));
         $spanSeconds = $spanOptions[$span];
+        $lang = $this->sanitizeTimelineLang((string) $request->query->get('lang', 'fr'));
 
         $endUtc = $this->parseUtcInput((string) $request->query->get('end_utc', '')) ?? new \DateTimeImmutable('now', $utc);
         $endUtc = $endUtc->setTimezone($utc);
@@ -119,7 +143,8 @@ final class SymbolicTextController extends AbstractController
             $rowDefinitions,
             $scheduleRepository,
             $msMappingRepository,
-            $orbWindowRepository
+            $orbWindowRepository,
+            $lang
         );
         $weatherVariantOptions = $this->buildWeatherVariantOptions(
             $variantRepository->findValidatedUsedWeatherVariants(self::FAMILY_SYMBOLIC, self::READING_MODE_SYM_WEATHER)
@@ -146,6 +171,8 @@ final class SymbolicTextController extends AbstractController
             'span' => $span,
             'span_options' => array_keys($spanOptions),
             'span_seconds' => $spanSeconds,
+            'lang' => $lang,
+            'lang_options' => $this->timelineLangOptions(),
             'window_start_utc' => $startUtc,
             'window_end_utc' => $endUtc,
             'window_end_input' => $endUtc->format('Y-m-d H:i'),
@@ -181,6 +208,7 @@ final class SymbolicTextController extends AbstractController
                 Response::HTTP_BAD_REQUEST
             );
         }
+        $lang = $this->sanitizeTimelineLang((string) $request->query->get('lang', 'fr'));
 
         $rowDefinitions = $this->rowDefinitions();
 
@@ -190,7 +218,8 @@ final class SymbolicTextController extends AbstractController
             $rowDefinitions,
             $scheduleRepository,
             $msMappingRepository,
-            $orbWindowRepository
+            $orbWindowRepository,
+            $lang
         );
 
         return $this->json($payload);
@@ -445,19 +474,24 @@ final class SymbolicTextController extends AbstractController
             $display->setIsActive(true);
             $display->setComment($this->nullIfEmpty('Parse auto Weather depuis SWTextVariant.'));
 
-            $contentJson = array_filter([
-                'label' => $label,
-                'subtitle' => $subtitle,
-                'color' => $defaultColor,
-                'variant_id' => $variant->getId(),
-                'symbolic_weather' => [
-                    'phase_key' => $variant->getPhaseKey(),
-                    'variant_no' => $variant->getVariantNo(),
+            $contentJson = $this->buildSwContentJson(
+                [],
+                [
                     'variant_id' => $variant->getId(),
-                    'is_validated' => $variant->isValidated(),
-                    'is_used' => $variant->isUsed(),
+                    'symbolic_weather' => [
+                        'phase_key' => $variant->getPhaseKey(),
+                        'variant_no' => $variant->getVariantNo(),
+                        'variant_id' => $variant->getId(),
+                    ],
                 ],
-            ], static fn (mixed $value): bool => $value !== null && $value !== '');
+                [
+                    'label' => $label,
+                    'subtitle' => $subtitle,
+                    'color' => $defaultColor,
+                    'status' => 'validated',
+                    'schema_version' => '1.0',
+                ]
+            );
 
             $content = new SwContent();
             $content->setDisplay($display);
@@ -580,33 +614,43 @@ final class SymbolicTextController extends AbstractController
         $status = $this->sanitizeStatus((string) ($input->status ?? 'draft'));
         $schemaVersion = $this->sanitizeSchemaVersion((string) ($input->schema_version ?? '1.0'));
 
-        $contentJson = [];
+        $decodedContentJson = [];
         $rawContentJson = trim((string) ($input->content_json ?? ''));
         if ($rawContentJson !== '') {
             $contentError = null;
-            $decodedContentJson = $this->parseOptionalJson($rawContentJson, $contentError);
-            if ($contentError !== null || $decodedContentJson === null) {
+            $parsedContentJson = $this->parseOptionalJson($rawContentJson, $contentError);
+            if ($contentError !== null || $parsedContentJson === null) {
                 $this->addFlash('error', $contentError ?? 'content_json invalide.');
                 return $redirect;
             }
-            $contentJson = $decodedContentJson;
-            $resolvedLabel = trim((string) ($contentJson['label'] ?? $contentJson['title'] ?? $resolvedLabel));
-            $resolvedSubtitle = trim((string) ($contentJson['subtitle'] ?? $resolvedSubtitle));
-            $resolvedIcon = trim((string) ($contentJson['icon'] ?? $resolvedIcon));
-            $resolvedEditorialNotes = trim((string) ($contentJson['editorial_notes'] ?? $resolvedEditorialNotes));
-            $resolvedColor = $this->sanitizeColor((string) ($contentJson['color'] ?? $contentJson['tone'] ?? $resolvedColor), $defaultColor);
-            $input->display_is_active = $this->resolveJsonBool($contentJson, ['is_active', 'isActive'], $input->display_is_active);
-            $input->content_is_current = $this->resolveJsonBool($contentJson, ['is_current', 'isCurrent'], $input->content_is_current);
-            $input->content_is_validated = $this->resolveJsonBool($contentJson, ['is_validated', 'isValidated'], $input->content_is_validated);
-            $input->schedule_is_published = $this->resolveJsonBool($contentJson, ['is_published', 'isPublished'], $input->schedule_is_published);
-            $status = $this->sanitizeStatus((string) ($contentJson['status'] ?? $status));
-            $schemaVersion = $this->sanitizeSchemaVersion((string) ($contentJson['schema_version'] ?? $contentJson['schemaVersion'] ?? $schemaVersion));
+            $decodedContentJson = $parsedContentJson;
+            $resolvedLabel = trim((string) ($decodedContentJson['label'] ?? $decodedContentJson['title'] ?? $resolvedLabel));
+            $resolvedSubtitle = trim((string) ($decodedContentJson['subtitle'] ?? $resolvedSubtitle));
+            $resolvedIcon = trim((string) ($decodedContentJson['icon'] ?? $resolvedIcon));
+            $resolvedEditorialNotes = trim((string) ($decodedContentJson['editorial_notes'] ?? $resolvedEditorialNotes));
+            $resolvedColor = $this->sanitizeColor((string) ($decodedContentJson['color'] ?? $decodedContentJson['tone'] ?? $resolvedColor), $defaultColor);
+            $status = $this->sanitizeStatus((string) ($decodedContentJson['status'] ?? $status));
+            $schemaVersion = $this->sanitizeSchemaVersion((string) ($decodedContentJson['schema_version'] ?? $decodedContentJson['schemaVersion'] ?? $schemaVersion));
         }
 
         if ($resolvedLabel === '') {
             $this->addFlash('error', 'Le texte est obligatoire (champ Texte ou content_json.label).');
             return $redirect;
         }
+
+        $contentJson = $this->buildSwContentJson(
+            [],
+            $decodedContentJson,
+            [
+                'label' => $resolvedLabel,
+                'subtitle' => $resolvedSubtitle,
+                'icon' => $resolvedIcon,
+                'color' => $resolvedColor,
+                'editorial_notes' => $resolvedEditorialNotes,
+                'status' => $status,
+                'schema_version' => $schemaVersion,
+            ]
+        );
 
         $display = new SwDisplay();
         $display->setCode($this->buildUniqueDisplayCode($input->row_code, $displayRepository));
@@ -724,20 +768,37 @@ final class SymbolicTextController extends AbstractController
         }
 
         $defaultColor = $this->findDefaultColorByCode($displayCode, $this->rowDefinitions());
-        $contentJson = array_filter([
-            'label' => $label,
-            'subtitle' => trim((string) $request->request->get('subtitle', '')) ?: null,
-            'color' => $this->sanitizeColor((string) $request->request->get('color', ''), $defaultColor),
-            'icon' => trim((string) $request->request->get('icon', '')) ?: null,
-        ], static fn ($value): bool => $value !== null && $value !== '');
+        $subtitle = trim((string) $request->request->get('subtitle', ''));
+        $icon = trim((string) $request->request->get('icon', ''));
+        $editorialNotes = trim((string) $request->request->get('editorial_notes', ''));
+        $status = $this->sanitizeStatus((string) $request->request->get('status', 'validated'));
+        $schemaVersion = $this->sanitizeSchemaVersion((string) $request->request->get('schema_version', '1.0'));
+        $color = $this->sanitizeColor((string) $request->request->get('color', ''), $defaultColor);
+        $existingContentJson = $content->getContentJson();
+        if (!is_array($existingContentJson)) {
+            $existingContentJson = [];
+        }
+        $contentJson = $this->buildSwContentJson(
+            $existingContentJson,
+            [],
+            [
+                'label' => $label,
+                'subtitle' => $subtitle,
+                'icon' => $icon,
+                'color' => $color,
+                'editorial_notes' => $editorialNotes,
+                'status' => $status,
+                'schema_version' => $schemaVersion,
+            ]
+        );
 
-        $content->setStatus($this->sanitizeStatus((string) $request->request->get('status', 'validated')));
+        $content->setStatus($status);
         $content->setIsCurrent($isCurrent);
         $content->setIsValidated($isValidated);
-        $content->setSchemaVersion($this->sanitizeSchemaVersion((string) $request->request->get('schema_version', '1.0')));
+        $content->setSchemaVersion($schemaVersion);
         $content->setContentJson($contentJson);
         $content->setComment($this->nullIfEmpty((string) $request->request->get('comment', '')));
-        $content->setEditorialNotes($this->nullIfEmpty((string) $request->request->get('editorial_notes', '')));
+        $content->setEditorialNotes($this->nullIfEmpty($editorialNotes));
         $content->setValidatedAtUtc($isValidated ? new \DateTimeImmutable('now', new \DateTimeZone('UTC')) : null);
 
         $schedule->setDisplay($display);
@@ -799,7 +860,8 @@ final class SymbolicTextController extends AbstractController
         array $rowDefinitions,
         SwScheduleRepository $scheduleRepository,
         MsMappingRepository $msMappingRepository,
-        OrbWindowRepository $orbWindowRepository
+        OrbWindowRepository $orbWindowRepository,
+        string $lang
     ): array {
         $readingModes = array_values(array_unique(array_map(
             static fn (array $row): string => (string) ($row['reading_mode'] ?? ''),
@@ -807,7 +869,13 @@ final class SymbolicTextController extends AbstractController
         )));
         $readingModes = array_values(array_filter($readingModes, static fn (string $value): bool => $value !== ''));
 
-        $schedules = $scheduleRepository->findTimelineEntriesForAdmin($startUtc, $endUtc, $readingModes);
+        $schedules = $scheduleRepository->findTimelineEntriesForAdmin(
+            $startUtc,
+            $endUtc,
+            $readingModes,
+            self::FAMILY_SYMBOLIC,
+            $lang
+        );
 
         $durationSeconds = max(1, $endUtc->getTimestamp() - $startUtc->getTimestamp());
         $entriesByRow = $this->buildEntriesByRow($schedules, $rowDefinitions, $startUtc, $endUtc, $durationSeconds);
@@ -834,7 +902,9 @@ final class SymbolicTextController extends AbstractController
         $weatherSchedules = $scheduleRepository->findTimelineEntriesForAdmin(
             $startUtc,
             $endUtc,
-            [self::READING_MODE_SYM_WEATHER]
+            [self::READING_MODE_SYM_WEATHER],
+            self::FAMILY_SYMBOLIC,
+            $lang
         );
         $weatherEntriesByRow = $this->buildEntriesByRow(
             $weatherSchedules,
@@ -1625,6 +1695,23 @@ final class SymbolicTextController extends AbstractController
         return array_key_exists($span, $options) ? $span : '2j';
     }
 
+    /**
+     * @return array<string, string>
+     */
+    private function timelineLangOptions(): array
+    {
+        return [
+            'fr' => 'Francais',
+            'en' => 'English',
+        ];
+    }
+
+    private function sanitizeTimelineLang(string $lang): string
+    {
+        $value = strtolower(trim($lang));
+        return in_array($value, ['fr', 'en'], true) ? $value : 'fr';
+    }
+
     private function parseUtcInput(string $raw): ?\DateTimeImmutable
     {
         $value = trim($raw);
@@ -1683,6 +1770,175 @@ final class SymbolicTextController extends AbstractController
             return strtoupper($value);
         }
         return $fallback;
+    }
+
+    /**
+     * Retourne le schema canonique de SWContent.content_json.
+     * Pourquoi: stabiliser la structure et faciliter les evolutions sans casser l historique.
+     *
+     * @return array<string, mixed>
+     */
+    private function swContentJsonTemplate(): array
+    {
+        return [
+            'schema_version' => '1.0',
+            'status' => 'validated',
+            'label' => '',
+            'title' => '',
+            'subtitle' => '',
+            'icon' => '',
+            'color' => '#315A7B',
+            'tone' => '',
+            'editorial_notes' => '',
+            'variant_id' => null,
+            'phase_key' => null,
+            'variant_no' => null,
+            'symbolic_weather' => [
+                'phase_key' => null,
+                'variant_no' => null,
+                'variant_id' => null,
+            ],
+            'content_card' => [[
+                'title' => '',
+                'baseline' => '',
+                'text' => '',
+                'citation' => '',
+                'commentaire' => '',
+                'media' => [],
+            ]],
+            'media' => [],
+        ];
+    }
+
+    /**
+     * Construit un content_json final non destructif:
+     * template + ancien JSON + JSON entrant + overrides formulaire.
+     *
+     * @param array<string, mixed> $existing
+     * @param array<string, mixed> $incoming
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function buildSwContentJson(array $existing, array $incoming, array $overrides = []): array
+    {
+        $template = $this->swContentJsonTemplate();
+        $merged = $this->mergeAssocRecursive($template, $existing);
+        $merged = $this->mergeAssocRecursive($merged, $incoming);
+        $merged = $this->mergeAssocRecursive($merged, $overrides);
+
+        $merged['schema_version'] = $this->sanitizeSchemaVersion((string) ($merged['schema_version'] ?? $template['schema_version']));
+        $merged['status'] = $this->sanitizeStatus((string) ($merged['status'] ?? $template['status']));
+        $merged['label'] = trim((string) ($merged['label'] ?? ''));
+        $merged['title'] = trim((string) ($merged['title'] ?? ''));
+        $merged['subtitle'] = trim((string) ($merged['subtitle'] ?? ''));
+        $merged['icon'] = trim((string) ($merged['icon'] ?? ''));
+        $merged['tone'] = trim((string) ($merged['tone'] ?? ''));
+        $merged['editorial_notes'] = trim((string) ($merged['editorial_notes'] ?? ''));
+        $merged['color'] = $this->sanitizeColor((string) ($merged['color'] ?? ''), (string) $template['color']);
+
+        $symbolicWeather = $merged['symbolic_weather'] ?? [];
+        if (!is_array($symbolicWeather)) {
+            $symbolicWeather = [];
+        }
+        $merged['symbolic_weather'] = $this->mergeAssocRecursive(
+            (array) ($template['symbolic_weather'] ?? []),
+            $symbolicWeather
+        );
+
+        $rawCards = $merged['content_card'] ?? [];
+        if (!is_array($rawCards)) {
+            $rawCards = [];
+        }
+        $normalizedCards = [];
+        foreach (array_values($rawCards) as $rawCard) {
+            if (!is_array($rawCard)) {
+                continue;
+            }
+            $normalizedCards[] = $this->normalizeContentCard($rawCard);
+        }
+        if ($normalizedCards === []) {
+            $defaultCard = $template['content_card'][0] ?? [];
+            $normalizedCards[] = $this->normalizeContentCard(is_array($defaultCard) ? $defaultCard : []);
+        }
+        $merged['content_card'] = $normalizedCards;
+
+        $rawMedia = $merged['media'] ?? [];
+        $merged['media'] = is_array($rawMedia) ? array_values($rawMedia) : [];
+
+        return $merged;
+    }
+
+    /**
+     * Fusion recursive non destructive pour objets associatifs.
+     * Pourquoi: conserver les champs inconnus deja presents dans les anciens JSON.
+     *
+     * @param array<mixed> $base
+     * @param array<mixed> $overlay
+     * @return array<mixed>
+     */
+    private function mergeAssocRecursive(array $base, array $overlay): array
+    {
+        foreach ($overlay as $key => $value) {
+            if (
+                array_key_exists($key, $base)
+                && is_array($base[$key])
+                && is_array($value)
+                && $this->isAssocArray($base[$key])
+                && $this->isAssocArray($value)
+            ) {
+                /** @var array<mixed> $nestedBase */
+                $nestedBase = $base[$key];
+                /** @var array<mixed> $nestedOverlay */
+                $nestedOverlay = $value;
+                $base[$key] = $this->mergeAssocRecursive($nestedBase, $nestedOverlay);
+                continue;
+            }
+            $base[$key] = $value;
+        }
+
+        return $base;
+    }
+
+    /**
+     * Normalise un bloc content_card au format attendu.
+     *
+     * @param array<string, mixed> $card
+     * @return array<string, mixed>
+     */
+    private function normalizeContentCard(array $card): array
+    {
+        $templateCard = [
+            'title' => '',
+            'baseline' => '',
+            'text' => '',
+            'citation' => '',
+            'commentaire' => '',
+            'media' => [],
+        ];
+        $merged = $this->mergeAssocRecursive($templateCard, $card);
+        $merged['title'] = trim((string) ($merged['title'] ?? ''));
+        $merged['baseline'] = trim((string) ($merged['baseline'] ?? ''));
+        $merged['text'] = trim((string) ($merged['text'] ?? ''));
+        $merged['citation'] = trim((string) ($merged['citation'] ?? ''));
+        $merged['commentaire'] = trim((string) ($merged['commentaire'] ?? ''));
+        $rawMedia = $merged['media'] ?? [];
+        $merged['media'] = is_array($rawMedia) ? array_values($rawMedia) : [];
+
+        return $merged;
+    }
+
+    /**
+     * Indique si le tableau est associatif.
+     *
+     * @param array<mixed> $value
+     */
+    private function isAssocArray(array $value): bool
+    {
+        if ($value === []) {
+            return false;
+        }
+
+        return array_keys($value) !== range(0, count($value) - 1);
     }
 
     /**
@@ -2173,6 +2429,7 @@ final class SymbolicTextController extends AbstractController
     {
         $params = [
             'span' => $this->sanitizeSpan((string) $request->request->get('span', '2j')),
+            'lang' => $this->sanitizeTimelineLang((string) $request->request->get('lang', 'fr')),
         ];
         $endInput = trim((string) $request->request->get('end_utc', ''));
         if ($endInput !== '') {

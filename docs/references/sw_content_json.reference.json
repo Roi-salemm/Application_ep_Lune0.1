@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "status": "validated",
+  "label": "",
+  "title": "",
+  "subtitle": "",
+  "icon": "",
+  "color": "#315A7B",
+  "tone": "",
+  "editorial_notes": "",
+  "variant_id": null,
+  "phase_key": null,
+  "variant_no": null,
+  "symbolic_weather": {
+    "phase_key": null,
+    "variant_no": null,
+    "variant_id": null
+  },
+  "content_card": [
+    {
+      "title": "",
+      "baseline": "",
+      "text": "",
+      "citation": "",
+      "commentaire": "",
+      "media": []
+    }
+  ],
+  "media": []
+}

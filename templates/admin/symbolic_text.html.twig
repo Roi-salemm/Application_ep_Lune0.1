@@ -27,9 +27,13 @@
             <div class="symbolic-text-toolbar__group">
                 {% for span_key in span_options %}
                     <a class="symbolic-span-btn {{ span_key == span ? 'is-active' : '' }}"
-                       href="{{ path('admin_symbolic_text', {'span': span_key, 'end_utc': window_end_input}) }}">{{ span_key }}</a>
+                       href="{{ path('admin_symbolic_text', {'span': span_key, 'end_utc': window_end_input, 'lang': lang}) }}">{{ span_key }}</a>
                 {% endfor %}
                 <button type="button" class="symbolic-span-btn symbolic-span-btn--today" data-jump-today>Aujourd'hui</button>
+                {% for lang_code, lang_label in lang_options %}
+                    <a class="symbolic-span-btn {{ lang_code == lang ? 'is-active' : '' }}"
+                       href="{{ path('admin_symbolic_text', {'span': span, 'end_utc': window_end_input, 'lang': lang_code}) }}">{{ lang_label }}</a>
+                {% endfor %}
             </div>
             <div class="symbolic-text-toolbar__meta">UTC</div>
         </div>
@@ -58,6 +62,7 @@
                  data-api-url="{{ path('admin_symbolic_text_data') }}"
                  data-span="{{ span }}"
                  data-span-seconds="{{ span_seconds }}"
+                 data-lang="{{ lang }}"
                  data-window-end-ts="{{ window_end_ts }}">
                 <div class="symbolic-grid" data-grid-lines>
                     {% for marker in day_markers %}
@@ -207,6 +212,7 @@
             {{ form_start(create_form, {'attr': {'class': 'admin-modal__body admin-form'}}) }}
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+                <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
 
                 <div class="admin-form__section">
                     <div class="admin-form__label">SW Display</div>
@@ -343,6 +349,7 @@
                 <input type="hidden" name="_token" value="" data-edit-update-token>
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+                <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
 
                 <div class="admin-form__row">
                     <label class="admin-form__field">
@@ -446,6 +453,7 @@
                 <input type="hidden" name="_token" value="" data-edit-delete-token>
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+                <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
                 <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
             </form>
         </div>
@@ -464,6 +472,7 @@
                 <input type="hidden" name="zone_end_utc" value="" data-weather-zone-end>
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
+                <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
 
                 <div class="admin-form__row">
                     <label class="admin-form__field">
@@ -782,17 +791,19 @@
             var apiUrl = timeline.getAttribute('data-api-url') || '';
             var span = timeline.getAttribute('data-span') || '2j';
             var spanSeconds = parseInt(timeline.getAttribute('data-span-seconds') || '172800', 10);
+            var lang = timeline.getAttribute('data-lang') || 'fr';
             var endTs = parseInt(timeline.getAttribute('data-window-end-ts') || '0', 10);
             if (!apiUrl || !spanSeconds || !endTs) {
                 return;
             }
 
-            var chunkSeconds = 7 * 86400;
-            var maxCacheSeconds = 75 * 86400;
-            var preloadThreshold = 7 * 86400;
+            var chunkSeconds = 30 * 86400;
+            var maxCacheSeconds = 180 * 86400;
+            var preloadThreshold = 30 * 86400;
             var moveSeconds = Math.max(600, Math.floor(spanSeconds / 6));
             var state = {
                 span: span,
+                lang: lang,
                 spanSeconds: spanSeconds,
                 visibleEndTs: endTs,
                 visibleStartTs: endTs - spanSeconds,
@@ -877,7 +888,7 @@
                 }
                 state.inFlight[key] = true;
 
-                var url = apiUrl + '?start_utc=' + encodeURIComponent(formatUtc(startTs)) + '&end_utc=' + encodeURIComponent(formatUtc(endTs));
+                var url = apiUrl + '?start_utc=' + encodeURIComponent(formatUtc(startTs)) + '&end_utc=' + encodeURIComponent(formatUtc(endTs)) + '&lang=' + encodeURIComponent(state.lang);
                 return fetch(url, { credentials: 'same-origin' })
                     .then(function (response) {
                         if (!response.ok) {
@@ -910,14 +921,28 @@
 
             function pruneCache() {
                 var centerTs = Math.floor((state.visibleStartTs + state.visibleEndTs) / 2);
-                var withDistance = state.chunks.map(function (chunk) {
+                // On conserve toujours les chunks qui couvrent la fenetre visible.
+                // Le reste est deleste par proximite pour limiter la memoire.
+                var required = [];
+                var optional = [];
+                state.chunks.forEach(function (chunk) {
+                    if (overlaps(chunk.startTs, chunk.endTs, state.visibleStartTs, state.visibleEndTs)) {
+                        required.push(chunk);
+                    } else {
+                        optional.push(chunk);
+                    }
+                });
+
+                var withDistance = optional.map(function (chunk) {
                     var chunkCenter = Math.floor((chunk.startTs + chunk.endTs) / 2);
                     return { chunk: chunk, distance: Math.abs(chunkCenter - centerTs) };
                 });
                 withDistance.sort(function (a, b) { return a.distance - b.distance; });
 
-                var kept = [];
-                var covered = 0;
+                var kept = required.slice();
+                var covered = required.reduce(function (sum, chunk) {
+                    return sum + (chunk.endTs - chunk.startTs);
+                }, 0);
                 for (var i = 0; i < withDistance.length; i++) {
                     var candidate = withDistance[i].chunk;
                     if (covered + (candidate.endTs - candidate.startTs) > maxCacheSeconds && kept.length > 0) {
@@ -972,6 +997,12 @@
 
             function buildDayLabel(ts) {
                 var d = new Date(ts * 1000);
+                if (state.span === '30j') {
+                    var day2 = String(d.getUTCDate()).padStart(2, '0');
+                    var month2 = String(d.getUTCMonth() + 1).padStart(2, '0');
+                    var year2 = String(d.getUTCFullYear()).slice(-2);
+                    return day2 + '/' + month2 + '/' + year2;
+                }
                 var days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 var months = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
                 return days[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + months[d.getUTCMonth()];
@@ -1277,6 +1308,7 @@
                         '<input type="hidden" name="parse_end_utc" value="' + escapeHtml(formatUtcWithSeconds(fullEndTs)) + '">' +
                         '<input type="hidden" name="span" value="' + escapeHtml(state.span) + '">' +
                         '<input type="hidden" name="end_utc" value="' + escapeHtml(formatUtc(state.visibleEndTs)) + '">' +
+                        '<input type="hidden" name="lang" value="' + escapeHtml(state.lang) + '">' +
                         '<button type="submit" class="symbolic-parse-button" title="' + escapeHtml(buttonLabel) + '">' +
                         escapeHtml(buttonLabel) +
                         '</button>' +
@@ -1918,7 +1950,10 @@
                 document.querySelectorAll('[data-window-end-hidden]').forEach(function (input) {
                     input.value = formatUtc(state.visibleEndTs);
                 });
-                var url = "{{ path('admin_symbolic_text') }}" + '?span=' + encodeURIComponent(state.span) + '&end_utc=' + encodeURIComponent(formatUtc(state.visibleEndTs));
+                document.querySelectorAll('[data-window-lang-hidden]').forEach(function (input) {
+                    input.value = state.lang;
+                });
+                var url = "{{ path('admin_symbolic_text') }}" + '?span=' + encodeURIComponent(state.span) + '&end_utc=' + encodeURIComponent(formatUtc(state.visibleEndTs)) + '&lang=' + encodeURIComponent(state.lang);
                 window.history.replaceState({}, '', url);
             }
 
