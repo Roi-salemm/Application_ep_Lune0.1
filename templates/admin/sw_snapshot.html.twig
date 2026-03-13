@@ -18,25 +18,25 @@
             <span class="snapshot-table-status" data-snapshot-status>Toutes les lignes sont affichees.</span>
         </div>
 
-        <div class="admin-table-wrap">
+        <div class="admin-table-wrap snapshot-table-wrap">
             <table class="admin-table snapshot-table">
                 <thead>
                     <tr>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="id" data-sort-type="int">id</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="sw_display_id" data-sort-type="int">sw_display_id</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="sw_content_id" data-sort-type="int">sw_content_id</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="sw_schedule_id" data-sort-type="int">sw_schedule_id</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="lang" data-sort-type="text">lang</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="family" data-sort-type="text">family</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="reading_mode" data-sort-type="text">reading_mode</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="card_title" data-sort-type="text">card_title</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="card_text" data-sort-type="text">card_text</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="content_json" data-sort-type="text">content_json</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="starts_at" data-sort-type="date">starts_at</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="ends_at" data-sort-type="date">ends_at</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="is_active" data-sort-type="bool">is_active</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="created_at" data-sort-type="date">created_at</button></th>
-                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="updated_at" data-sort-type="date">updated_at</button></th>
+                        <th class="admin-table__cell snapshot-col--id"><button type="button" class="admin-table__sort" data-sort-key="id" data-sort-type="int">id</button></th>
+                        <th class="admin-table__cell snapshot-col--ref"><button type="button" class="admin-table__sort" data-sort-key="sw_display_id" data-sort-type="int">sw_display_id</button></th>
+                        <th class="admin-table__cell snapshot-col--ref"><button type="button" class="admin-table__sort" data-sort-key="sw_content_id" data-sort-type="int">sw_content_id</button></th>
+                        <th class="admin-table__cell snapshot-col--ref"><button type="button" class="admin-table__sort" data-sort-key="sw_schedule_id" data-sort-type="int">sw_schedule_id</button></th>
+                        <th class="admin-table__cell snapshot-col--short"><button type="button" class="admin-table__sort" data-sort-key="lang" data-sort-type="text">lang</button></th>
+                        <th class="admin-table__cell snapshot-col--medium"><button type="button" class="admin-table__sort" data-sort-key="family" data-sort-type="text">family</button></th>
+                        <th class="admin-table__cell snapshot-col--medium"><button type="button" class="admin-table__sort" data-sort-key="reading_mode" data-sort-type="text">reading_mode</button></th>
+                        <th class="admin-table__cell snapshot-col--title"><button type="button" class="admin-table__sort" data-sort-key="card_title" data-sort-type="text">card_title</button></th>
+                        <th class="admin-table__cell snapshot-col--card"><button type="button" class="admin-table__sort" data-sort-key="card_text" data-sort-type="text">card_text</button></th>
+                        <th class="admin-table__cell snapshot-col--json"><button type="button" class="admin-table__sort" data-sort-key="content_json" data-sort-type="text">content_json</button></th>
+                        <th class="admin-table__cell snapshot-col--date"><button type="button" class="admin-table__sort" data-sort-key="starts_at" data-sort-type="date">starts_at</button></th>
+                        <th class="admin-table__cell snapshot-col--date"><button type="button" class="admin-table__sort" data-sort-key="ends_at" data-sort-type="date">ends_at</button></th>
+                        <th class="admin-table__cell snapshot-col--active"><button type="button" class="admin-table__sort" data-sort-key="is_active" data-sort-type="bool">is_active</button></th>
+                        <th class="admin-table__cell snapshot-col--date"><button type="button" class="admin-table__sort" data-sort-key="created_at" data-sort-type="date">created_at</button></th>
+                        <th class="admin-table__cell snapshot-col--date"><button type="button" class="admin-table__sort" data-sort-key="updated_at" data-sort-type="date">updated_at</button></th>
                     </tr>
                 </thead>
                 <tbody data-snapshot-tbody>
@@ -62,23 +62,25 @@
                             data-sort-is_active="{{ snapshot.isActive ? '1' : '0' }}"
                             data-sort-created_at="{{ snapshot.createdAt|date('U') }}"
                             data-sort-updated_at="{{ snapshot.updatedAt|date('U') }}">
-                            <td class="admin-table__cell">{{ snapshot.id }}</td>
-                            <td class="admin-table__cell">{{ snapshot.swDisplay ? snapshot.swDisplay.id : '' }}</td>
-                            <td class="admin-table__cell">{{ snapshot.swContent ? snapshot.swContent.id : '' }}</td>
-                            <td class="admin-table__cell">{{ snapshot.swSchedule ? snapshot.swSchedule.id : '' }}</td>
-                            <td class="admin-table__cell">{{ snapshot.lang }}</td>
-                            <td class="admin-table__cell">{{ snapshot.family }}</td>
-                            <td class="admin-table__cell">{{ snapshot.readingMode }}</td>
-                            <td class="admin-table__cell">{{ snapshot.cardTitle }}</td>
-                            <td class="admin-table__cell">{{ snapshot.cardText }}</td>
-                            <td class="admin-table__cell snapshot-json-cell">
+                            <td class="admin-table__cell snapshot-col--id">{{ snapshot.id }}</td>
+                            <td class="admin-table__cell snapshot-col--ref">{{ snapshot.swDisplay ? snapshot.swDisplay.id : '' }}</td>
+                            <td class="admin-table__cell snapshot-col--ref">{{ snapshot.swContent ? snapshot.swContent.id : '' }}</td>
+                            <td class="admin-table__cell snapshot-col--ref">{{ snapshot.swSchedule ? snapshot.swSchedule.id : '' }}</td>
+                            <td class="admin-table__cell snapshot-col--short">{{ snapshot.lang }}</td>
+                            <td class="admin-table__cell snapshot-col--medium">{{ snapshot.family }}</td>
+                            <td class="admin-table__cell snapshot-col--medium">{{ snapshot.readingMode }}</td>
+                            <td class="admin-table__cell snapshot-cell--title">{{ snapshot.cardTitle }}</td>
+                            <td class="admin-table__cell snapshot-cell--card">
+                                <div class="snapshot-card-text">{{ snapshot.cardText }}</div>
+                            </td>
+                            <td class="admin-table__cell snapshot-json-cell snapshot-col--json">
                                 <pre class="snapshot-json">{{ snapshot.contentJson|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
                             </td>
-                            <td class="admin-table__cell">{{ snapshot.startsAt|date('Y-m-d H:i:s', 'UTC') }}</td>
-                            <td class="admin-table__cell">{{ snapshot.endsAt|date('Y-m-d H:i:s', 'UTC') }}</td>
-                            <td class="admin-table__cell">{{ snapshot.isActive ? '1' : '0' }}</td>
-                            <td class="admin-table__cell">{{ snapshot.createdAt|date('Y-m-d H:i:s', 'UTC') }}</td>
-                            <td class="admin-table__cell">{{ snapshot.updatedAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell snapshot-col--date">{{ snapshot.startsAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell snapshot-col--date">{{ snapshot.endsAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell snapshot-col--active">{{ snapshot.isActive ? '1' : '0' }}</td>
+                            <td class="admin-table__cell snapshot-col--date">{{ snapshot.createdAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell snapshot-col--date">{{ snapshot.updatedAt|date('Y-m-d H:i:s', 'UTC') }}</td>
                         </tr>
                     {% else %}
                         <tr>
@@ -195,4 +197,3 @@
         })();
     </script>
 {% endblock %}
-

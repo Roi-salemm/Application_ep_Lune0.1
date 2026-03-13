@@ -13,6 +13,7 @@ use App\Repository\OrbWindowRepository;
 use App\Repository\SwContentRepository;
 use App\Repository\SwDisplayRepository;
 use App\Repository\SwScheduleRepository;
+use App\Repository\SwSnapshotRepository;
 use App\Repository\SwTextVariantRepository;
 use App\Service\Moon\OrbWindowParseService;
 use App\Service\SwSnapshotSyncService;
@@ -122,6 +123,7 @@ final class SymbolicTextController extends AbstractController
         EntityManagerInterface $entityManager,
         SwDisplayRepository $displayRepository,
         SwScheduleRepository $scheduleRepository,
+        SwSnapshotRepository $snapshotRepository,
         SwTextVariantRepository $variantRepository,
         MsMappingRepository $msMappingRepository,
         OrbWindowRepository $orbWindowRepository
@@ -145,6 +147,7 @@ final class SymbolicTextController extends AbstractController
             $endUtc,
             $rowDefinitions,
             $scheduleRepository,
+            $snapshotRepository,
             $msMappingRepository,
             $orbWindowRepository,
             $lang,
@@ -202,6 +205,7 @@ final class SymbolicTextController extends AbstractController
     public function data(
         Request $request,
         SwScheduleRepository $scheduleRepository,
+        SwSnapshotRepository $snapshotRepository,
         MsMappingRepository $msMappingRepository,
         OrbWindowRepository $orbWindowRepository
     ): JsonResponse {
@@ -223,6 +227,7 @@ final class SymbolicTextController extends AbstractController
             $endUtc,
             $rowDefinitions,
             $scheduleRepository,
+            $snapshotRepository,
             $msMappingRepository,
             $orbWindowRepository,
             $lang,
@@ -1137,6 +1142,7 @@ final class SymbolicTextController extends AbstractController
         \DateTimeImmutable $endUtc,
         array $rowDefinitions,
         SwScheduleRepository $scheduleRepository,
+        SwSnapshotRepository $snapshotRepository,
         MsMappingRepository $msMappingRepository,
         OrbWindowRepository $orbWindowRepository,
         string $lang,
@@ -1157,7 +1163,15 @@ final class SymbolicTextController extends AbstractController
         );
 
         $durationSeconds = max(1, $endUtc->getTimestamp() - $startUtc->getTimestamp());
-        $entriesByRow = $this->buildEntriesByRow($schedules, $rowDefinitions, $startUtc, $endUtc, $durationSeconds, $showAll);
+        $entriesByRow = $this->buildEntriesByRow(
+            $schedules,
+            $rowDefinitions,
+            $startUtc,
+            $endUtc,
+            $durationSeconds,
+            $showAll,
+            $snapshotRepository
+        );
         $gapsByRow = $this->buildGapsByRow($entriesByRow, $rowDefinitions, $startUtc, $endUtc, $durationSeconds);
 
         $phaseEvents = $this->normalizePhaseEvents(
@@ -1198,7 +1212,8 @@ final class SymbolicTextController extends AbstractController
             $startUtc,
             $endUtc,
             $durationSeconds,
-            $showAll
+            $showAll,
+            $snapshotRepository
         );
         $weatherEntries = $weatherEntriesByRow['family_symbolic_weather'] ?? [];
 
@@ -1317,10 +1332,14 @@ final class SymbolicTextController extends AbstractController
         \DateTimeImmutable $startUtc,
         \DateTimeImmutable $endUtc,
         int $durationSeconds,
-        bool $showAll = false
+        bool $showAll = false,
+        ?SwSnapshotRepository $snapshotRepository = null
     ): array {
         $startTs = $startUtc->getTimestamp();
         $endTs = $endUtc->getTimestamp();
+        $snapshotScheduleIdIndex = $snapshotRepository instanceof SwSnapshotRepository
+            ? $this->buildSnapshotScheduleIdIndex($schedules, $snapshotRepository)
+            : [];
         $rowMap = [];
         foreach ($rowDefinitions as $row) {
             $rowMap[$row['code']] = [];
@@ -1364,9 +1383,11 @@ final class SymbolicTextController extends AbstractController
             }
 
             $isReady = $display->isActive() && $content->isValidated() && $content->isCurrent() && $schedule->isPublished();
+            $scheduleId = (string) ($schedule->getId() ?? '');
+            $isInSnapshot = $scheduleId !== '' && isset($snapshotScheduleIdIndex[$scheduleId]);
 
             $rowMap[$rowCode][] = [
-                'id' => (string) $schedule->getId(),
+                'id' => $scheduleId,
                 'left' => $this->positionPercent($itemStartTs, $startTs, $durationSeconds),
                 'width' => $this->widthPercent($itemStartTs, $itemEndTs, $durationSeconds),
                 'start_ts' => $itemStartTs,
@@ -1375,6 +1396,7 @@ final class SymbolicTextController extends AbstractController
                 'subtitle' => $subtitle,
                 'color' => $color,
                 'is_ready' => $isReady,
+                'is_in_snapshot' => $isInSnapshot,
                 'is_published_for_snapshot' => $publishedForSnapshot,
                 'start_at_input' => $schedule->getStartsAtUtc()->format('Y-m-d H:i'),
                 'end_at_input' => $schedule->getEndsAtUtc()->format('Y-m-d H:i'),
@@ -2050,6 +2072,38 @@ final class SymbolicTextController extends AbstractController
         }
 
         return null;
+    }
+
+    /**
+     * Construit un index rapide schedule_id => true pour les lignes presentes en snapshot.
+     *
+     * @param SwSchedule[] $schedules
+     * @return array<string, bool>
+     */
+    private function buildSnapshotScheduleIdIndex(array $schedules, SwSnapshotRepository $snapshotRepository): array
+    {
+        $scheduleIds = [];
+        foreach ($schedules as $schedule) {
+            if (!$schedule instanceof SwSchedule) {
+                continue;
+            }
+            $scheduleId = $schedule->getId();
+            if ($scheduleId === null) {
+                continue;
+            }
+            $scheduleIds[] = (string) $scheduleId;
+        }
+
+        if ($scheduleIds === []) {
+            return [];
+        }
+
+        $foundIds = $snapshotRepository->findScheduleIdsIn($scheduleIds);
+        if ($foundIds === []) {
+            return [];
+        }
+
+        return array_fill_keys($foundIds, true);
     }
 
     private function isPublishedForSnapshot(SwDisplay $display): bool

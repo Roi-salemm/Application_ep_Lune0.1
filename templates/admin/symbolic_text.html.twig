@@ -184,8 +184,11 @@
                             {% endif %}
 
                             {% for entry in entries %}
-                                <article class="symbolic-entry {{ entry.is_ready ? (entry.end_ts <= now_ts ? 'is-ready-past' : 'is-ready-upcoming') : 'is-warning' }}"
+                                <article class="symbolic-entry {{ entry.is_ready ? (entry.end_ts <= now_ts ? 'is-ready-past is-past' : 'is-ready-upcoming') : (entry.end_ts <= now_ts ? 'is-warning is-past' : 'is-warning') }}"
                                          style="left: {{ entry.left }}%; width: {{ entry.width }}%; --entry-color: {{ entry.color }};">
+                                    {% if entry.is_in_snapshot %}
+                                        <span class="symbolic-entry__snapshot-band" aria-hidden="true"></span>
+                                    {% endif %}
                                     <div class="symbolic-entry__text">
                                         <strong>{{ entry.label }}</strong>
                                         {% if entry.subtitle %}
@@ -1179,9 +1182,13 @@
                 inFlight: {},
                 selectedSymbolicKey: null,
                 pendingActiveBySchedule: {},
-                bulkSaving: false
+                bulkSaving: false,
+                cursorTs: null,
+                cursorMode: null,
+                visibleJunctionTs: []
             };
             var labelsPanel = document.querySelector('.symbolic-layout__labels');
+            var junctionSnapPx = 8;
 
             function formatUtc(ts) {
                 var d = new Date(ts * 1000);
@@ -1191,6 +1198,14 @@
                 var h = String(d.getUTCHours()).padStart(2, '0');
                 var min = String(d.getUTCMinutes()).padStart(2, '0');
                 return y + '-' + m + '-' + day + ' ' + h + ':' + min;
+            }
+
+            function formatUtcClock(ts) {
+                var d = new Date(ts * 1000);
+                var h = String(d.getUTCHours()).padStart(2, '0');
+                var min = String(d.getUTCMinutes()).padStart(2, '0');
+                var sec = String(d.getUTCSeconds()).padStart(2, '0');
+                return h + ':' + min + ':' + sec;
             }
 
             function formatUtcPrecise(ts) {
@@ -1333,18 +1348,19 @@
             }
 
             function readyStateClass(entry, fallbackStartTs, fallbackEndTs) {
-                if (!entry || !entry.is_ready) {
-                    return ' is-warning';
-                }
-
+                var nowTs = Math.floor(Date.now() / 1000);
                 var endTs = typeof entry.end_ts === 'number' ? entry.end_ts : fallbackEndTs;
+                var isPast = typeof endTs === 'number' && endTs <= nowTs;
+
+                if (!entry || !entry.is_ready) {
+                    return isPast ? ' is-warning is-past' : ' is-warning';
+                }
                 if (typeof endTs !== 'number') {
                     return ' is-ready-upcoming';
                 }
 
-                var nowTs = Math.floor(Date.now() / 1000);
-                if (endTs <= nowTs) {
-                    return ' is-ready-past';
+                if (isPast) {
+                    return ' is-ready-past is-past';
                 }
 
                 return ' is-ready-upcoming';
@@ -1386,6 +1402,19 @@
                 }
 
                 return normalizeLooseBool(entry ? entry.is_published_for_snapshot : false);
+            }
+
+            function hasSnapshotLine(entry) {
+                return normalizeLooseBool(entry ? entry.is_in_snapshot : false);
+            }
+
+            function buildSnapshotBandHtml(entry, cssClass) {
+                if (!hasSnapshotLine(entry)) {
+                    return '';
+                }
+                var klass = (cssClass && String(cssClass).trim() !== '') ? String(cssClass).trim() : 'symbolic-entry__snapshot-band';
+
+                return '<span class="' + escapeHtml(klass) + '" aria-hidden="true"></span>';
             }
 
             function buildPublishSwitchHtml(entry) {
@@ -1682,6 +1711,52 @@
                     weatherEntries: weatherEntries,
                     entriesByRow: normalizedEntriesByRow
                 };
+            }
+
+            function buildVisibleJunctions(data) {
+                var tsMap = {};
+                var minTs = state.visibleStartTs;
+                var maxTs = state.visibleEndTs;
+
+                function addTs(rawTs) {
+                    if (typeof rawTs !== 'number' || !Number.isFinite(rawTs)) {
+                        return;
+                    }
+                    var ts = Math.floor(rawTs);
+                    if (ts < minTs || ts > maxTs) {
+                        return;
+                    }
+                    tsMap[String(ts)] = true;
+                }
+
+                var entriesByRow = (data && data.entriesByRow) ? data.entriesByRow : {};
+                Object.keys(entriesByRow).forEach(function (rowCode) {
+                    var rowEntries = entriesByRow[rowCode] || [];
+                    rowEntries.forEach(function (entry) {
+                        if (!entry) {
+                            return;
+                        }
+                        addTs(entry.start_ts);
+                        addTs(entry.end_ts);
+                    });
+                });
+
+                var weatherEntries = (data && data.weatherEntries) ? data.weatherEntries : [];
+                weatherEntries.forEach(function (entry) {
+                    if (!entry) {
+                        return;
+                    }
+                    addTs(entry.start_ts);
+                    addTs(entry.end_ts);
+                });
+
+                return Object.keys(tsMap).map(function (key) {
+                    return parseInt(key, 10);
+                }).filter(function (ts) {
+                    return Number.isFinite(ts);
+                }).sort(function (a, b) {
+                    return a - b;
+                });
             }
 
             function renderAstronomy(points) {
@@ -2039,6 +2114,7 @@
                     var weatherReadyClass = readyStateClass(entry, entryPack.startTs, entryPack.endTs);
                     html += '' +
                         '<article class="symbolic-text-entry symbolic-text-entry--weather' + weatherReadyClass + '" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:#2D66A0;">' +
+                        buildSnapshotBandHtml(entry, 'symbolic-text-entry__snapshot-band') +
                         '<div class="symbolic-text-entry__text symbolic-text-entry__text--weather">' +
                         '<div class="symbolic-weather-body">' + escapeHtml(entry.label || '') + '</div>' +
                         '<small class="symbolic-weather-meta">' + escapeHtml(metaLine) + '</small>' +
@@ -2341,6 +2417,7 @@
                         var readyClass = readyStateClass(entry, entryPack.startTs, entryPack.endTs);
                         html += '' +
                             '<article class="symbolic-text-entry' + readyClass + '" style="left:' + positionPercent(entryPack.startTs) + '%;width:' + widthPercent(entryPack.startTs, entryPack.endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#315A7B') + ';">' +
+                            buildSnapshotBandHtml(entry, 'symbolic-text-entry__snapshot-band') +
                             '<div class="symbolic-text-entry__text">' +
                             '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
                             (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
@@ -2402,6 +2479,7 @@
                         var readyClass = readyStateClass(entry, startTs, endTs);
                         html += '' +
                             '<article class="symbolic-entry' + readyClass + '" style="left:' + positionPercent(startTs) + '%;width:' + widthPercent(startTs, endTs) + '%;--entry-color:' + escapeHtml(entry.color || '#315A7B') + ';">' +
+                            buildSnapshotBandHtml(entry, 'symbolic-entry__snapshot-band') +
                             '<div class="symbolic-entry__text">' +
                             '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
                             (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
@@ -2469,7 +2547,12 @@
             function updateWindowLabels() {
                 var label = document.querySelector('[data-window-label]');
                 if (label) {
-                    label.textContent = 'Fenetre UTC: ' + formatUtc(state.visibleStartTs) + ' -> ' + formatUtc(state.visibleEndTs);
+                    var base = 'Fenetre UTC: ' + formatUtc(state.visibleStartTs) + ' -> ' + formatUtc(state.visibleEndTs);
+                    if (typeof state.cursorTs === 'number') {
+                        var cursorPrefix = state.cursorMode === 'junction' ? 'Jonction UTC' : 'Curseur UTC';
+                        base += '    |    ' + cursorPrefix + ': ' + formatUtcClock(state.cursorTs);
+                    }
+                    label.textContent = base;
                 }
                 document.querySelectorAll('[data-window-end-hidden]').forEach(function (input) {
                     input.value = formatUtc(state.visibleEndTs);
@@ -2491,6 +2574,7 @@
             function renderFromCache() {
                 buildGridAndReal();
                 var data = collectWindowData();
+                state.visibleJunctionTs = buildVisibleJunctions(data);
                 renderAstronomy(data.astronomy);
                 renderLunation(data.lunation);
                 renderSymbolic(data.symbolic);
@@ -2615,7 +2699,54 @@
             });
 
             timeline.addEventListener('mouseleave', function () {
+                state.cursorTs = null;
+                state.cursorMode = null;
+                updateWindowLabels();
                 hidePhaseTooltip();
+            });
+
+            timeline.addEventListener('mousemove', function (event) {
+                var rect = timeline.getBoundingClientRect();
+                var width = rect.width;
+                if (!Number.isFinite(width) || width <= 0) {
+                    state.cursorTs = null;
+                    state.cursorMode = null;
+                    updateWindowLabels();
+                    return;
+                }
+
+                var relativeX = event.clientX - rect.left;
+                if (relativeX < 0 || relativeX > width) {
+                    state.cursorTs = null;
+                    state.cursorMode = null;
+                    updateWindowLabels();
+                    return;
+                }
+
+                var ratio = relativeX / width;
+                var rawTs = state.visibleStartTs + (ratio * state.spanSeconds);
+                var snappedTs = Math.floor(rawTs);
+                var mode = 'cursor';
+                var bestPx = Number.POSITIVE_INFINITY;
+
+                (state.visibleJunctionTs || []).forEach(function (junctionTs) {
+                    var deltaPx = Math.abs(junctionTs - rawTs) * width / Math.max(1, state.spanSeconds);
+                    if (deltaPx < bestPx) {
+                        bestPx = deltaPx;
+                        snappedTs = junctionTs;
+                    }
+                });
+
+                if (bestPx <= junctionSnapPx) {
+                    mode = 'junction';
+                } else {
+                    snappedTs = Math.floor(rawTs);
+                }
+
+                snappedTs = Math.max(state.visibleStartTs, Math.min(state.visibleEndTs, snappedTs));
+                state.cursorTs = snappedTs;
+                state.cursorMode = mode;
+                updateWindowLabels();
             });
 
             document.addEventListener('click', function (event) {

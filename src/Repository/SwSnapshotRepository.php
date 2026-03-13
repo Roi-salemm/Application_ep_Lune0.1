@@ -59,5 +59,39 @@ class SwSnapshotRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
-}
 
+    /**
+     * Retourne les IDs de schedules presents en snapshot.
+     *
+     * @param string[] $scheduleIds
+     * @return string[]
+     */
+    public function findScheduleIdsIn(array $scheduleIds): array
+    {
+        $normalized = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $id): string => trim((string) $id), $scheduleIds),
+            static fn (string $id): bool => $id !== ''
+        )));
+        if ($normalized === []) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('snap')
+            ->select('IDENTITY(snap.swSchedule) AS schedule_id')
+            ->andWhere('IDENTITY(snap.swSchedule) IN (:scheduleIds)')
+            ->setParameter('scheduleIds', $normalized)
+            ->getQuery()
+            ->getScalarResult();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $id = trim((string) ($row['schedule_id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $result[] = $id;
+        }
+
+        return array_values(array_unique($result));
+    }
+}
