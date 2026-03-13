@@ -1,0 +1,198 @@
+{# Ecran admin SWSnapshot.
+   Pourquoi: inspecter la table snapshot telle qu elle sera lue par le front.
+   Info: tri client par en-tetes + filtre Aujourd hui sur la fenetre UTC starts_at/ends_at. #}
+{% extends 'admin/base.html.twig' %}
+
+{% block admin_content %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="admin-flash admin-flash--{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <section class="admin-card admin-card--table">
+        <div class="admin-modal__actions snapshot-table-actions">
+            <button type="button" class="admin-button admin-button--primary" data-snapshot-today-toggle>
+                Aujourd'hui ({{ today_label }})
+            </button>
+            <span class="snapshot-table-status" data-snapshot-status>Toutes les lignes sont affichees.</span>
+        </div>
+
+        <div class="admin-table-wrap">
+            <table class="admin-table snapshot-table">
+                <thead>
+                    <tr>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="id" data-sort-type="int">id</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="sw_display_id" data-sort-type="int">sw_display_id</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="sw_content_id" data-sort-type="int">sw_content_id</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="sw_schedule_id" data-sort-type="int">sw_schedule_id</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="lang" data-sort-type="text">lang</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="family" data-sort-type="text">family</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="reading_mode" data-sort-type="text">reading_mode</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="card_title" data-sort-type="text">card_title</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="card_text" data-sort-type="text">card_text</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="content_json" data-sort-type="text">content_json</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="starts_at" data-sort-type="date">starts_at</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="ends_at" data-sort-type="date">ends_at</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="is_active" data-sort-type="bool">is_active</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="created_at" data-sort-type="date">created_at</button></th>
+                        <th class="admin-table__cell"><button type="button" class="admin-table__sort" data-sort-key="updated_at" data-sort-type="date">updated_at</button></th>
+                    </tr>
+                </thead>
+                <tbody data-snapshot-tbody>
+                    {% for snapshot in snapshots %}
+                        {% set starts_ts = snapshot.startsAt|date('U') %}
+                        {% set ends_ts = snapshot.endsAt|date('U') %}
+                        {% set row_is_today = starts_ts < today_end_ts and ends_ts > today_start_ts %}
+                        <tr class="admin-table__row snapshot-row {{ row_is_today ? 'snapshot-row--today' : '' }}"
+                            data-snapshot-row
+                            data-is-today="{{ row_is_today ? '1' : '0' }}"
+                            data-sort-id="{{ snapshot.id }}"
+                            data-sort-sw_display_id="{{ snapshot.swDisplay ? snapshot.swDisplay.id : 0 }}"
+                            data-sort-sw_content_id="{{ snapshot.swContent ? snapshot.swContent.id : 0 }}"
+                            data-sort-sw_schedule_id="{{ snapshot.swSchedule ? snapshot.swSchedule.id : 0 }}"
+                            data-sort-lang="{{ snapshot.lang|lower|e('html_attr') }}"
+                            data-sort-family="{{ snapshot.family|lower|e('html_attr') }}"
+                            data-sort-reading_mode="{{ snapshot.readingMode|lower|e('html_attr') }}"
+                            data-sort-card_title="{{ (snapshot.cardTitle ?? '')|lower|e('html_attr') }}"
+                            data-sort-card_text="{{ snapshot.cardText|lower|e('html_attr') }}"
+                            data-sort-content_json="{{ snapshot.contentJson|json_encode|lower|e('html_attr') }}"
+                            data-sort-starts_at="{{ starts_ts }}"
+                            data-sort-ends_at="{{ ends_ts }}"
+                            data-sort-is_active="{{ snapshot.isActive ? '1' : '0' }}"
+                            data-sort-created_at="{{ snapshot.createdAt|date('U') }}"
+                            data-sort-updated_at="{{ snapshot.updatedAt|date('U') }}">
+                            <td class="admin-table__cell">{{ snapshot.id }}</td>
+                            <td class="admin-table__cell">{{ snapshot.swDisplay ? snapshot.swDisplay.id : '' }}</td>
+                            <td class="admin-table__cell">{{ snapshot.swContent ? snapshot.swContent.id : '' }}</td>
+                            <td class="admin-table__cell">{{ snapshot.swSchedule ? snapshot.swSchedule.id : '' }}</td>
+                            <td class="admin-table__cell">{{ snapshot.lang }}</td>
+                            <td class="admin-table__cell">{{ snapshot.family }}</td>
+                            <td class="admin-table__cell">{{ snapshot.readingMode }}</td>
+                            <td class="admin-table__cell">{{ snapshot.cardTitle }}</td>
+                            <td class="admin-table__cell">{{ snapshot.cardText }}</td>
+                            <td class="admin-table__cell snapshot-json-cell">
+                                <pre class="snapshot-json">{{ snapshot.contentJson|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+                            </td>
+                            <td class="admin-table__cell">{{ snapshot.startsAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell">{{ snapshot.endsAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell">{{ snapshot.isActive ? '1' : '0' }}</td>
+                            <td class="admin-table__cell">{{ snapshot.createdAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                            <td class="admin-table__cell">{{ snapshot.updatedAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td class="admin-table__cell" colspan="15">Aucune ligne snapshot en base.</td>
+                        </tr>
+                    {% endfor %}
+                    <tr data-snapshot-empty-today hidden>
+                        <td class="admin-table__cell" colspan="15">Aucune ligne affichee aujourd'hui.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+            var tableBody = document.querySelector('[data-snapshot-tbody]');
+            var todayToggle = document.querySelector('[data-snapshot-today-toggle]');
+            var statusNode = document.querySelector('[data-snapshot-status]');
+            var emptyTodayRow = document.querySelector('[data-snapshot-empty-today]');
+            if (!tableBody) {
+                return;
+            }
+
+            var sortingState = { key: null, direction: 'asc' };
+            var showTodayOnly = false;
+
+            function toComparableValue(row, key, type) {
+                var raw = row.getAttribute('data-sort-' + key) || '';
+                if (type === 'int' || type === 'date' || type === 'bool') {
+                    var parsed = parseInt(raw, 10);
+                    return Number.isNaN(parsed) ? 0 : parsed;
+                }
+
+                return raw.toLowerCase();
+            }
+
+            function applySort(key, type) {
+                sortingState.direction = sortingState.key === key && sortingState.direction === 'asc' ? 'desc' : 'asc';
+                sortingState.key = key;
+
+                var rows = Array.prototype.slice.call(tableBody.querySelectorAll('[data-snapshot-row]'));
+                rows.sort(function (a, b) {
+                    var left = toComparableValue(a, key, type);
+                    var right = toComparableValue(b, key, type);
+                    if (left < right) {
+                        return sortingState.direction === 'asc' ? -1 : 1;
+                    }
+                    if (left > right) {
+                        return sortingState.direction === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                });
+
+                rows.forEach(function (row) {
+                    tableBody.appendChild(row);
+                });
+
+                document.querySelectorAll('.admin-table__sort').forEach(function (button) {
+                    button.classList.remove('is-active', 'is-asc', 'is-desc');
+                });
+                var activeButton = document.querySelector('.admin-table__sort[data-sort-key="' + key + '"]');
+                if (activeButton) {
+                    activeButton.classList.add('is-active');
+                    activeButton.classList.add(sortingState.direction === 'asc' ? 'is-asc' : 'is-desc');
+                }
+            }
+
+            function applyTodayFilter() {
+                var rows = Array.prototype.slice.call(tableBody.querySelectorAll('[data-snapshot-row]'));
+                var visibleCount = 0;
+                rows.forEach(function (row) {
+                    var isToday = row.getAttribute('data-is-today') === '1';
+                    var hide = showTodayOnly && !isToday;
+                    row.hidden = hide;
+                    if (!hide) {
+                        visibleCount++;
+                    }
+                });
+
+                if (emptyTodayRow) {
+                    emptyTodayRow.hidden = !(showTodayOnly && visibleCount === 0);
+                }
+                if (statusNode) {
+                    statusNode.textContent = showTodayOnly
+                        ? (visibleCount + ' ligne(s) sur la journee UTC.')
+                        : 'Toutes les lignes sont affichees.';
+                }
+                if (todayToggle) {
+                    todayToggle.classList.toggle('is-active', showTodayOnly);
+                    todayToggle.textContent = showTodayOnly ? 'Afficher tout' : "Aujourd'hui";
+                }
+            }
+
+            document.querySelectorAll('.admin-table__sort').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var key = button.getAttribute('data-sort-key') || '';
+                    var type = button.getAttribute('data-sort-type') || 'text';
+                    if (!key) {
+                        return;
+                    }
+                    applySort(key, type);
+                });
+            });
+
+            if (todayToggle) {
+                todayToggle.addEventListener('click', function () {
+                    showTodayOnly = !showTodayOnly;
+                    applyTodayFilter();
+                });
+            }
+
+            applyTodayFilter();
+        })();
+    </script>
+{% endblock %}
+

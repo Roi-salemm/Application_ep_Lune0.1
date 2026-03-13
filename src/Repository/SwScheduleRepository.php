@@ -67,6 +67,22 @@ class SwScheduleRepository extends ServiceEntityRepository
     }
 
     /**
+     * @return SwSchedule[]
+     */
+    public function findByDisplayId(string $displayId): array
+    {
+        return $this->createQueryBuilder('s')
+            ->addSelect('d', 'c')
+            ->innerJoin('s.display', 'd')
+            ->innerJoin('s.content', 'c')
+            ->andWhere('d.id = :displayId')
+            ->setParameter('displayId', $displayId)
+            ->orderBy('s.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Retourne les schedules Weather termines avant une date de reference.
      * Pourquoi: permettre la rotation coherente variant_no a partir du dernier historique en base.
      *

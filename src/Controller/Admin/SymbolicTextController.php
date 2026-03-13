@@ -15,6 +15,7 @@ use App\Repository\SwDisplayRepository;
 use App\Repository\SwScheduleRepository;
 use App\Repository\SwTextVariantRepository;
 use App\Service\Moon\OrbWindowParseService;
+use App\Service\SwSnapshotSyncService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -37,6 +38,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  *   - is_validated: drapeau technique de validation.
  *   - is_current: version active parmi les versions d un meme display (une seule ligne true par display).
  * - Table sw_schedule:
+ *   - display_id: relation 1:1 avec sw_display (un texte = une seule ligne schedule).
  *   - is_published: publication temporelle de la fenetre.
  *
  * Matrice de coherence sw_content (regle conseillee):
@@ -47,9 +49,9 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  *
  * Eligibilite d envoi en snapshot:
  * - sw_display.is_active = 1
- * - sw_content.is_validated = 1
- * - sw_content.is_current = 1
- * - sw_schedule.is_published = 1
+ *
+ * Note: le marqueur visuel is_ready dans la timeline reste volontairement strict
+ * (is_active + is_validated + is_current + is_published) pour le suivi qualite.
  */
 final class SymbolicTextController extends AbstractController
 {
@@ -129,6 +131,7 @@ final class SymbolicTextController extends AbstractController
         $span = $this->sanitizeSpan((string) $request->query->get('span', '2j'));
         $spanSeconds = $spanOptions[$span];
         $lang = $this->sanitizeTimelineLang((string) $request->query->get('lang', 'fr'));
+        $showAll = $this->requestQueryBool($request, 'show_all');
 
         $endUtc = $this->parseUtcInput((string) $request->query->get('end_utc', '')) ?? new \DateTimeImmutable('now', $utc);
         $endUtc = $endUtc->setTimezone($utc);
@@ -144,7 +147,8 @@ final class SymbolicTextController extends AbstractController
             $scheduleRepository,
             $msMappingRepository,
             $orbWindowRepository,
-            $lang
+            $lang,
+            $showAll
         );
         $weatherVariantOptions = $this->buildWeatherVariantOptions(
             $variantRepository->findValidatedUsedWeatherVariants(self::FAMILY_SYMBOLIC, self::READING_MODE_SYM_WEATHER)
@@ -172,6 +176,7 @@ final class SymbolicTextController extends AbstractController
             'span_options' => array_keys($spanOptions),
             'span_seconds' => $spanSeconds,
             'lang' => $lang,
+            'show_all' => $showAll,
             'lang_options' => $this->timelineLangOptions(),
             'window_start_utc' => $startUtc,
             'window_end_utc' => $endUtc,
@@ -209,6 +214,7 @@ final class SymbolicTextController extends AbstractController
             );
         }
         $lang = $this->sanitizeTimelineLang((string) $request->query->get('lang', 'fr'));
+        $showAll = $this->requestQueryBool($request, 'show_all');
 
         $rowDefinitions = $this->rowDefinitions();
 
@@ -219,10 +225,235 @@ final class SymbolicTextController extends AbstractController
             $scheduleRepository,
             $msMappingRepository,
             $orbWindowRepository,
-            $lang
+            $lang,
+            $showAll
         );
 
         return $this->json($payload);
+    }
+
+    /**
+     * Verifie l impact d une edition/creation sur une plage potentiellement anterieure a aujourd hui.
+     * Pourquoi: imposer une validation explicite avant toute ecriture retroactive et expliciter les recouvrements.
+     */
+    #[Route('/admin/symbolic-text/impact-check', name: 'admin_symbolic_text_impact_check', methods: ['POST'])]
+    public function impactCheck(
+        Request $request,
+        SwScheduleRepository $scheduleRepository
+    ): JsonResponse {
+        $payload = json_decode((string) $request->getContent(), true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Payload JSON invalide.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $token = (string) ($payload['_token'] ?? '');
+        if (!$this->isCsrfTokenValid('symbolic_text_impact_check', $token)) {
+            return $this->json(['error' => 'Jeton CSRF invalide.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $startUtc = $this->parseUtcInput((string) ($payload['start_utc'] ?? ''));
+        $endUtc = $this->parseUtcInput((string) ($payload['end_utc'] ?? ''));
+        if (!$startUtc || !$endUtc || $endUtc <= $startUtc) {
+            return $this->json(['error' => 'Plage UTC invalide.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $displayCode = trim((string) ($payload['display_code'] ?? ''));
+        $readingModeScope = trim((string) ($payload['reading_mode'] ?? ''));
+        $familyScope = trim((string) ($payload['family'] ?? ''));
+        $excludeScheduleId = trim((string) ($payload['schedule_id'] ?? ''));
+        $lang = $this->sanitizeTimelineLang((string) ($payload['lang'] ?? 'fr'));
+        $row = $this->findRowDefinitionByCode($displayCode, $this->rowDefinitions());
+
+        $overlaps = [];
+        $readingModes = [];
+        $familyFilter = self::FAMILY_SYMBOLIC;
+        if ($row !== null) {
+            $readingMode = trim((string) ($row['reading_mode'] ?? ''));
+            if ($readingMode !== '') {
+                $readingModes[] = $readingMode;
+            }
+            $familyFromRow = trim((string) ($row['family'] ?? ''));
+            if ($familyFromRow !== '') {
+                $familyFilter = $familyFromRow;
+            }
+        } elseif ($readingModeScope !== '') {
+            $readingModes[] = $readingModeScope;
+            if ($familyScope !== '') {
+                $familyFilter = $familyScope;
+            }
+        }
+
+        if ($readingModes !== []) {
+            $existingSchedules = $scheduleRepository->findTimelineEntriesForAdmin(
+                $startUtc,
+                $endUtc,
+                $readingModes,
+                $familyFilter,
+                $lang
+            );
+
+            foreach ($existingSchedules as $schedule) {
+                if (!$schedule instanceof SwSchedule || $schedule->getId() === null) {
+                    continue;
+                }
+                $scheduleId = (string) $schedule->getId();
+                if ($excludeScheduleId !== '' && $scheduleId === $excludeScheduleId) {
+                    continue;
+                }
+
+                $scheduleStart = $schedule->getStartsAtUtc();
+                $scheduleEnd = $schedule->getEndsAtUtc();
+                if ($scheduleEnd <= $startUtc || $scheduleStart >= $endUtc) {
+                    continue;
+                }
+
+                $content = $schedule->getContent();
+                $contentJson = $content?->getContentJson();
+                $label = '';
+                if (is_array($contentJson)) {
+                    $label = trim((string) ($contentJson['label'] ?? $contentJson['title'] ?? ''));
+                }
+                if ($label === '') {
+                    $label = trim((string) ($schedule->getComment() ?? ''));
+                }
+                if ($label === '') {
+                    $label = 'Texte existant';
+                }
+
+                $overlaps[] = [
+                    'schedule_id' => $scheduleId,
+                    'label' => $label,
+                    'starts_at_utc' => $scheduleStart->format('Y-m-d H:i:s'),
+                    'ends_at_utc' => $scheduleEnd->format('Y-m-d H:i:s'),
+                ];
+            }
+        }
+
+        $daysConcerned = $this->listUtcDaysInRange($startUtc, $endUtc);
+        $todayStartUtc = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->setTime(0, 0, 0);
+        $todayDay = $todayStartUtc->format('Y-m-d');
+        $pastDays = array_values(array_filter(
+            $daysConcerned,
+            static fn (string $day): bool => $day < $todayDay
+        ));
+
+        return $this->json([
+            'start_utc' => $startUtc->format('Y-m-d H:i:s'),
+            'end_utc' => $endUtc->format('Y-m-d H:i:s'),
+            'touches_past' => $startUtc < $todayStartUtc,
+            'days_concerned' => $daysConcerned,
+            'past_days' => $pastDays,
+            'would_rewrite' => count($overlaps) > 0,
+            'overlap_count' => count($overlaps),
+            'overlaps' => $overlaps,
+        ]);
+    }
+
+    /**
+     * Applique en lot les bascules is_active (publication snapshot) depuis la vue "Tous".
+     * Pourquoi: permettre plusieurs changements UI puis une seule sauvegarde en base.
+     */
+    #[Route('/admin/symbolic-text/bulk-active', name: 'admin_symbolic_text_bulk_active', methods: ['POST'])]
+    public function bulkActive(
+        Request $request,
+        EntityManagerInterface $entityManager,
+        SwScheduleRepository $scheduleRepository,
+        SwSnapshotSyncService $snapshotSyncService
+    ): JsonResponse {
+        $payload = json_decode((string) $request->getContent(), true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Payload JSON invalide.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $token = (string) ($payload['_token'] ?? '');
+        if (!$this->isCsrfTokenValid('symbolic_text_bulk_active', $token)) {
+            return $this->json(['error' => 'Jeton CSRF invalide.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $updatesRaw = $payload['updates'] ?? null;
+        if (!is_array($updatesRaw)) {
+            return $this->json(['error' => 'Champ updates manquant.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $requestedBySchedule = [];
+        foreach ($updatesRaw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $scheduleId = trim((string) ($row['schedule_id'] ?? ''));
+            if ($scheduleId === '') {
+                continue;
+            }
+            $active = $this->normalizeLooseBool($row['is_active'] ?? null);
+            if ($active === null) {
+                continue;
+            }
+            $requestedBySchedule[$scheduleId] = $active;
+        }
+
+        if ($requestedBySchedule === []) {
+            return $this->json(['updated' => 0, 'requested' => 0]);
+        }
+
+        $schedules = $scheduleRepository->findBy([
+            'id' => array_keys($requestedBySchedule),
+        ]);
+
+        $scheduleById = [];
+        foreach ($schedules as $schedule) {
+            if (!$schedule instanceof SwSchedule || $schedule->getId() === null) {
+                continue;
+            }
+            $scheduleById[(string) $schedule->getId()] = $schedule;
+        }
+
+        $updated = 0;
+        /** @var array<string, bool> $requestedByDisplay */
+        $requestedByDisplay = [];
+        foreach ($requestedBySchedule as $scheduleId => $target) {
+            $schedule = $scheduleById[$scheduleId] ?? null;
+            if (!$schedule instanceof SwSchedule) {
+                continue;
+            }
+            $display = $schedule->getDisplay();
+            if (!$display instanceof SwDisplay) {
+                continue;
+            }
+            $displayId = $display->getId();
+            if ($displayId !== null) {
+                // Regle robuste: on force la synchro snapshot sur l etat cible,
+                // meme si la valeur est deja identique en base.
+                $requestedByDisplay[(string) $displayId] = (bool) $target;
+            }
+            $targetBool = (bool) $target;
+            if ($display->isActive() === $targetBool) {
+                continue;
+            }
+            $display->setIsActive($targetBool);
+            $updated++;
+        }
+
+        if ($updated > 0) {
+            $entityManager->flush();
+        }
+
+        $snapshotChanged = false;
+        foreach ($requestedByDisplay as $displayId => $targetBool) {
+            if ($targetBool) {
+                $snapshotChanged = $snapshotSyncService->syncByDisplayId($displayId) || $snapshotChanged;
+                continue;
+            }
+            $snapshotChanged = $snapshotSyncService->removeByDisplayId($displayId) > 0 || $snapshotChanged;
+        }
+        if ($snapshotChanged) {
+            $entityManager->flush();
+        }
+
+        return $this->json([
+            'updated' => $updated,
+            'requested' => count($requestedBySchedule),
+            'snapshot_changed' => $snapshotChanged,
+        ]);
     }
 
     /**
@@ -236,7 +467,8 @@ final class SymbolicTextController extends AbstractController
         SwDisplayRepository $displayRepository,
         SwScheduleRepository $scheduleRepository,
         SwTextVariantRepository $variantRepository,
-        OrbWindowRepository $orbWindowRepository
+        OrbWindowRepository $orbWindowRepository,
+        SwSnapshotSyncService $snapshotSyncService
     ): RedirectResponse {
         $redirect = $this->redirectToTimeline($request);
         if (!$this->isCsrfTokenValid('parse_symbolic_text_weather_week', (string) $request->request->get('_token', ''))) {
@@ -245,6 +477,9 @@ final class SymbolicTextController extends AbstractController
         }
 
         $utc = new \DateTimeZone('UTC');
+        // Autorisation explicite des ecritures retroactives:
+        // ce flag n est pose que depuis le modal de confirmation front.
+        $allowRetroactiveWrite = $this->requestBool($request, 'allow_retroactive_write');
         $zoneStartUtc = $this->parseUtcInput((string) $request->request->get('zone_start_utc', ''));
         $zoneEndUtc = $this->parseUtcInput((string) $request->request->get('zone_end_utc', ''));
         $isSingleZoneParse = $zoneStartUtc instanceof \DateTimeImmutable && $zoneEndUtc instanceof \DateTimeImmutable;
@@ -285,7 +520,7 @@ final class SymbolicTextController extends AbstractController
         }
 
         $todayStartUtc = (new \DateTimeImmutable('now', $utc))->setTime(0, 0, 0);
-        if ($parseEndUtc <= $todayStartUtc) {
+        if (!$allowRetroactiveWrite && $parseEndUtc <= $todayStartUtc) {
             $this->addFlash('warning', 'Parse ignore: plage totalement anterieure a aujourd hui.');
             return $redirect;
         }
@@ -309,10 +544,11 @@ final class SymbolicTextController extends AbstractController
                 $parseStartUtc,
                 $parseEndUtc,
                 $todayStartUtc,
+                $allowRetroactiveWrite,
                 $forcedPhaseIndex,
                 $forcedVariantNo
             )
-            : $this->selectWeatherParseZones($sourceZones, $parseStartUtc, $parseEndUtc, $todayStartUtc);
+            : $this->selectWeatherParseZones($sourceZones, $parseStartUtc, $parseEndUtc, $todayStartUtc, $allowRetroactiveWrite);
         if ($targetZones === []) {
             $this->addFlash('warning', 'Aucune zone Weather eligible sur la plage choisie.');
             return $redirect;
@@ -367,20 +603,21 @@ final class SymbolicTextController extends AbstractController
 
                 $existingStartTs = $schedule->getStartsAtUtc()->getTimestamp();
                 $existingEndTs = $schedule->getEndsAtUtc()->getTimestamp();
-                if ($existingEndTs <= $todayStartUtc->getTimestamp()) {
+                if (!$allowRetroactiveWrite && $existingEndTs <= $todayStartUtc->getTimestamp()) {
                     continue;
                 }
                 if (!$this->timeRangeOverlaps($existingStartTs, $existingEndTs, $rewriteStartTs, $rewriteEndTs)) {
                     continue;
                 }
 
-                if ($existingStartTs < $todayStartUtc->getTimestamp()) {
+                if (!$allowRetroactiveWrite && $existingStartTs < $todayStartUtc->getTimestamp()) {
                     $schedule->setEndsAtUtc($todayStartUtc);
                     $trimmedSchedules++;
                     continue;
                 }
 
                 $content = $schedule->getContent();
+                $this->detachScheduleFromDisplay($schedule);
                 $entityManager->remove($schedule);
                 $removedSchedules++;
                 if ($content instanceof SwContent && $content->getId() !== null) {
@@ -419,6 +656,8 @@ final class SymbolicTextController extends AbstractController
         $lastVariantNoByPhase = $this->buildLastVariantNoByPhaseFromSchedules($historySchedules);
 
         $created = 0;
+        /** @var array<int, SwDisplay> $createdDisplays */
+        $createdDisplays = [];
         $missingVariantZones = 0;
         $unknownPhaseZones = 0;
         $nowUtc = new \DateTimeImmutable('now', $utc);
@@ -530,10 +769,23 @@ final class SymbolicTextController extends AbstractController
             $entityManager->persist($content);
             $entityManager->persist($schedule);
             $created++;
+            $createdDisplays[] = $display;
         }
 
         if ($created > 0) {
             $entityManager->flush();
+            $snapshotChanged = false;
+            // Les IDs existent apres flush: on force une projection snapshot immediate.
+            foreach ($createdDisplays as $displayEntity) {
+                $displayId = $displayEntity->getId();
+                if ($displayId === null) {
+                    continue;
+                }
+                $snapshotChanged = $snapshotSyncService->syncByDisplayId((string) $displayId) || $snapshotChanged;
+            }
+            if ($snapshotChanged) {
+                $entityManager->flush();
+            }
         }
 
         $this->addFlash(
@@ -566,7 +818,8 @@ final class SymbolicTextController extends AbstractController
     public function create(
         Request $request,
         EntityManagerInterface $entityManager,
-        SwDisplayRepository $displayRepository
+        SwDisplayRepository $displayRepository,
+        SwSnapshotSyncService $snapshotSyncService
     ): RedirectResponse {
         $redirect = $this->redirectToTimeline($request);
         $rowDefinitions = $this->rowDefinitions();
@@ -638,6 +891,17 @@ final class SymbolicTextController extends AbstractController
             return $redirect;
         }
 
+        $isCurrent = $input->content_is_current;
+        $isValidated = $input->content_is_validated;
+        $contentState = $this->resolveContentStateFromFlags($isValidated, $isCurrent);
+        $isCurrent = $contentState['is_current'];
+        $isValidated = $contentState['is_validated'];
+        $status = $contentState['status'];
+        if ($contentState['corrected']) {
+            $this->addFlash('warning', 'Etat content corrige: is_current=true exige is_validated=true. Passage automatique en draft.');
+        }
+        $nowUtc = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
         $contentJson = $this->buildSwContentJson(
             [],
             $decodedContentJson,
@@ -659,10 +923,6 @@ final class SymbolicTextController extends AbstractController
         $display->setLang($this->sanitizeLang((string) $input->display_lang));
         $display->setIsActive($input->display_is_active);
         $display->setComment($this->nullIfEmpty((string) ($input->display_comment ?? '')));
-
-        $isCurrent = $input->content_is_current;
-        $isValidated = $input->content_is_validated;
-        $nowUtc = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
         $content = new SwContent();
         $content->setDisplay($display);
@@ -696,6 +956,7 @@ final class SymbolicTextController extends AbstractController
         $entityManager->persist($content);
         $entityManager->persist($schedule);
         $entityManager->flush();
+        $this->syncSnapshotForDisplay($display, $snapshotSyncService, $entityManager);
 
         $this->addFlash('success', 'Element timeline cree (3 tables).');
 
@@ -708,8 +969,8 @@ final class SymbolicTextController extends AbstractController
         Request $request,
         EntityManagerInterface $entityManager,
         SwScheduleRepository $scheduleRepository,
-        SwDisplayRepository $displayRepository,
-        SwContentRepository $contentRepository
+        SwContentRepository $contentRepository,
+        SwSnapshotSyncService $snapshotSyncService
     ): RedirectResponse {
         $redirect = $this->redirectToTimeline($request);
         if (!$this->isCsrfTokenValid('update_symbolic_text_' . $id, (string) $request->request->get('_token', ''))) {
@@ -729,12 +990,20 @@ final class SymbolicTextController extends AbstractController
             return $redirect;
         }
 
-        $displayCode = trim((string) $request->request->get('display_code', ''));
-        $display = $displayRepository->findOneByCode($displayCode);
+        $display = $schedule->getDisplay();
         if (!$display instanceof SwDisplay) {
+            $this->addFlash('error', 'Display associe introuvable.');
+            return $redirect;
+        }
+
+        $displayCode = trim((string) $request->request->get('display_code', ''));
+        $row = $this->findRowDefinitionByCode($displayCode, $this->rowDefinitions());
+        if ($row === null) {
             $this->addFlash('error', 'Ligne timeline inconnue.');
             return $redirect;
         }
+        $display->setFamily((string) ($row['family'] ?? self::FAMILY_SYMBOLIC));
+        $display->setReadingMode((string) ($row['reading_mode'] ?? self::READING_MODE_SYM_INFLUENCE));
 
         $startsAtUtc = $this->parseUtcInput((string) $request->request->get('starts_at_utc', ''));
         $endsAtUtc = $this->parseUtcInput((string) $request->request->get('ends_at_utc', ''));
@@ -756,22 +1025,27 @@ final class SymbolicTextController extends AbstractController
             return $redirect;
         }
 
+        $isValidated = $this->requestBool($request, 'is_validated');
         $isCurrent = $this->requestBool($request, 'is_current');
+        $contentState = $this->resolveContentStateFromFlags($isValidated, $isCurrent);
+        $isCurrent = $contentState['is_current'];
+        $isValidated = $contentState['is_validated'];
+        $status = $contentState['status'];
+        if ($contentState['corrected']) {
+            $this->addFlash('warning', 'Etat content corrige: is_current=true exige is_validated=true. Passage automatique en draft.');
+        }
         if ($isCurrent) {
             $contentRepository->clearCurrentForDisplay($display);
         }
-        $isValidated = $this->requestBool($request, 'is_validated');
 
         if ($content->getDisplay()?->getId() !== $display->getId()) {
             $content->setDisplay($display);
-            $content->setVersionNo($contentRepository->findMaxVersionNoForDisplay($display) + 1);
         }
 
         $defaultColor = $this->findDefaultColorByCode($displayCode, $this->rowDefinitions());
         $subtitle = trim((string) $request->request->get('subtitle', ''));
         $icon = trim((string) $request->request->get('icon', ''));
         $editorialNotes = trim((string) $request->request->get('editorial_notes', ''));
-        $status = $this->sanitizeStatus((string) $request->request->get('status', 'validated'));
         $schemaVersion = $this->sanitizeSchemaVersion((string) $request->request->get('schema_version', '1.0'));
         $color = $this->sanitizeColor((string) $request->request->get('color', ''), $defaultColor);
         $existingContentJson = $content->getContentJson();
@@ -811,6 +1085,7 @@ final class SymbolicTextController extends AbstractController
         $schedule->setPayloadJson($payloadJson);
 
         $entityManager->flush();
+        $this->syncSnapshotForDisplay($display, $snapshotSyncService, $entityManager);
 
         $this->addFlash('success', 'Element timeline modifie.');
 
@@ -822,7 +1097,8 @@ final class SymbolicTextController extends AbstractController
         string $id,
         Request $request,
         EntityManagerInterface $entityManager,
-        SwScheduleRepository $scheduleRepository
+        SwScheduleRepository $scheduleRepository,
+        SwSnapshotSyncService $snapshotSyncService
     ): RedirectResponse {
         $redirect = $this->redirectToTimeline($request);
         if (!$this->isCsrfTokenValid('delete_symbolic_text_' . $id, (string) $request->request->get('_token', ''))) {
@@ -836,7 +1112,9 @@ final class SymbolicTextController extends AbstractController
             return $redirect;
         }
 
+        $snapshotSyncService->removeByScheduleId((string) $schedule->getId());
         $content = $schedule->getContent();
+        $this->detachScheduleFromDisplay($schedule);
         $entityManager->remove($schedule);
         $entityManager->flush();
 
@@ -861,7 +1139,8 @@ final class SymbolicTextController extends AbstractController
         SwScheduleRepository $scheduleRepository,
         MsMappingRepository $msMappingRepository,
         OrbWindowRepository $orbWindowRepository,
-        string $lang
+        string $lang,
+        bool $showAll = false
     ): array {
         $readingModes = array_values(array_unique(array_map(
             static fn (array $row): string => (string) ($row['reading_mode'] ?? ''),
@@ -878,7 +1157,7 @@ final class SymbolicTextController extends AbstractController
         );
 
         $durationSeconds = max(1, $endUtc->getTimestamp() - $startUtc->getTimestamp());
-        $entriesByRow = $this->buildEntriesByRow($schedules, $rowDefinitions, $startUtc, $endUtc, $durationSeconds);
+        $entriesByRow = $this->buildEntriesByRow($schedules, $rowDefinitions, $startUtc, $endUtc, $durationSeconds, $showAll);
         $gapsByRow = $this->buildGapsByRow($entriesByRow, $rowDefinitions, $startUtc, $endUtc, $durationSeconds);
 
         $phaseEvents = $this->normalizePhaseEvents(
@@ -918,7 +1197,8 @@ final class SymbolicTextController extends AbstractController
             ]],
             $startUtc,
             $endUtc,
-            $durationSeconds
+            $durationSeconds,
+            $showAll
         );
         $weatherEntries = $weatherEntriesByRow['family_symbolic_weather'] ?? [];
 
@@ -1036,7 +1316,8 @@ final class SymbolicTextController extends AbstractController
         array $rowDefinitions,
         \DateTimeImmutable $startUtc,
         \DateTimeImmutable $endUtc,
-        int $durationSeconds
+        int $durationSeconds,
+        bool $showAll = false
     ): array {
         $startTs = $startUtc->getTimestamp();
         $endTs = $endUtc->getTimestamp();
@@ -1053,6 +1334,10 @@ final class SymbolicTextController extends AbstractController
             $display = $schedule->getDisplay();
             $content = $schedule->getContent();
             if (!$display instanceof SwDisplay || !$content instanceof SwContent) {
+                continue;
+            }
+            $publishedForSnapshot = $this->isPublishedForSnapshot($display);
+            if (!$showAll && !$publishedForSnapshot) {
                 continue;
             }
 
@@ -1090,6 +1375,7 @@ final class SymbolicTextController extends AbstractController
                 'subtitle' => $subtitle,
                 'color' => $color,
                 'is_ready' => $isReady,
+                'is_published_for_snapshot' => $publishedForSnapshot,
                 'start_at_input' => $schedule->getStartsAtUtc()->format('Y-m-d H:i'),
                 'end_at_input' => $schedule->getEndsAtUtc()->format('Y-m-d H:i'),
                 'priority' => $schedule->getPriority(),
@@ -1740,6 +2026,128 @@ final class SymbolicTextController extends AbstractController
         return in_array((string) $request->request->get($field, ''), ['1', 'true', 'on', 'yes'], true);
     }
 
+    private function requestQueryBool(Request $request, string $field): bool
+    {
+        return in_array((string) $request->query->get($field, ''), ['1', 'true', 'on', 'yes'], true);
+    }
+
+    private function normalizeLooseBool(mixed $value): ?bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return ((int) $value) !== 0;
+        }
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return null;
+    }
+
+    private function isPublishedForSnapshot(SwDisplay $display): bool
+    {
+        // Regle de publication snapshot: le display actif fait foi.
+        return $display->isActive();
+    }
+
+    /**
+     * Synchronise explicitement la projection snapshot pour un display.
+     * Pourquoi: garantir la coherence immediate avec sw_display.is_active sans dependre
+     * uniquement des evenements Doctrine.
+     */
+    private function syncSnapshotForDisplay(
+        SwDisplay $display,
+        SwSnapshotSyncService $snapshotSyncService,
+        EntityManagerInterface $entityManager
+    ): void {
+        $displayId = $display->getId();
+        if ($displayId === null) {
+            return;
+        }
+
+        $changed = false;
+        if ($display->isActive()) {
+            $changed = $snapshotSyncService->syncByDisplayId((string) $displayId);
+        } else {
+            $changed = $snapshotSyncService->removeByDisplayId((string) $displayId) > 0;
+        }
+
+        if ($changed) {
+            $entityManager->flush();
+        }
+    }
+
+    /**
+     * Retourne la liste des jours UTC touches par une plage [start, end[.
+     *
+     * @return string[]
+     */
+    private function listUtcDaysInRange(\DateTimeImmutable $startUtc, \DateTimeImmutable $endUtc): array
+    {
+        if ($endUtc <= $startUtc) {
+            return [];
+        }
+
+        $days = [];
+        $cursor = $startUtc->setTime(0, 0, 0);
+        $lastIncluded = $endUtc->modify('-1 second')->setTime(0, 0, 0);
+
+        while ($cursor <= $lastIncluded) {
+            $days[] = $cursor->format('Y-m-d');
+            $cursor = $cursor->modify('+1 day');
+        }
+
+        return $days;
+    }
+
+    /**
+     * @return array{status:string,is_validated:bool,is_current:bool,corrected:bool}
+     */
+    private function resolveContentStateFromFlags(bool $isValidated, bool $isCurrent): array
+    {
+        if (!$isValidated && $isCurrent) {
+            return [
+                'status' => 'draft',
+                'is_validated' => false,
+                'is_current' => false,
+                'corrected' => true,
+            ];
+        }
+
+        if ($isValidated && $isCurrent) {
+            return [
+                'status' => 'validated',
+                'is_validated' => true,
+                'is_current' => true,
+                'corrected' => false,
+            ];
+        }
+
+        if ($isValidated) {
+            return [
+                'status' => 'review',
+                'is_validated' => true,
+                'is_current' => false,
+                'corrected' => false,
+            ];
+        }
+
+        return [
+            'status' => 'draft',
+            'is_validated' => false,
+            'is_current' => false,
+            'corrected' => false,
+        ];
+    }
+
     private function sanitizeStatus(string $status): string
     {
         $value = strtolower(trim($status));
@@ -1976,6 +2384,7 @@ final class SymbolicTextController extends AbstractController
         \DateTimeImmutable $parseStartUtc,
         \DateTimeImmutable $parseEndUtc,
         \DateTimeImmutable $todayStartUtc,
+        bool $allowRetroactiveWrite,
         ?int $forcedPhaseIndex,
         ?int $forcedVariantNo
     ): array {
@@ -1983,7 +2392,10 @@ final class SymbolicTextController extends AbstractController
         $parseEndTs = $parseEndUtc->getTimestamp();
         $todayStartTs = $todayStartUtc->getTimestamp();
 
-        if ($parseEndTs <= $parseStartTs || $parseEndTs <= $todayStartTs) {
+        if ($parseEndTs <= $parseStartTs) {
+            return [];
+        }
+        if (!$allowRetroactiveWrite && $parseEndTs <= $todayStartTs) {
             return [];
         }
 
@@ -2014,7 +2426,7 @@ final class SymbolicTextController extends AbstractController
             return [];
         }
 
-        $writeStartTs = max($parseStartTs, $todayStartTs);
+        $writeStartTs = $allowRetroactiveWrite ? $parseStartTs : max($parseStartTs, $todayStartTs);
         $writeEndTs = $parseEndTs;
         if ($writeEndTs <= $writeStartTs) {
             return [];
@@ -2184,7 +2596,8 @@ final class SymbolicTextController extends AbstractController
 
     /**
      * Construit la liste des zones de la semaine qui peuvent etre parsees.
-     * Pourquoi: inclure le chevauchement au debut, exclure celui de fin, et interdire toute ecriture dans le passe.
+     * Pourquoi: inclure le chevauchement au debut, exclure celui de fin, et
+     * autoriser conditionnellement l ecriture dans le passe via validation explicite.
      *
      * @param array<int, array{
      *   id:int,
@@ -2201,7 +2614,8 @@ final class SymbolicTextController extends AbstractController
         array $sourceZones,
         \DateTimeImmutable $parseStartUtc,
         \DateTimeImmutable $parseEndUtc,
-        \DateTimeImmutable $todayStartUtc
+        \DateTimeImmutable $todayStartUtc,
+        bool $allowRetroactiveWrite
     ): array {
         $parseStartTs = $parseStartUtc->getTimestamp();
         $parseEndTs = $parseEndUtc->getTimestamp();
@@ -2223,13 +2637,14 @@ final class SymbolicTextController extends AbstractController
                 continue;
             }
 
-            // Regle metier: aucune ecriture avant le debut du jour UTC courant.
-            if ($fullEndTs <= $todayStartTs) {
+            // Regle metier: par defaut on interdit les ecritures passees.
+            // Cette protection saute uniquement apres validation modal explicite.
+            if (!$allowRetroactiveWrite && $fullEndTs <= $todayStartTs) {
                 continue;
             }
 
             $phaseIndex = $this->phaseIndexFromInfluencePhaseKey((string) ($zone['phase_key'] ?? ''));
-            $writeStartTs = max($fullStartTs, $todayStartTs);
+            $writeStartTs = $allowRetroactiveWrite ? $fullStartTs : max($fullStartTs, $todayStartTs);
             $writeEndTs = $fullEndTs;
             if ($writeEndTs <= $writeStartTs) {
                 continue;
@@ -2317,6 +2732,20 @@ final class SymbolicTextController extends AbstractController
     private function buildAutoDisplayCode(string $prefix): string
     {
         return str_replace('.', '_', uniqid($prefix . '_', true));
+    }
+
+    /**
+     * Coupe explicitement le lien display <-> schedule avant suppression.
+     * Pourquoi: eviter qu une reference stale en memoire soit reintroduite pendant le flush Doctrine.
+     */
+    private function detachScheduleFromDisplay(SwSchedule $schedule): void
+    {
+        $display = $schedule->getDisplay();
+        if ($display instanceof SwDisplay && $display->getSchedule() === $schedule) {
+            $display->setSchedule(null);
+        }
+
+        $schedule->setDisplay(null);
     }
 
     private function timeRangeOverlaps(int $startA, int $endA, int $startB, int $endB): bool
@@ -2431,6 +2860,10 @@ final class SymbolicTextController extends AbstractController
             'span' => $this->sanitizeSpan((string) $request->request->get('span', '2j')),
             'lang' => $this->sanitizeTimelineLang((string) $request->request->get('lang', 'fr')),
         ];
+        $showAllRaw = (string) $request->request->get('show_all', '');
+        if ($showAllRaw !== '') {
+            $params['show_all'] = $this->requestBool($request, 'show_all') ? '1' : '0';
+        }
         $endInput = trim((string) $request->request->get('end_utc', ''));
         if ($endInput !== '') {
             $params['end_utc'] = $endInput;

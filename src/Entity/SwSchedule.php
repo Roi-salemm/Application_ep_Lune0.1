@@ -9,7 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entite de diffusion temporelle qui lie un affichage a une version de contenu.
  * Pourquoi: publier en UTC une version precise selon une fenetre, une priorite et un statut de publication.
- * Info: les colonnes display_id et content_id restent en base et sont mappees en ManyToOne via JoinColumn.
+ * Info: display_id est volontairement en 1:1 avec sw_display pour garantir 1 texte = 1 ligne display + 1 ligne schedule.
  */
 #[ORM\Entity(repositoryClass: SwScheduleRepository::class)]
 #[ORM\Table(name: 'sw_schedule')]
@@ -25,7 +25,7 @@ class SwSchedule
     #[ORM\Column(type: Types::BIGINT, options: ['unsigned' => true])]
     private ?string $id = null;
 
-    #[ORM\ManyToOne(targetEntity: SwDisplay::class, inversedBy: 'schedules')]
+    #[ORM\OneToOne(targetEntity: SwDisplay::class, inversedBy: 'schedule')]
     #[ORM\JoinColumn(name: 'display_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private ?SwDisplay $display = null;
 
@@ -96,7 +96,15 @@ class SwSchedule
 
     public function setDisplay(?SwDisplay $display): self
     {
+        if ($this->display === $display) {
+            return $this;
+        }
+
         $this->display = $display;
+
+        if ($display !== null && $display->getSchedule() !== $this) {
+            $display->setSchedule($this);
+        }
 
         return $this;
     }

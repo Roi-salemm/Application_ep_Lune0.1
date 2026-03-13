@@ -12,6 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
  * Entite racine qui definit l identite metier d un affichage.
  * Pourquoi: separer la definition fonctionnelle (role, mode, activation) du contenu versionne et de sa diffusion.
  * Info: les dates sont forcees en UTC et les liens vers contenu/planning sont portes par les associations Doctrine.
+ * Important: un display porte au plus un schedule (relation 1:1) pour eviter la mutualisation de publication.
  */
 #[ORM\Entity(repositoryClass: SwDisplayRepository::class)]
 #[ORM\Table(name: 'sw_display')]
@@ -56,11 +57,8 @@ class SwDisplay
     #[ORM\OneToMany(mappedBy: 'display', targetEntity: SwContent::class)]
     private Collection $contents;
 
-    /**
-     * @var Collection<int, SwSchedule>
-     */
-    #[ORM\OneToMany(mappedBy: 'display', targetEntity: SwSchedule::class)]
-    private Collection $schedules;
+    #[ORM\OneToOne(mappedBy: 'display', targetEntity: SwSchedule::class)]
+    private ?SwSchedule $schedule = null;
 
     public function __construct()
     {
@@ -68,7 +66,6 @@ class SwDisplay
         $this->createdAtUtc = $now;
         $this->updatedAtUtc = $now;
         $this->contents = new ArrayCollection();
-        $this->schedules = new ArrayCollection();
     }
 
     #[ORM\PrePersist]
@@ -204,30 +201,21 @@ class SwDisplay
         return $this;
     }
 
-    /**
-     * @return Collection<int, SwSchedule>
-     */
-    public function getSchedules(): Collection
+    public function getSchedule(): ?SwSchedule
     {
-        return $this->schedules;
+        return $this->schedule;
     }
 
-    public function addSchedule(SwSchedule $schedule): self
+    public function setSchedule(?SwSchedule $schedule): self
     {
-        if (!$this->schedules->contains($schedule)) {
-            $this->schedules->add($schedule);
-            $schedule->setDisplay($this);
+        if ($this->schedule === $schedule) {
+            return $this;
         }
 
-        return $this;
-    }
+        $this->schedule = $schedule;
 
-    public function removeSchedule(SwSchedule $schedule): self
-    {
-        if ($this->schedules->removeElement($schedule)) {
-            if ($schedule->getDisplay() === $this) {
-                $schedule->setDisplay(null);
-            }
+        if ($schedule !== null && $schedule->getDisplay() !== $this) {
+            $schedule->setDisplay($this);
         }
 
         return $this;

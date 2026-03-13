@@ -121,6 +121,16 @@
                 </span>
                 <span class="admin-sidebar__label">Symbolic Text</span>
             </a>
+            <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'sw_snapshot' ? 'admin-sidebar__item--active' : '' }}"
+               href="{{ path('admin_sw_snapshot') }}" style="--delay: 7.62">
+                <span class="admin-sidebar__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <rect x="4" y="5" width="16" height="14" rx="2" />
+                        <path d="M7 9h10M7 13h10M7 17h6" />
+                    </svg>
+                </span>
+                <span class="admin-sidebar__label">SWSnapshot</span>
+            </a>
             <a class="admin-sidebar__item {{ active_menu is defined and active_menu == 'sw_text_variant' ? 'admin-sidebar__item--active' : '' }}"
                href="{{ path('admin_sw_text_variant') }}" style="--delay: 7.65">
                 <span class="admin-sidebar__icon" aria-hidden="true">

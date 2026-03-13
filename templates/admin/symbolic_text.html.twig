@@ -27,14 +27,28 @@
             <div class="symbolic-text-toolbar__group">
                 {% for span_key in span_options %}
                     <a class="symbolic-span-btn {{ span_key == span ? 'is-active' : '' }}"
-                       href="{{ path('admin_symbolic_text', {'span': span_key, 'end_utc': window_end_input, 'lang': lang}) }}">{{ span_key }}</a>
+                       href="{{ path('admin_symbolic_text', {'span': span_key, 'end_utc': window_end_input, 'lang': lang, 'show_all': show_all ? 1 : 0}) }}">{{ span_key }}</a>
                 {% endfor %}
                 <button type="button" class="symbolic-span-btn symbolic-span-btn--today" data-jump-today>Aujourd'hui</button>
                 {% for lang_code, lang_label in lang_options %}
                     <a class="symbolic-span-btn {{ lang_code == lang ? 'is-active' : '' }}"
-                       href="{{ path('admin_symbolic_text', {'span': span, 'end_utc': window_end_input, 'lang': lang_code}) }}">{{ lang_label }}</a>
+                       href="{{ path('admin_symbolic_text', {'span': span, 'end_utc': window_end_input, 'lang': lang_code, 'show_all': show_all ? 1 : 0}) }}">{{ lang_label }}</a>
                 {% endfor %}
+                <a class="symbolic-span-btn {{ not show_all ? 'is-active' : '' }}"
+                   href="{{ path('admin_symbolic_text', {'span': span, 'end_utc': window_end_input, 'lang': lang, 'show_all': 0}) }}">Publies</a>
+                <a class="symbolic-span-btn {{ show_all ? 'is-active' : '' }}"
+                   href="{{ path('admin_symbolic_text', {'span': span, 'end_utc': window_end_input, 'lang': lang, 'show_all': 1}) }}">Tous</a>
             </div>
+            {% if show_all %}
+                <div class="symbolic-text-toolbar__actions">
+                    <button type="button"
+                            class="admin-button admin-button--primary symbolic-bulk-save"
+                            data-bulk-save
+                            disabled>
+                        Sauvegarder <span class="symbolic-bulk-save__count" data-bulk-count>0</span>
+                    </button>
+                </div>
+            {% endif %}
             <div class="symbolic-text-toolbar__meta">UTC</div>
         </div>
 
@@ -60,9 +74,14 @@
             <div class="symbolic-layout__timeline"
                  data-timeline-wheel
                  data-api-url="{{ path('admin_symbolic_text_data') }}"
+                 data-toggle-active-url="{{ path('admin_symbolic_text_bulk_active') }}"
+                 data-toggle-active-token="{{ csrf_token('symbolic_text_bulk_active') }}"
+                 data-impact-check-url="{{ path('admin_symbolic_text_impact_check') }}"
+                 data-impact-check-token="{{ csrf_token('symbolic_text_impact_check') }}"
                  data-span="{{ span }}"
                  data-span-seconds="{{ span_seconds }}"
                  data-lang="{{ lang }}"
+                 data-show-all="{{ show_all ? '1' : '0' }}"
                  data-window-end-ts="{{ window_end_ts }}">
                 <div class="symbolic-grid" data-grid-lines>
                     {% for marker in day_markers %}
@@ -173,6 +192,21 @@
                                             <small>{{ entry.subtitle }}</small>
                                         {% endif %}
                                     </div>
+                                    {% if show_all %}
+                                        <label class="symbolic-publish-switch symbolic-publish-switch--compact"
+                                               title="Publication snapshot (sw_display.is_active)">
+                                            <input type="checkbox"
+                                                   class="symbolic-publish-switch__input"
+                                                   data-publish-toggle
+                                                   data-schedule-id="{{ entry.id }}"
+                                                   data-original-active="{{ entry.is_published_for_snapshot ? '1' : '0' }}"
+                                                   {% if entry.is_published_for_snapshot %}checked{% endif %}>
+                                            <span class="symbolic-publish-switch__slider"></span>
+                                            <span class="symbolic-publish-switch__label">
+                                                {{ entry.is_published_for_snapshot ? 'Publie' : 'Non publie' }}
+                                            </span>
+                                        </label>
+                                    {% endif %}
                                     <button type="button"
                                             class="symbolic-entry__edit"
                                             data-open-edit
@@ -209,10 +243,11 @@
         <div class="admin-modal__backdrop" data-modal-close></div>
         <div class="admin-modal__dialog admin-modal__dialog--wide" role="dialog" aria-modal="true">
             <div class="admin-modal__header">Ajouter un texte timeline</div>
-            {{ form_start(create_form, {'attr': {'class': 'admin-modal__body admin-form'}}) }}
+            {{ form_start(create_form, {'attr': {'class': 'admin-modal__body admin-form', 'data-create-form': '1'}}) }}
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
                 <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
+                <input type="hidden" name="show_all" value="{{ show_all ? '1' : '0' }}" data-window-show-all-hidden>
 
                 <div class="admin-form__section">
                     <div class="admin-form__label">SW Display</div>
@@ -350,6 +385,7 @@
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
                 <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
+                <input type="hidden" name="show_all" value="{{ show_all ? '1' : '0' }}" data-window-show-all-hidden>
 
                 <div class="admin-form__row">
                     <label class="admin-form__field">
@@ -454,6 +490,7 @@
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
                 <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
+                <input type="hidden" name="show_all" value="{{ show_all ? '1' : '0' }}" data-window-show-all-hidden>
                 <button class="admin-button admin-button--danger" type="submit">Supprimer</button>
             </form>
         </div>
@@ -473,6 +510,7 @@
                 <input type="hidden" name="span" value="{{ span }}">
                 <input type="hidden" name="end_utc" value="{{ window_end_input }}" data-window-end-hidden>
                 <input type="hidden" name="lang" value="{{ lang }}" data-window-lang-hidden>
+                <input type="hidden" name="show_all" value="{{ show_all ? '1' : '0' }}" data-window-show-all-hidden>
 
                 <div class="admin-form__row">
                     <label class="admin-form__field">
@@ -509,6 +547,37 @@
         </div>
     </div>
 
+    <div class="admin-modal" data-symbolic-retro-confirm-modal aria-hidden="true">
+        <div class="admin-modal__backdrop" data-retro-cancel></div>
+        <div class="admin-modal__dialog" role="dialog" aria-modal="true">
+            <div class="admin-modal__header">Validation requise: modification retroactive</div>
+            <div class="admin-modal__body admin-form">
+                <p class="admin-form__hint">
+                    Cette modification touche une plage anterieure a aujourd hui (UTC).
+                </p>
+                <div class="admin-form__row">
+                    <div class="admin-form__field">
+                        <span class="admin-form__label">Plage UTC</span>
+                        <div class="admin-form__hint" data-retro-range>n/a</div>
+                    </div>
+                    <div class="admin-form__field">
+                        <span class="admin-form__label">Jours concernes</span>
+                        <div class="admin-form__hint" data-retro-days>n/a</div>
+                    </div>
+                </div>
+                <div class="admin-form__field">
+                    <span class="admin-form__label">Impact de reecriture</span>
+                    <div class="admin-form__hint" data-retro-overlap-summary>Aucun recouvrement detecte.</div>
+                    <ul class="symbolic-retro-overlap-list" data-retro-overlap-list></ul>
+                </div>
+            </div>
+            <div class="admin-modal__actions">
+                <button class="admin-button admin-button--primary" type="button" data-retro-confirm>Valider</button>
+                <button class="admin-button" type="button" data-retro-cancel>Annuler</button>
+            </div>
+        </div>
+    </div>
+
     <script type="application/json" id="symbolic-initial-payload">{{ initial_payload|json_encode|raw }}</script>
     <script type="application/json" id="symbolic-weather-variants">{{ weather_variant_options|default([])|json_encode|raw }}</script>
 
@@ -517,9 +586,14 @@
             var createModal = document.querySelector('[data-symbolic-create-modal]');
             var editModal = document.querySelector('[data-symbolic-edit-modal]');
             var weatherZoneModal = document.querySelector('[data-symbolic-weather-zone-modal]');
-            if (!createModal || !editModal || !weatherZoneModal) {
+            var retroConfirmModal = document.querySelector('[data-symbolic-retro-confirm-modal]');
+            var timelineRoot = document.querySelector('[data-timeline-wheel]');
+            if (!createModal || !editModal || !weatherZoneModal || !retroConfirmModal || !timelineRoot) {
                 return;
             }
+            var impactCheckUrl = timelineRoot.getAttribute('data-impact-check-url') || '';
+            var impactCheckToken = timelineRoot.getAttribute('data-impact-check-token') || '';
+            var pendingRetroForm = null;
             var weatherVariantsNode = document.getElementById('symbolic-weather-variants');
             var weatherVariantOptions = [];
             if (weatherVariantsNode) {
@@ -600,6 +674,254 @@
                 closeModal(createModal);
                 closeModal(editModal);
                 closeModal(weatherZoneModal);
+                closeModal(retroConfirmModal);
+            }
+
+            function parseUtcInputToTs(raw) {
+                var value = String(raw || '').trim();
+                if (value === '') {
+                    return null;
+                }
+                var normalized = value.replace('T', ' ');
+                var match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+                if (!match) {
+                    return null;
+                }
+                var year = parseInt(match[1], 10);
+                var month = parseInt(match[2], 10);
+                var day = parseInt(match[3], 10);
+                var hour = parseInt(match[4], 10);
+                var minute = parseInt(match[5], 10);
+                var second = parseInt(match[6] || '0', 10);
+
+                return Math.floor(Date.UTC(year, month - 1, day, hour, minute, second) / 1000);
+            }
+
+            function getTodayStartTsUtc() {
+                var now = new Date();
+                now.setUTCHours(0, 0, 0, 0);
+
+                return Math.floor(now.getTime() / 1000);
+            }
+
+            function resolveFormTemporalContext(form) {
+                var startField = form.querySelector('[name="starts_at_utc"], [name$="[starts_at_utc]"], [name="parse_start_utc"], [name="zone_start_utc"]');
+                var endField = form.querySelector('[name="ends_at_utc"], [name$="[ends_at_utc]"], [name="parse_end_utc"], [name="zone_end_utc"]');
+                if (!startField || !endField) {
+                    return null;
+                }
+
+                var startRaw = String(startField.value || '').trim();
+                var endRaw = String(endField.value || '').trim();
+                var startTs = parseUtcInputToTs(startRaw);
+                var endTs = parseUtcInputToTs(endRaw);
+                if (startTs === null || endTs === null || endTs <= startTs) {
+                    return null;
+                }
+
+                return {
+                    startRaw: startRaw,
+                    endRaw: endRaw,
+                    startTs: startTs,
+                    endTs: endTs
+                };
+            }
+
+            function resolveDisplayCodeFromForm(form) {
+                var displayField = form.querySelector('[name="display_code"], [name$="[row_code]"]');
+                return displayField ? String(displayField.value || '').trim() : '';
+            }
+
+            function resolveImpactScopeFromForm(form) {
+                var displayCode = resolveDisplayCodeFromForm(form);
+                if (displayCode !== '') {
+                    return {
+                        display_code: displayCode,
+                        reading_mode: '',
+                        family: ''
+                    };
+                }
+
+                // Parse Weather (zone/lunaison): scope explicite pour detecter les recouvrements reels.
+                if (form.querySelector('[name="parse_start_utc"], [name="zone_start_utc"]')) {
+                    return {
+                        display_code: '',
+                        reading_mode: 'SYM_Weather',
+                        family: 'symbolic'
+                    };
+                }
+
+                return {
+                    display_code: '',
+                    reading_mode: '',
+                    family: ''
+                };
+            }
+
+            function resolveLangFromForm(form) {
+                var langField = form.querySelector('[name="lang"], [name$="[display_lang]"]');
+                return langField ? String(langField.value || '').trim() : 'fr';
+            }
+
+            function resolveScheduleIdFromForm(form) {
+                var action = String(form.getAttribute('action') || '');
+                var match = action.match(/\/admin\/symbolic-text\/([^/]+)\/update(?:$|\?)/);
+                if (!match || !match[1]) {
+                    return '';
+                }
+                try {
+                    return decodeURIComponent(match[1]);
+                } catch (e) {
+                    return match[1];
+                }
+            }
+
+            function fillRetroConfirmModal(payload) {
+                var rangeNode = retroConfirmModal.querySelector('[data-retro-range]');
+                var daysNode = retroConfirmModal.querySelector('[data-retro-days]');
+                var overlapSummaryNode = retroConfirmModal.querySelector('[data-retro-overlap-summary]');
+                var overlapListNode = retroConfirmModal.querySelector('[data-retro-overlap-list]');
+                if (!rangeNode || !daysNode || !overlapSummaryNode || !overlapListNode) {
+                    return;
+                }
+
+                rangeNode.textContent = String(payload.start_utc || 'n/a') + ' -> ' + String(payload.end_utc || 'n/a');
+
+                var days = Array.isArray(payload.days_concerned) ? payload.days_concerned : [];
+                var pastDays = Array.isArray(payload.past_days) ? payload.past_days : [];
+                if (days.length === 0) {
+                    daysNode.textContent = 'n/a';
+                } else if (pastDays.length === 0) {
+                    daysNode.textContent = days.join(', ');
+                } else {
+                    daysNode.textContent = days.join(', ') + ' (jours passes: ' + pastDays.join(', ') + ')';
+                }
+
+                var overlaps = Array.isArray(payload.overlaps) ? payload.overlaps : [];
+                if (!payload.would_rewrite || overlaps.length === 0) {
+                    overlapSummaryNode.textContent = 'Aucun recouvrement detecte. Aucune reecriture de donnees existantes.';
+                    overlapListNode.innerHTML = '';
+                    return;
+                }
+
+                overlapSummaryNode.textContent = String(payload.overlap_count || overlaps.length) + ' recouvrement(s) detecte(s). Une reecriture est probable.';
+                overlapListNode.innerHTML = overlaps.map(function (item) {
+                    var label = String(item && item.label ? item.label : 'Texte existant');
+                    var start = String(item && item.starts_at_utc ? item.starts_at_utc : 'n/a');
+                    var end = String(item && item.ends_at_utc ? item.ends_at_utc : 'n/a');
+                    var id = String(item && item.schedule_id ? item.schedule_id : '');
+                    return '<li><strong>' + escapeHtmlLocal(label) + '</strong>'
+                        + ' [' + escapeHtmlLocal(start) + ' -> ' + escapeHtmlLocal(end) + ']'
+                        + (id ? ' (#' + escapeHtmlLocal(id) + ')' : '')
+                        + '</li>';
+                }).join('');
+            }
+
+            function submitFormHard(form, extraFields) {
+                if (!form) {
+                    return;
+                }
+
+                var hardForm = document.createElement('form');
+                hardForm.method = String(form.getAttribute('method') || 'post').toLowerCase();
+                hardForm.action = String(form.getAttribute('action') || window.location.href);
+                hardForm.style.display = 'none';
+
+                var fields = form.querySelectorAll('input, select, textarea');
+                fields.forEach(function (field) {
+                    if (!(field instanceof HTMLElement)) {
+                        return;
+                    }
+                    var name = field.getAttribute('name');
+                    if (!name) {
+                        return;
+                    }
+
+                    var tag = field.tagName.toLowerCase();
+                    if (tag === 'input') {
+                        var input = field;
+                        var type = String(input.getAttribute('type') || 'text').toLowerCase();
+                        if ((type === 'checkbox' || type === 'radio') && !input.checked) {
+                            return;
+                        }
+                        if (type === 'file') {
+                            return;
+                        }
+                    }
+
+                    var hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = name;
+                    hidden.value = String(field.value || '');
+                    hardForm.appendChild(hidden);
+                });
+
+                // Injection de champs additionnels (ex: autorisation retroactive).
+                if (extraFields && typeof extraFields === 'object') {
+                    Object.keys(extraFields).forEach(function (key) {
+                        if (!key) {
+                            return;
+                        }
+                        var hiddenExtra = document.createElement('input');
+                        hiddenExtra.type = 'hidden';
+                        hiddenExtra.name = String(key);
+                        hiddenExtra.value = String(extraFields[key] || '');
+                        hardForm.appendChild(hiddenExtra);
+                    });
+                }
+
+                document.body.appendChild(hardForm);
+                hardForm.submit();
+            }
+
+            function openRetroConfirmForForm(form, context) {
+                if (!impactCheckUrl || !impactCheckToken) {
+                    submitFormHard(form, { allow_retroactive_write: '1' });
+                    return;
+                }
+
+                var requestPayload = {
+                    _token: impactCheckToken,
+                    start_utc: context.startRaw,
+                    end_utc: context.endRaw,
+                    lang: resolveLangFromForm(form),
+                    schedule_id: resolveScheduleIdFromForm(form)
+                };
+                var impactScope = resolveImpactScopeFromForm(form);
+                requestPayload.display_code = impactScope.display_code;
+                requestPayload.reading_mode = impactScope.reading_mode;
+                requestPayload.family = impactScope.family;
+
+                fetch(impactCheckUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(requestPayload)
+                })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('impact check failed');
+                        }
+                        return response.json();
+                    })
+                    .then(function (payload) {
+                        fillRetroConfirmModal(payload || {});
+                        pendingRetroForm = form;
+                        openModal(retroConfirmModal);
+                    })
+                    .catch(function () {
+                        window.alert('Impossible de verifier l impact de la modification retroactive.');
+                    });
+            }
+
+            function shouldGuardRetroactiveForm(form) {
+                if (!form || !form.matches) {
+                    return false;
+                }
+                return form.matches('[data-create-form], [data-edit-form], [data-weather-zone-form], .symbolic-parse-form');
             }
 
             function populateWeatherVariantSelect(phaseIndex, preferredVariantNo) {
@@ -667,6 +989,26 @@
                 if (closeButton) {
                     event.preventDefault();
                     closeAllModals();
+                    return;
+                }
+                var retroCancelButton = event.target.closest('[data-retro-cancel]');
+                if (retroCancelButton) {
+                    event.preventDefault();
+                    pendingRetroForm = null;
+                    closeModal(retroConfirmModal);
+                    return;
+                }
+                var retroConfirmButton = event.target.closest('[data-retro-confirm]');
+                if (retroConfirmButton) {
+                    event.preventDefault();
+                    if (!pendingRetroForm) {
+                        closeModal(retroConfirmModal);
+                        return;
+                    }
+                    var formToSubmit = pendingRetroForm;
+                    pendingRetroForm = null;
+                    closeModal(retroConfirmModal);
+                    submitFormHard(formToSubmit, { allow_retroactive_write: '1' });
                     return;
                 }
 
@@ -774,6 +1116,26 @@
                 });
             }
 
+            document.addEventListener('submit', function (event) {
+                var form = event.target;
+                if (!(form instanceof HTMLFormElement) || !shouldGuardRetroactiveForm(form)) {
+                    return;
+                }
+
+                var context = resolveFormTemporalContext(form);
+                if (context === null) {
+                    return;
+                }
+
+                var todayStartTs = getTodayStartTsUtc();
+                if (context.startTs >= todayStartTs) {
+                    return;
+                }
+
+                event.preventDefault();
+                openRetroConfirmForForm(form, context);
+            }, true);
+
             document.addEventListener('keydown', function (event) {
                 if (event.key === 'Escape') {
                     closeAllModals();
@@ -789,9 +1151,14 @@
             }
 
             var apiUrl = timeline.getAttribute('data-api-url') || '';
+            var bulkActiveUrl = timeline.getAttribute('data-toggle-active-url') || '';
+            var bulkActiveToken = timeline.getAttribute('data-toggle-active-token') || '';
+            var bulkSaveButton = document.querySelector('[data-bulk-save]');
+            var bulkCountNode = document.querySelector('[data-bulk-count]');
             var span = timeline.getAttribute('data-span') || '2j';
             var spanSeconds = parseInt(timeline.getAttribute('data-span-seconds') || '172800', 10);
             var lang = timeline.getAttribute('data-lang') || 'fr';
+            var showAll = (timeline.getAttribute('data-show-all') || '0') === '1';
             var endTs = parseInt(timeline.getAttribute('data-window-end-ts') || '0', 10);
             if (!apiUrl || !spanSeconds || !endTs) {
                 return;
@@ -804,12 +1171,15 @@
             var state = {
                 span: span,
                 lang: lang,
+                showAll: showAll,
                 spanSeconds: spanSeconds,
                 visibleEndTs: endTs,
                 visibleStartTs: endTs - spanSeconds,
                 chunks: [],
                 inFlight: {},
-                selectedSymbolicKey: null
+                selectedSymbolicKey: null,
+                pendingActiveBySchedule: {},
+                bulkSaving: false
             };
             var labelsPanel = document.querySelector('.symbolic-layout__labels');
 
@@ -888,7 +1258,11 @@
                 }
                 state.inFlight[key] = true;
 
-                var url = apiUrl + '?start_utc=' + encodeURIComponent(formatUtc(startTs)) + '&end_utc=' + encodeURIComponent(formatUtc(endTs)) + '&lang=' + encodeURIComponent(state.lang);
+                var url = apiUrl
+                    + '?start_utc=' + encodeURIComponent(formatUtc(startTs))
+                    + '&end_utc=' + encodeURIComponent(formatUtc(endTs))
+                    + '&lang=' + encodeURIComponent(state.lang)
+                    + '&show_all=' + (state.showAll ? '1' : '0');
                 return fetch(url, { credentials: 'same-origin' })
                     .then(function (response) {
                         if (!response.ok) {
@@ -985,6 +1359,127 @@
                     .replace(/'/g, '&#039;');
             }
 
+            function normalizeLooseBool(value) {
+                if (typeof value === 'boolean') {
+                    return value;
+                }
+                if (typeof value === 'number') {
+                    return value !== 0;
+                }
+                if (typeof value === 'string') {
+                    var normalized = value.trim().toLowerCase();
+                    if (['1', 'true', 'yes', 'on'].indexOf(normalized) >= 0) {
+                        return true;
+                    }
+                    if (['0', 'false', 'no', 'off'].indexOf(normalized) >= 0) {
+                        return false;
+                    }
+                }
+
+                return false;
+            }
+
+            function resolveEntrySnapshotActive(entry) {
+                var scheduleId = String((entry && entry.id) || '').trim();
+                if (scheduleId && Object.prototype.hasOwnProperty.call(state.pendingActiveBySchedule, scheduleId)) {
+                    return !!state.pendingActiveBySchedule[scheduleId];
+                }
+
+                return normalizeLooseBool(entry ? entry.is_published_for_snapshot : false);
+            }
+
+            function buildPublishSwitchHtml(entry) {
+                if (!state.showAll) {
+                    return '';
+                }
+                var scheduleId = String((entry && entry.id) || '').trim();
+                if (!scheduleId) {
+                    return '';
+                }
+                var originalActive = normalizeLooseBool(entry ? entry.is_published_for_snapshot : false);
+                var currentActive = resolveEntrySnapshotActive(entry);
+                return '' +
+                    '<label class="symbolic-publish-switch symbolic-publish-switch--compact" title="Publication snapshot (sw_display.is_active)">' +
+                    '<input type="checkbox" class="symbolic-publish-switch__input" data-publish-toggle data-schedule-id="' + escapeHtml(scheduleId) + '" data-original-active="' + (originalActive ? '1' : '0') + '"' + (currentActive ? ' checked' : '') + '>' +
+                    '<span class="symbolic-publish-switch__slider"></span>' +
+                    '<span class="symbolic-publish-switch__label">' + (currentActive ? 'Publie' : 'Non publie') + '</span>' +
+                    '</label>';
+            }
+
+            function pendingActiveCount() {
+                return Object.keys(state.pendingActiveBySchedule).length;
+            }
+
+            function refreshBulkSaveUi() {
+                if (!bulkSaveButton || !bulkCountNode) {
+                    return;
+                }
+                var count = pendingActiveCount();
+                bulkCountNode.textContent = String(count);
+                bulkSaveButton.disabled = count === 0 || state.bulkSaving;
+                bulkSaveButton.classList.toggle('is-pending', count > 0);
+            }
+
+            function reloadVisibleChunks() {
+                state.chunks = [];
+                state.inFlight = {};
+                return ensureChunksForRange(state.visibleStartTs, state.visibleEndTs, true).then(function () {
+                    renderFromCache();
+                    maybePrefetch();
+                });
+            }
+
+            function persistPendingActiveChanges() {
+                if (!state.showAll || !bulkActiveUrl || !bulkActiveToken || state.bulkSaving) {
+                    return;
+                }
+                var scheduleIds = Object.keys(state.pendingActiveBySchedule);
+                if (!scheduleIds.length) {
+                    refreshBulkSaveUi();
+                    return;
+                }
+
+                var updates = scheduleIds.map(function (scheduleId) {
+                    return {
+                        schedule_id: scheduleId,
+                        is_active: !!state.pendingActiveBySchedule[scheduleId]
+                    };
+                });
+
+                state.bulkSaving = true;
+                refreshBulkSaveUi();
+
+                fetch(bulkActiveUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        _token: bulkActiveToken,
+                        updates: updates
+                    })
+                })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('bulk active failed');
+                        }
+                        return response.json();
+                    })
+                    .then(function () {
+                        state.pendingActiveBySchedule = {};
+                        return reloadVisibleChunks();
+                    })
+                    .catch(function () {
+                        window.alert('Echec de la sauvegarde des publications.');
+                    })
+                    .finally(function () {
+                        state.bulkSaving = false;
+                        refreshBulkSaveUi();
+                    });
+            }
+
             function positionPercent(ts) {
                 var ratio = (ts - state.visibleStartTs) / Math.max(1, state.spanSeconds);
                 return Math.max(0, Math.min(100, ratio * 100));
@@ -1027,7 +1522,26 @@
                 }
                 markers.push(state.visibleEndTs);
 
-                var gridHtml = markers.map(function (ts) {
+                var nowDate = new Date();
+                nowDate.setUTCHours(0, 0, 0, 0);
+                var todayStartTs = Math.floor(nowDate.getTime() / 1000);
+                var todayEndTs = todayStartTs + 86400;
+
+                var todayColumnsHtml = [];
+                for (var j = 0; j < markers.length - 1; j++) {
+                    var daySegStart = markers[j];
+                    var daySegEnd = markers[j + 1];
+                    var highlightStart = Math.max(daySegStart, todayStartTs);
+                    var highlightEnd = Math.min(daySegEnd, todayEndTs);
+                    if (highlightEnd <= highlightStart) {
+                        continue;
+                    }
+                    todayColumnsHtml.push(
+                        '<span class="symbolic-grid__today-column" style="left:' + positionPercent(highlightStart) + '%;width:' + widthPercent(highlightStart, highlightEnd) + '%;"></span>'
+                    );
+                }
+
+                var gridHtml = todayColumnsHtml.join('') + markers.map(function (ts) {
                     return '<span class="symbolic-grid__line" style="left:' + positionPercent(ts) + '%;"></span>';
                 }).join('');
                 grid.innerHTML = gridHtml;
@@ -1309,6 +1823,7 @@
                         '<input type="hidden" name="span" value="' + escapeHtml(state.span) + '">' +
                         '<input type="hidden" name="end_utc" value="' + escapeHtml(formatUtc(state.visibleEndTs)) + '">' +
                         '<input type="hidden" name="lang" value="' + escapeHtml(state.lang) + '">' +
+                        '<input type="hidden" name="show_all" value="' + (state.showAll ? '1' : '0') + '">' +
                         '<button type="submit" class="symbolic-parse-button" title="' + escapeHtml(buttonLabel) + '">' +
                         escapeHtml(buttonLabel) +
                         '</button>' +
@@ -1339,6 +1854,9 @@
 
                 var clippedEntries = (entries || []).map(function (entry) {
                     if (!entry || typeof entry.start_ts !== 'number' || typeof entry.end_ts !== 'number') {
+                        return null;
+                    }
+                    if (!state.showAll && !resolveEntrySnapshotActive(entry)) {
                         return null;
                     }
                     var startTs = Math.max(entry.start_ts, state.visibleStartTs);
@@ -1514,6 +2032,9 @@
                         + ' | variant_id: ' + variantIdLabel
                         + ' | is_validated: ' + boolLabel(meta.isValidated)
                         + ' | is_used: ' + boolLabel(meta.isUsed);
+                    if (!state.showAll && resolveEntrySnapshotActive(entry)) {
+                        metaLine += ' | publie';
+                    }
 
                     var weatherReadyClass = readyStateClass(entry, entryPack.startTs, entryPack.endTs);
                     html += '' +
@@ -1521,6 +2042,7 @@
                         '<div class="symbolic-text-entry__text symbolic-text-entry__text--weather">' +
                         '<div class="symbolic-weather-body">' + escapeHtml(entry.label || '') + '</div>' +
                         '<small class="symbolic-weather-meta">' + escapeHtml(metaLine) + '</small>' +
+                        buildPublishSwitchHtml(entry) +
                         '</div>' +
                         '</article>';
                 });
@@ -1823,6 +2345,7 @@
                             '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
                             (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
                             '</div>' +
+                            buildPublishSwitchHtml(entry) +
                             buildEditButtonHtml(entry, 'influence_synodic') +
                             '</article>';
                     });
@@ -1883,6 +2406,7 @@
                             '<strong>' + escapeHtml(entry.label || '') + '</strong>' +
                             (entry.subtitle ? '<small>' + escapeHtml(entry.subtitle) + '</small>' : '') +
                             '</div>' +
+                            buildPublishSwitchHtml(entry) +
                             buildEditButtonHtml(entry, rowCode) +
                             '</article>';
                     });
@@ -1953,7 +2477,14 @@
                 document.querySelectorAll('[data-window-lang-hidden]').forEach(function (input) {
                     input.value = state.lang;
                 });
-                var url = "{{ path('admin_symbolic_text') }}" + '?span=' + encodeURIComponent(state.span) + '&end_utc=' + encodeURIComponent(formatUtc(state.visibleEndTs)) + '&lang=' + encodeURIComponent(state.lang);
+                document.querySelectorAll('[data-window-show-all-hidden]').forEach(function (input) {
+                    input.value = state.showAll ? '1' : '0';
+                });
+                var url = "{{ path('admin_symbolic_text') }}"
+                    + '?span=' + encodeURIComponent(state.span)
+                    + '&end_utc=' + encodeURIComponent(formatUtc(state.visibleEndTs))
+                    + '&lang=' + encodeURIComponent(state.lang)
+                    + '&show_all=' + (state.showAll ? '1' : '0');
                 window.history.replaceState({}, '', url);
             }
 
@@ -1969,6 +2500,7 @@
                 renderSynodic(data.textSymbolicZones || [], data.entriesByRow.influence_synodic || []);
                 syncTimelineLabelHeights();
                 updateWindowLabels();
+                refreshBulkSaveUi();
             }
 
             function maybePrefetch() {
@@ -2015,6 +2547,41 @@
 
             window.addEventListener('resize', function () {
                 syncTimelineLabelHeights();
+            });
+
+            if (bulkSaveButton) {
+                bulkSaveButton.addEventListener('click', function () {
+                    persistPendingActiveChanges();
+                });
+            }
+
+            timeline.addEventListener('change', function (event) {
+                var target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+                var toggleNode = target.closest('[data-publish-toggle]');
+                if (!toggleNode) {
+                    return;
+                }
+                var scheduleId = String(toggleNode.getAttribute('data-schedule-id') || '').trim();
+                if (!scheduleId) {
+                    return;
+                }
+                var originalActive = (toggleNode.getAttribute('data-original-active') || '0') === '1';
+                var currentActive = !!toggleNode.checked;
+                if (currentActive === originalActive) {
+                    delete state.pendingActiveBySchedule[scheduleId];
+                } else {
+                    state.pendingActiveBySchedule[scheduleId] = currentActive;
+                }
+
+                var switchNode = toggleNode.closest('.symbolic-publish-switch');
+                var labelNode = switchNode ? switchNode.querySelector('.symbolic-publish-switch__label') : null;
+                if (labelNode) {
+                    labelNode.textContent = currentActive ? 'Publie' : 'Non publie';
+                }
+                refreshBulkSaveUi();
             });
 
             function hidePhaseTooltip() {
